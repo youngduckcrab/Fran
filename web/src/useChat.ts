@@ -133,18 +133,24 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
       if (cancelled) return;
       attempts.current += 1;
 
-      // 끊긴 이유가 토큰 때문인지 네트워크 때문인지 소켓만 봐서는 알 수 없다.
-      // 몇 번 실패하면 서버에 직접 물어보고, 토큰이 죽었을 때만 로그아웃시킨다.
-      if (!authenticated.current && attempts.current >= VERIFY_AFTER_ATTEMPTS) {
-        const valid = await isTokenValid(token);
-        if (cancelled) return;
-        if (!valid) {
-          onUnauthorized();
-          return;
+      if (attempts.current >= VERIFY_AFTER_ATTEMPTS) {
+        // 한 번도 연결된 적이 없다면 토큰이 죽은 것일 수 있다. 소켓만 봐서는
+        // 401 과 네트워크 장애를 구분할 수 없으므로 서버에 직접 물어본다.
+        if (!authenticated.current) {
+          const valid = await isTokenValid(token);
+          if (cancelled) return;
+          if (!valid) {
+            onUnauthorized();
+            return;
+          }
         }
+        // 연결된 적이 있든 없든, 계속 실패하고 있다면 그 사실을 알려야 한다.
+        // 헤더의 "다시 연결하는 중…"만 조용히 도는 것으로는 뭐가 문제인지 알 수 없다.
         setState((previous) => ({
           ...previous,
-          error: previous.error ?? '서버에 연결하지 못했습니다. 계속 다시 시도합니다.',
+          error:
+            previous.error ??
+            '서버에 연결하지 못했습니다. 서버가 실행 중인지 터미널을 확인해 주세요. 계속 다시 시도합니다.',
         }));
       }
 

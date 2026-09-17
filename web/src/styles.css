@@ -139,12 +139,21 @@ textarea {
 /* ---------- 채팅 ---------- */
 
 .chat {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* grid 로 두면 배너처럼 조건부로 뜨는 자식이 늘어날 때 1fr 자리를 빼앗아
+     메시지 영역이 쭈그러든다. 늘어나야 할 곳을 명시하는 flex 가 안전하다. */
+  display: flex;
+  flex-direction: column;
   height: 100%;
   max-width: 720px;
   margin: 0 auto;
   background: var(--bg);
+}
+
+.chat__header,
+.chat__banner,
+.note,
+.composer {
+  flex: 0 0 auto;
 }
 
 .chat__header {
@@ -177,11 +186,21 @@ textarea {
 }
 
 .chat__banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 10px 16px;
   background: var(--danger);
   color: #fff;
   font-size: 14px;
+  line-height: 1.45;
   cursor: pointer;
+}
+
+.chat__banner::after {
+  content: '✕';
+  opacity: 0.8;
 }
 
 .chat__messages {
@@ -191,6 +210,9 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 남는 공간을 전부 가져가되, min-height 0 이어야 넘칠 때 스크롤이 생긴다. */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
