@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   LANGUAGE_NAMES,
+  cleanTerm,
   type ChatMessage,
+  type ExplanationChunk,
   type LangCode,
   type MessageExplanation,
 } from '@fran/shared';
-import { explainMessage } from '../api';
+import { explainMessage, saveVocab } from '../api';
 import { useT } from '../i18n';
 
 interface Props {
   message: ChatMessage;
   /** 처음 열었을 때 설명할 언어. */
   initialLang: LangCode;
+  /** 단어를 담았을 때. 홈의 숫자를 맞추는 데 쓴다. */
+  onAdded: () => void;
   onClose: () => void;
 }
 
@@ -23,7 +27,7 @@ function availableLangs(message: ChatMessage): LangCode[] {
   return [message.sourceLang, ...langs];
 }
 
-export default function Explanation({ message, initialLang, onClose }: Props) {
+export default function Explanation({ message, initialLang, onAdded, onClose }: Props) {
   const t = useT();
   const langs = availableLangs(message);
   const [lang, setLang] = useState<LangCode>(langs.includes(initialLang) ? initialLang : message.sourceLang);
@@ -50,6 +54,28 @@ export default function Explanation({ message, initialLang, onClose }: Props) {
 
   const sentence =
     lang === message.sourceLang ? message.sourceText : message.translations[lang]?.text ?? '';
+
+  /** 단어장에 담은 조각들. 같은 화면에서 눌렀는지 바로 보이게 표시만 해 둔다. */
+  const [added, setAdded] = useState<Set<string>>(new Set());
+
+  const addToVocab = async (chunk: ExplanationChunk) => {
+    const term = cleanTerm(chunk.text);
+    if (!term) return;
+    try {
+      await saveVocab({
+        term,
+        lang,
+        meaning: chunk.meaning,
+        ...(chunk.reading ? { reading: chunk.reading } : {}),
+        ...(chunk.note ? { note: chunk.note } : {}),
+        messageId: message.id,
+      });
+      setAdded((current) => new Set(current).add(term));
+      onAdded();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
 
   return (
     <div className="sheet" role="dialog" aria-label={t('explain.title')}>
@@ -89,10 +115,27 @@ export default function Explanation({ message, initialLang, onClose }: Props) {
               <ol className="explain__chunks">
                 {explanation.chunks.map((chunk, index) => (
                   <li key={`${chunk.text}-${index}`}>
-                    <p className="explain__chunkText">
-                      {chunk.text}
-                      {chunk.reading && <span className="explain__reading">{chunk.reading}</span>}
-                    </p>
+                    <div className="explain__chunkHead">
+                      <p className="explain__chunkText">
+                        {chunk.text}
+                        {chunk.reading && <span className="explain__reading">{chunk.reading}</span>}
+                      </p>
+                      {/* 기호를 뗀 표제어로 담는다. "¿Dormiste" 가 아니라 "Dormiste" 로. */}
+                      <button
+                        type="button"
+                        className={`explain__add ${added.has(cleanTerm(chunk.text)) ? 'is-on' : ''}`}
+                        onClick={() => void addToVocab(chunk)}
+                        disabled={added.has(cleanTerm(chunk.text)) || !cleanTerm(chunk.text)}
+                        aria-label={t('vocab.add')}
+                        title={
+                          added.has(cleanTerm(chunk.text))
+                            ? t('vocab.added')
+                            : `${t('vocab.add')}: ${cleanTerm(chunk.text)}`
+                        }
+                      >
+                        {added.has(cleanTerm(chunk.text)) ? '✓' : '+'}
+                      </button>
+                    </div>
                     <p className="explain__meaning">{chunk.meaning}</p>
                     {chunk.note && <p className="explain__note">{chunk.note}</p>}
                   </li>

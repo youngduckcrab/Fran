@@ -1,99 +1,107 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage, LangCode } from '@fran/shared';
-import { useChat } from '../useChat';
+import type { Chat } from '../useChat';
+import { saveSentence } from '../api';
+import { useT } from '../i18n';
+import { useSpeaker } from '../speech';
+import { wallpaperProps } from '../wallpaper';
 import Explanation from './Explanation';
-import Glossary from './Glossary';
 import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
-import Settings from './Settings';
-import { toUiLang, useT, type UiLang } from '../i18n';
-import { useSpeaker } from '../speech';
+import Composer from './Composer';
 
 interface Props {
-  token: string;
-  onLogout: () => void;
-  /** 내 표시 언어가 정해지면 화면 문구도 그 언어로 맞춘다. */
-  onUiLang: (lang: UiLang) => void;
+  chat: Chat;
+  primaryLang: LangCode;
+  extraLangs: LangCode[];
+  alwaysShowSource: boolean;
+  /** 이미 저장한 문장들. `<메시지 id>:<언어>` */
+  savedKeys: Set<string>;
+  onSaved: (key: string) => void;
+  onVocabAdded: () => void;
+  onBack: () => void;
+  onGlossary: () => void;
+  onSettings: () => void;
 }
 
-const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
-const SENT_AS_PREF_KEY = 'fran.showSentAs';
-const TYPING_IDLE_MS = 1500;
-
-export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
+export default function ChatRoom({
+  chat,
+  primaryLang,
+  extraLangs,
+  alwaysShowSource,
+  savedKeys,
+  onSaved,
+  onVocabAdded,
+  onBack,
+  onGlossary,
+  onSettings,
+}: Props) {
   const t = useT();
-  const chat = useChat(token, onLogout);
-  const [draft, setDraft] = useState('');
-  /** 이번 메시지에만 붙일 번역 지시. 보낸 뒤 비워진다. */
-  const [note, setNote] = useState('');
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [glossaryOpen, setGlossaryOpen] = useState(false);
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
   const [picked, setPicked] = useState<ChatMessage | null>(null);
   const [explaining, setExplaining] = useState<ChatMessage | null>(null);
-  const [alwaysShowSource, setAlwaysShowSource] = useState(
-    () => localStorage.getItem(SOURCE_PREF_KEY) === '1',
-  );
-  // 내 말이 상대에게 어떻게 갔는지를 펼쳐 둘지. 한 번 접으면 계속 접힌 채로 둔다.
-  const [showSentAs, setShowSentAs] = useState(() => localStorage.getItem(SENT_AS_PREF_KEY) !== '0');
+  const [toast, setToast] = useState<string | null>(null);
   const speaker = useSpeaker();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [chat.messages, chat.peerTyping]);
 
-  useEffect(() => {
-    localStorage.setItem(SOURCE_PREF_KEY, alwaysShowSource ? '1' : '0');
-  }, [alwaysShowSource]);
-
-  useEffect(() => {
-    localStorage.setItem(SENT_AS_PREF_KEY, showSentAs ? '1' : '0');
-  }, [showSentAs]);
-
-  const handleDraftChange = (value: string) => {
-    setDraft(value);
-    chat.setTyping(value.length > 0);
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(() => chat.setTyping(false), TYPING_IDLE_MS);
-  };
-
-  const submit = (event: React.FormEvent) => {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    chat.sendMessage(text, note.trim() || undefined);
-    setDraft('');
-    setNote('');
-    setNoteOpen(false);
-    chat.setTyping(false);
-  };
-
-  const primaryLang: LangCode = chat.me?.displayLangs[0] ?? chat.me?.nativeLang ?? 'ko';
   /** 상대가 실제로 읽는 언어. 내 메시지가 어떻게 갔는지 보여줄 때 쓴다. */
   const peerLang: LangCode = chat.peer?.displayLangs[0] ?? chat.peer?.nativeLang ?? 'es';
 
-  useEffect(() => {
-    if (chat.me) onUiLang(toUiLang(primaryLang));
-  }, [chat.me, primaryLang, onUiLang]);
+  const [showSentAs, setShowSentAs] = useState(
+    () => localStorage.getItem('fran.showSentAs') !== '0',
+  );
+  const toggleSentAs = useCallback(() => {
+    setShowSentAs((open) => {
+      localStorage.setItem('fran.showSentAs', open ? '0' : '1');
+      return !open;
+    });
+  }, []);
 
-  // iOS 는 홈 화면에 추가할 때 문서 제목을 쓴다. 상대 이름으로 두면 아이콘이 그 사람이 된다.
-  useEffect(() => {
-    if (chat.peer) document.title = chat.peer.name;
-  }, [chat.peer]);
-  const extraLangs = chat.me?.displayLangs.slice(1) ?? [];
+  /** 지금 화면에 보이는 문장을 저장한다. 번역을 다시 돌려도 저장본은 그대로 남는다. */
+  const save = async (message: ChatMessage) => {
+    const mine = message.senderId === chat.me?.id;
+    const lang = mine ? message.sourceLang : primaryLang;
+    const text = lang === message.sourceLang ? message.sourceText : message.translations[lang]?.text;
+    if (!text) return;
+
+    const pairLang = lang === message.sourceLang ? peerLang : message.sourceLang;
+    const pairText =
+      pairLang === message.sourceLang ? message.sourceText : message.translations[pairLang]?.text;
+
+    try {
+      await saveSentence({
+        messageId: message.id,
+        lang,
+        text,
+        ...(pairText ? { pairLang, pairText } : {}),
+      });
+      onSaved(`${message.id}:${lang}`);
+      setToast(t('actions.saved'));
+      setTimeout(() => setToast(null), 1800);
+    } catch (cause) {
+      setToast(cause instanceof Error ? cause.message : String(cause));
+      setTimeout(() => setToast(null), 2500);
+    }
+  };
+
+  const wall = wallpaperProps(chat.me?.wallpaper);
 
   return (
-    <div className="chat">
+    <div className={`chat ${wall.className}`} style={wall.style}>
       <header className="chat__header">
-        <div>
+        <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
+          ‹
+        </button>
+        <div className="chat__who">
           <h1 className="chat__peer">{chat.peer?.name ?? t('chat.connecting')}</h1>
           <p className="chat__status">
             {chat.connection !== 'open'
-              ? t('chat.reconnecting')
+              ? t('chat.reconnectingShort')
               : chat.peerTyping
                 ? t('chat.typing')
                 : chat.peerOnline
@@ -102,20 +110,14 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
           </p>
         </div>
         <div className="chat__actions">
-          <button type="button" className="chat__settings" onClick={() => setGlossaryOpen(true)}>
+          <button type="button" className="chat__settings" onClick={onGlossary}>
             {t('chat.glossary')}
           </button>
-          <button type="button" className="chat__settings" onClick={() => setSettingsOpen(true)}>
+          <button type="button" className="chat__settings" onClick={onSettings}>
             {t('chat.settings')}
           </button>
         </div>
       </header>
-
-      {chat.error && (
-        <div className="chat__banner" onClick={chat.dismissError}>
-          {chat.error === 'disconnected' ? t('chat.disconnected') : chat.error}
-        </div>
-      )}
 
       <ul className="chat__messages">
         {chat.messages.map((message) => (
@@ -128,7 +130,7 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
             peerLang={peerLang}
             peerName={chat.peer?.name ?? ''}
             showSentAs={showSentAs}
-            onToggleSentAs={() => setShowSentAs((open) => !open)}
+            onToggleSentAs={toggleSentAs}
             alwaysShowSource={alwaysShowSource}
             speechSupported={speaker.supported}
             speakingKey={speaker.speakingKey}
@@ -141,52 +143,35 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
         <div ref={bottomRef} />
       </ul>
 
-      {noteOpen && (
-        <div className="note">
-          <input
-            className="note__input"
-            value={note}
-            autoFocus
-            placeholder={t('note.placeholder')}
-            onChange={(event) => setNote(event.target.value)}
-          />
-          <p className="note__hint">{t('note.hint')}</p>
-        </div>
+      {/* 연결이 끊겼을 때. 화면을 가리지 않게 한 줄로 띄우고, 이어지면 알아서 사라진다. */}
+      {chat.connection !== 'open' && chat.error === 'disconnected' && (
+        <p className="chat__toast chat__toast--muted">{t('chat.disconnected')}</p>
       )}
+      {chat.error && chat.error !== 'disconnected' && (
+        <p className="chat__toast" onClick={chat.dismissError}>
+          {chat.error}
+        </p>
+      )}
+      {toast && <p className="chat__toast chat__toast--ok">{toast}</p>}
 
-      <form className="composer" onSubmit={submit}>
-        <button
-          type="button"
-          className={`composer__note ${noteOpen || note ? 'is-on' : ''}`}
-          onClick={() => setNoteOpen((open) => !open)}
-          aria-label={t('note.button')}
-          title={t('note.button')}
-        >
-          ✎
-        </button>
-        <textarea
-          className="composer__input"
-          rows={1}
-          value={draft}
-          placeholder={t('chat.sendTo', { name: chat.peer?.name ?? '' })}
-          onChange={(event) => handleDraftChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              submit(event);
-            }
-          }}
-        />
-        <button className="composer__send" type="submit" disabled={!draft.trim()}>
-          {t('chat.send')}
-        </button>
-      </form>
+      <Composer
+        peerName={chat.peer?.name ?? ''}
+        onSend={(text, options) => chat.sendMessage(text, options)}
+        onTyping={chat.setTyping}
+      />
 
       {picked && (
         <MessageActions
           canRetranslate={picked.senderId === chat.me?.id || picked.translationStatus === 'failed'}
+          alreadySaved={savedKeys.has(
+            `${picked.id}:${picked.senderId === chat.me?.id ? picked.sourceLang : primaryLang}`,
+          )}
           onExplain={() => {
             setExplaining(picked);
+            setPicked(null);
+          }}
+          onSave={() => {
+            void save(picked);
             setPicked(null);
           }}
           onCopy={() => {
@@ -208,26 +193,8 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
             // 내가 공부하는 언어 쪽 문장을 먼저 보여준다.
             explaining.sourceLang !== primaryLang ? explaining.sourceLang : (extraLangs[0] ?? primaryLang)
           }
+          onAdded={onVocabAdded}
           onClose={() => setExplaining(null)}
-        />
-      )}
-
-      {glossaryOpen && (
-        <Glossary
-          entries={chat.glossary}
-          onChanged={chat.setGlossary}
-          onClose={() => setGlossaryOpen(false)}
-        />
-      )}
-
-      {settingsOpen && chat.me && (
-        <Settings
-          profile={chat.me}
-          alwaysShowSource={alwaysShowSource}
-          onToggleSource={setAlwaysShowSource}
-          onSaved={chat.setProfile}
-          onClose={() => setSettingsOpen(false)}
-          onLogout={onLogout}
         />
       )}
     </div>

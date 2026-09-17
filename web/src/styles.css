@@ -150,7 +150,7 @@ textarea {
 }
 
 .chat__header,
-.chat__banner,
+.chat__toast,
 .note,
 .composer {
   flex: 0 0 auto;
@@ -185,22 +185,41 @@ textarea {
   cursor: pointer;
 }
 
-.chat__banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
+/* 연결이 끊겼을 때 뜨는 한 줄.
+   예전에는 화면 위쪽을 빨갛게 덮었는데, 잠깐 끊긴 것치고는 너무 크게 방해가 됐다.
+   아래쪽에 작게 띄우고, 다시 이어지면 조건이 풀리면서 알아서 사라진다. */
+.chat__toast {
+  align-self: center;
+  margin: 0 16px 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
   background: var(--danger);
   color: #fff;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
   cursor: pointer;
+  animation: toast-in 180ms ease-out;
 }
 
-.chat__banner::after {
-  content: '✕';
-  opacity: 0.8;
+.chat__toast--muted {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  cursor: default;
+}
+
+.chat__toast--ok {
+  background: var(--accent);
+  color: #fff;
+  cursor: default;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .chat__messages {
@@ -330,20 +349,23 @@ textarea {
 
 .composer {
   display: flex;
-  gap: 8px;
-  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  gap: 6px;
+  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
 
 .composer__input {
-  flex: 1;
+  flex: 1 1 auto;
+  /* 버튼이 늘어나면서 입력칸이 밀려 글자가 잘리지 않도록. */
+  min-width: 0;
   resize: none;
   max-height: 140px;
 }
 
 .composer__send {
-  padding: 0 18px;
+  flex: 0 0 auto;
+  padding: 0 14px;
   border: none;
   border-radius: 12px;
   background: var(--accent);
@@ -504,9 +526,9 @@ textarea {
   color: var(--text-muted);
 }
 
-.composer__note {
+.composer__icon {
   flex: 0 0 auto;
-  width: 42px;
+  width: 38px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: transparent;
@@ -514,9 +536,13 @@ textarea {
   cursor: pointer;
 }
 
-.composer__note.is-on {
+.composer__icon.is-on {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.composer__icon:disabled {
+  opacity: 0.4;
 }
 
 .bubble__note {
@@ -767,4 +793,499 @@ textarea {
   margin: 4px 0 0;
   font-size: 11px;
   opacity: 0.7;
+}
+
+/* ---------- 메인 화면 ---------- */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.home__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home__peer {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+.home__status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.home__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tile:active {
+  background: var(--surface-raised);
+}
+
+.tile--chat {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+}
+
+.tile__icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.tile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tile__title {
+  font-weight: 600;
+  /* 한국어는 음절마다 끊기므로, 줄바꿈은 낱말 단위로 하게 둔다. */
+  word-break: keep-all;
+}
+
+.home__grid .tile__title {
+  font-size: 15px;
+}
+
+.home__grid .tile__count {
+  margin-top: auto;
+}
+
+.tile__line {
+  color: var(--text-muted);
+  font-size: 14px;
+  /* 마지막 한 줄만 보여준다. 길면 잘라낸다. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile__count {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tile__badge {
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---------- 모아 보기 화면 (저장한 문장·단어장·사진첩) ---------- */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.page__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page__header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.page__empty {
+  margin: 24px 4px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.chat__back {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat__back:active {
+  background: var(--surface-raised);
+}
+
+.chat__who {
+  flex: 1;
+  min-width: 0;
+}
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.card__main {
+  margin: 0;
+  font-size: 17px;
+}
+
+.card__reading {
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.card__sub {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
+.card__note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.card__tag {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.card__delete {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ---------- 사진첩 ---------- */
+
+.album {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.album__cell {
+  padding: 0;
+  border: none;
+  background: var(--surface-raised);
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  cursor: pointer;
+}
+
+.album__cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.viewer {
+  max-width: 720px;
+  margin: auto;
+  padding: 16px;
+}
+
+.viewer img {
+  width: 100%;
+  border-radius: 12px;
+}
+
+.viewer__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- 사진·음성 메시지 ---------- */
+
+.bubble__photo {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.bubble__photo img {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.bubble__audio {
+  display: block;
+  width: 220px;
+  max-width: 100%;
+  margin-bottom: 4px;
+}
+
+.bubble__audioTime {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.attachBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.attachBar__thumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.attachBar__voice {
+  flex: 1;
+}
+
+.attachBar__remove {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.composer__file {
+  display: none;
+}
+
+.composer__status,
+.composer__error {
+  margin: 0 16px 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.composer__error {
+  color: var(--danger);
+  cursor: pointer;
+}
+
+/* 녹음 중에는 입력칸 대신 이 줄이 뜬다. */
+.recording {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.recording__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.recording__time {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.recording__cancel,
+.recording__stop {
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+}
+
+.recording__stop {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- 단어장 담기 버튼 (설명 화면) ---------- */
+
+.explain__chunkHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.explain__chunkHead .explain__chunkText {
+  flex: 1;
+}
+
+.explain__add {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.explain__add.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.explain__add:disabled {
+  cursor: default;
+}
+
+/* ---------- 배경화면 ---------- */
+
+.wall--default {
+  background: var(--bg);
+}
+
+.wall--night {
+  background: linear-gradient(170deg, #0f1020 0%, #1b1b35 55%, #241d3a 100%);
+}
+
+.wall--dawn {
+  background: linear-gradient(170deg, #2b1d3a 0%, #55355a 50%, #8a5a63 100%);
+}
+
+.wall--forest {
+  background: linear-gradient(170deg, #12251c 0%, #1b3a2a 55%, #27503a 100%);
+}
+
+.wall--sand {
+  background: linear-gradient(170deg, #2c2419 0%, #4a3b26 55%, #6b563a 100%);
+}
+
+.wall--rose {
+  background: linear-gradient(170deg, #2a1622 0%, #4c2138 55%, #6e3350 100%);
+}
+
+.wall--mono {
+  background: #14141a;
+}
+
+.wall--photo {
+  background-size: cover;
+  background-position: center;
+}
+
+/* 사진 위에서는 글자가 묻히지 않도록 살짝 덮는다. */
+.chat.wall--photo .chat__messages {
+  background: rgba(10, 10, 16, 0.42);
+}
+
+.walls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.walls__item {
+  height: 62px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 12px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 6px;
+}
+
+.walls__item.is-on {
+  border-color: var(--accent);
 }

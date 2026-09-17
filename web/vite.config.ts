@@ -9,6 +9,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // 알림 처리는 우리가 쓴다. 생성된 서비스 워커가 이 파일을 불러오게 한다.
+      workbox: { importScripts: ['push-sw.js'] },
       manifest: {
         name: 'Fran',
         short_name: 'Fran',

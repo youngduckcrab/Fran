@@ -1,9 +1,14 @@
 import type {
+  Attachment,
   GlossaryDraft,
   GlossaryEntry,
   LangCode,
   MessageExplanation,
+  SavedSentence,
+  SavedSentenceDraft,
   UserProfile,
+  VocabDraft,
+  VocabEntry,
 } from '@fran/shared';
 
 const LAST_USER_KEY = 'fran.lastUser';
@@ -163,4 +168,70 @@ export async function isTokenValid(token: string): Promise<boolean> {
 export function websocketUrl(token: string): string {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}`;
+}
+
+/* ---------------------- 저장한 문장 / 단어장 ---------------------- */
+
+export async function fetchSaved(): Promise<{ items: SavedSentence[]; keys: string[] }> {
+  const response = await fetch('/api/saved', { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return (await response.json()) as { items: SavedSentence[]; keys: string[] };
+}
+
+export async function saveSentence(draft: SavedSentenceDraft): Promise<SavedSentence> {
+  const response = await fetch('/api/saved', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(draft),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { item: SavedSentence }).item;
+}
+
+export async function deleteSaved(id: string): Promise<void> {
+  const response = await fetch(`/api/saved/${id}`, { method: 'DELETE', headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+}
+
+export async function fetchVocab(): Promise<VocabEntry[]> {
+  const response = await fetch('/api/vocab', { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { entries: VocabEntry[] }).entries;
+}
+
+export async function saveVocab(draft: VocabDraft): Promise<VocabEntry> {
+  const response = await fetch('/api/vocab', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(draft),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { entry: VocabEntry }).entry;
+}
+
+export async function deleteVocab(id: string): Promise<void> {
+  const response = await fetch(`/api/vocab/${id}`, { method: 'DELETE', headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+}
+
+/* ---------------------------- 사진첩 ---------------------------- */
+
+export type Photo = Attachment & { messageId: string; senderId: string };
+
+export async function fetchPhotos(): Promise<Photo[]> {
+  const response = await fetch('/api/photos', { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { photos: Photo[] }).photos;
+}
+
+/* --------------------------- 배경화면 --------------------------- */
+
+export async function saveWallpaper(wallpaper: string): Promise<UserProfile> {
+  const response = await fetch('/api/wallpaper', {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ wallpaper }),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { profile: UserProfile }).profile;
 }

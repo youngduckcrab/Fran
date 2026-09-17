@@ -1,0 +1,171 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { LangCode } from '@fran/shared';
+import { useChat } from '../useChat';
+import { fetchPhotos, fetchSaved, fetchVocab } from '../api';
+import { toUiLang, type UiLang } from '../i18n';
+import Album from './Album';
+import ChatRoom from './ChatRoom';
+import Glossary from './Glossary';
+import Home, { type View } from './Home';
+import SavedList from './SavedList';
+import Settings from './Settings';
+import VocabList from './VocabList';
+
+interface Props {
+  token: string;
+  onLogout: () => void;
+  onUiLang: (lang: UiLang) => void;
+}
+
+const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
+
+/**
+ * 로그인한 뒤의 모든 화면. 대화 연결(useChat)은 여기서 한 번만 잡는다.
+ *
+ * 화면마다 연결을 새로 잡으면 홈에 다녀올 때마다 대화를 다시 받아오고, 그 사이에
+ * 온 메시지를 놓친다. 연결은 위에 두고 화면만 갈아 끼운다.
+ */
+export default function Shell({ token, onLogout, onUiLang }: Props) {
+  const chat = useChat(token, onLogout);
+  const [view, setView] = useState<View>('home');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
+  const [alwaysShowSource, setAlwaysShowSource] = useState(
+    () => localStorage.getItem(SOURCE_PREF_KEY) === '1',
+  );
+
+  /** 모아 보기 화면들의 개수. 홈에 숫자를 띄우고, 저장할 때마다 다시 센다. */
+  const [counts, setCounts] = useState({ saved: 0, vocab: 0, photos: 0 });
+  /** 이미 저장해 둔 문장. `<메시지 id>:<언어>` 형태. */
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+
+  const refreshCounts = useCallback(async () => {
+    try {
+      const [saved, vocab, photos] = await Promise.all([fetchSaved(), fetchVocab(), fetchPhotos()]);
+      setCounts({ saved: saved.items.length, vocab: vocab.length, photos: photos.length });
+      setSavedKeys(new Set(saved.keys));
+    } catch {
+      // 숫자는 있으면 좋은 것일 뿐이다. 실패해도 대화에는 영향이 없다.
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshCounts();
+  }, [refreshCounts]);
+
+  useEffect(() => {
+    localStorage.setItem(SOURCE_PREF_KEY, alwaysShowSource ? '1' : '0');
+  }, [alwaysShowSource]);
+
+  const primaryLang: LangCode = chat.me?.displayLangs[0] ?? chat.me?.nativeLang ?? 'ko';
+
+  useEffect(() => {
+    if (chat.me) onUiLang(toUiLang(primaryLang));
+  }, [chat.me, primaryLang, onUiLang]);
+
+  // iOS 는 홈 화면에 추가할 때 문서 제목을 쓴다. 상대 이름으로 두면 아이콘이 그 사람이 된다.
+  useEffect(() => {
+    if (chat.peer) document.title = chat.peer.name;
+  }, [chat.peer]);
+
+  /* ---- 안 읽은 메시지 ---- */
+  const [unread, setUnread] = useState(0);
+  const seen = useRef(0);
+  /** 처음 받아온 지난 대화는 "새로 온 것"이 아니다. */
+  const primed = useRef(false);
+
+  useEffect(() => {
+    // 채팅을 보고 있으면 읽은 것으로 친다.
+    if (view === 'chat') {
+      seen.current = chat.messages.length;
+      primed.current = true;
+      setUnread(0);
+      return;
+    }
+    if (!primed.current) {
+      if (chat.messages.length > 0) primed.current = true;
+      seen.current = chat.messages.length;
+      return;
+    }
+    const fresh = chat.messages.slice(seen.current).filter((m) => m.senderId !== chat.me?.id);
+    if (fresh.length > 0) setUnread((count) => count + fresh.length);
+    seen.current = chat.messages.length;
+  }, [chat.messages, chat.me?.id, view]);
+
+  const lastMessage = chat.messages[chat.messages.length - 1];
+  const extraLangs = useMemo(() => chat.me?.displayLangs.slice(1) ?? [], [chat.me]);
+
+  const markSaved = useCallback((key: string) => {
+    setSavedKeys((previous) => new Set(previous).add(key));
+    setCounts((previous) => ({ ...previous, saved: previous.saved + 1 }));
+  }, []);
+
+  const backHome = useCallback(() => {
+    setView('home');
+    void refreshCounts();
+  }, [refreshCounts]);
+
+  return (
+    <>
+      {view === 'home' && (
+        <Home
+          me={chat.me}
+          peer={chat.peer}
+          connecting={chat.connection !== 'open'}
+          peerOnline={chat.peerOnline}
+          lastMessage={lastMessage}
+          primaryLang={primaryLang}
+          unread={unread}
+          counts={counts}
+          onOpen={setView}
+          onSettings={() => setSettingsOpen(true)}
+        />
+      )}
+
+      {view === 'chat' && (
+        <ChatRoom
+          chat={chat}
+          primaryLang={primaryLang}
+          extraLangs={extraLangs}
+          alwaysShowSource={alwaysShowSource}
+          savedKeys={savedKeys}
+          onSaved={markSaved}
+          onVocabAdded={() => setCounts((p) => ({ ...p, vocab: p.vocab + 1 }))}
+          onBack={backHome}
+          onGlossary={() => setGlossaryOpen(true)}
+          onSettings={() => setSettingsOpen(true)}
+        />
+      )}
+
+      {view === 'saved' && <SavedList onBack={backHome} />}
+      {view === 'vocab' && <VocabList onBack={backHome} />}
+      {view === 'album' && (
+        <Album
+          onBack={backHome}
+          me={chat.me}
+          peer={chat.peer}
+          onWallpaper={chat.setProfile}
+        />
+      )}
+
+      {glossaryOpen && (
+        <Glossary
+          entries={chat.glossary}
+          onChanged={chat.setGlossary}
+          onClose={() => setGlossaryOpen(false)}
+        />
+      )}
+
+      {settingsOpen && chat.me && (
+        <Settings
+          profile={chat.me}
+          alwaysShowSource={alwaysShowSource}
+          onToggleSource={setAlwaysShowSource}
+          onSaved={chat.setProfile}
+          onClose={() => setSettingsOpen(false)}
+          onLogout={onLogout}
+        />
+      )}
+    </>
+  );
+}

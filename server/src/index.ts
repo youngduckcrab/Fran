@@ -7,7 +7,11 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  cleanTerm,
   isLangCode,
+  isWallpaperId,
+  type Attachment,
+  type AttachmentKind,
   type ChatMessage,
   type ClientEvent,
   type LangCode,
@@ -18,8 +22,22 @@ import {
 import { checkPasscode, issueToken, verifyToken } from './auth.js';
 import { config, findUserById, peerOf } from './config.js';
 import {
+  attachToMessage,
   clearTranslations,
+  deleteSaved,
+  deleteVocab,
+  getAttachmentBytes,
+  getWallpaper,
   initDatabase,
+  insertAttachment,
+  listPhotos,
+  listSaved,
+  listVocab,
+  purgeOrphanAttachments,
+  saveSentence,
+  saveVocab,
+  saveWallpaper,
+  savedKeysOf,
   deleteGlossaryEntry,
   getDisplayLangs,
   getExplanation,
@@ -38,9 +56,12 @@ import {
   setTranslationStatus,
 } from './db.js';
 import { TranslationError, explainMessage, getProvider, translateMessage } from './translation/index.js';
+import { initPush, kindLabel, notify, publicKey, subscribe, unsubscribe } from './push.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_NOTE_LENGTH = 500;
+/** 첨부 한 건의 최대 크기. 사진은 화면에서 미리 줄여서 올라온다. */
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 
 // 주소를 공개로 열어두면 패스코드가 유일한 자물쇠다. 예시 값 그대로면 잠그지 않은 것과 같다.
@@ -61,11 +82,12 @@ for (const user of config.users) {
 async function profileOf(userId: string): Promise<UserProfile> {
   const user = findUserById(userId);
   if (!user) throw new Error(`알 수 없는 사용자: ${userId}`);
-  const [nativeLang, displayLangs] = await Promise.all([
+  const [nativeLang, displayLangs, wallpaper] = await Promise.all([
     getNativeLang(userId, user.profile.nativeLang),
     getDisplayLangs(userId, user.profile.displayLangs),
+    getWallpaper(userId),
   ]);
-  return { ...user.profile, nativeLang, displayLangs };
+  return { ...user.profile, nativeLang, displayLangs, ...(wallpaper ? { wallpaper } : {}) };
 }
 
 function bothProfiles(): Promise<UserProfile[]> {
@@ -155,9 +177,11 @@ async function runTranslation(messageId: string): Promise<void> {
   const participants = await bothProfiles();
   const targetLangs = targetLangsFor(message.sourceLang, participants);
 
-  if (targetLangs.length === 0) {
+  // 번역할 게 없는 경우: 글이 없는 사진·음성이거나, 둘 다 같은 언어로 읽을 때.
+  if (targetLangs.length === 0 || !message.sourceText.trim()) {
     await setTranslationStatus(messageId, 'done');
     await publishUpdate(messageId);
+    await notifyNewMessage(messageId);
     return;
   }
 
@@ -190,11 +214,52 @@ async function runTranslation(messageId: string): Promise<void> {
   }
 
   await publishUpdate(messageId);
+  await notifyNewMessage(messageId);
 }
 
 async function publishUpdate(messageId: string): Promise<void> {
   const updated = await getMessage(messageId);
   if (updated) broadcastMessage('message_updated', updated);
+}
+
+/* ------------------------------------------------------------------ */
+/* 알림                                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 아직 알림을 보내지 않은 새 메시지들.
+ *
+ * 알림은 번역이 끝난 뒤에 보낸다. 받자마자 보내면 상대는 자기가 못 읽는 언어로 된
+ * 알림을 받게 된다. 다시 번역(retranslate)일 때는 여기 들어 있지 않으므로 알림도 없다.
+ */
+const awaitingNotify = new Set<string>();
+
+async function notifyNewMessage(messageId: string): Promise<void> {
+  if (!awaitingNotify.delete(messageId)) return;
+
+  const message = await getMessage(messageId);
+  if (!message) return;
+
+  const recipient = peerOf(message.senderId).profile.id;
+  // 앱을 열어 두고 있으면 화면에 이미 떠 있다. 굳이 알림까지 울릴 이유가 없다.
+  if (isOnline(recipient)) return;
+
+  const [sender, receiver] = await Promise.all([profileOf(message.senderId), profileOf(recipient)]);
+  const readingLang = receiver.displayLangs[0] ?? receiver.nativeLang;
+
+  // 받는 사람이 읽는 언어로 적는다. 아직 번역이 없으면 원문이라도 보낸다.
+  const translated = message.translations[readingLang]?.text;
+  const text =
+    message.sourceLang === readingLang ? message.sourceText : (translated ?? message.sourceText);
+  const label = message.attachment ? kindLabel(readingLang, message.attachment.kind) : '';
+  const body = [label, text].filter(Boolean).join('  ').trim();
+
+  await notify(recipient, {
+    title: sender.name,
+    body: body || '…',
+    url: `/?u=${encodeURIComponent(recipient)}`,
+    messageId: message.id,
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -235,6 +300,14 @@ function authenticate(c: { req: { header: (name: string) => string | undefined }
   return verifyToken(header?.replace(/^Bearer\s+/i, ''));
 }
 
+/**
+ * 헤더 대신 주소의 ?t= 로도 토큰을 받는다.
+ * <img src> 나 <audio src> 에는 헤더를 붙일 방법이 없어서, 사진·음성을 내려줄 때만 쓴다.
+ */
+function authenticateMedia(c: Context): string | null {
+  return authenticate(c) ?? verifyToken(c.req.query('t'));
+}
+
 app.get('/api/messages', async (c) => {
   const userId = authenticate(c);
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
@@ -266,6 +339,188 @@ app.put('/api/settings', async (c) => {
   const profile = await profileOf(userId);
   broadcast({ type: 'presence', userId, online: true });
   return c.json({ profile });
+});
+
+/** 대화방 배경. 기본 배경 id 이거나 `photo:<첨부 id>`. */
+app.put('/api/wallpaper', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { wallpaper?: unknown } | null;
+  const value = typeof body?.wallpaper === 'string' ? body.wallpaper.trim() : '';
+  const isPhoto = /^photo:[0-9a-f-]{36}$/i.test(value);
+  if (!isWallpaperId(value) && !isPhoto) {
+    return c.json({ error: '알 수 없는 배경입니다.' }, 400);
+  }
+
+  const current = await profileOf(userId);
+  await saveWallpaper(userId, value, {
+    nativeLang: current.nativeLang,
+    displayLangs: current.displayLangs,
+  });
+  return c.json({ profile: await profileOf(userId) });
+});
+
+/* --------------------------- 사진·음성 --------------------------- */
+
+const MIME_BY_KIND: Record<AttachmentKind, RegExp> = {
+  image: /^image\/(jpeg|png|webp|gif)$/,
+  audio: /^audio\/(webm|ogg|mp4|mpeg|aac|wav)(;.*)?$/,
+};
+
+/**
+ * 파일을 먼저 올리고, 그 id 를 실어 메시지를 보낸다.
+ * 사진을 WebSocket 으로 실어 보내면 그 사이 다른 메시지가 전부 밀린다.
+ */
+app.post('/api/attachments', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const kind = c.req.query('kind') === 'audio' ? 'audio' : 'image';
+  const mime = (c.req.header('content-type') ?? '').split(';')[0]?.trim() ?? '';
+  if (!MIME_BY_KIND[kind].test(mime)) {
+    return c.json({ error: `보낼 수 없는 형식입니다 (${mime || '알 수 없음'}).` }, 415);
+  }
+
+  const bytes = Buffer.from(await c.req.arrayBuffer());
+  if (bytes.byteLength === 0) return c.json({ error: '빈 파일입니다.' }, 400);
+  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    return c.json({ error: `파일이 너무 큽니다 (최대 ${MAX_ATTACHMENT_BYTES / 1024 / 1024}MB).` }, 413);
+  }
+
+  const number = (name: string): number | undefined => {
+    const raw = Number.parseInt(c.req.query(name) ?? '', 10);
+    return Number.isFinite(raw) && raw > 0 ? raw : undefined;
+  };
+
+  const attachment = await insertAttachment({
+    kind,
+    mime,
+    bytes,
+    senderId: userId,
+    ...(number('width') ? { width: number('width') as number } : {}),
+    ...(number('height') ? { height: number('height') as number } : {}),
+    ...(number('duration') ? { durationMs: number('duration') as number } : {}),
+  });
+  return c.json({ attachment });
+});
+
+app.get('/api/attachments/:id', async (c) => {
+  if (!authenticateMedia(c)) return c.json({ error: 'unauthorized' }, 401);
+
+  const file = await getAttachmentBytes(c.req.param('id'));
+  if (!file) return c.json({ error: '파일을 찾을 수 없습니다.' }, 404);
+
+  return c.body(new Uint8Array(file.bytes), 200, {
+    'content-type': file.mime,
+    // 내용이 바뀌지 않는 파일이다. 한 번 받은 폰은 다시 받지 않는다.
+    'cache-control': 'private, max-age=31536000, immutable',
+  });
+});
+
+/** 대화방 사진첩. 주고받은 사진만 최근 것부터. */
+app.get('/api/photos', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  return c.json({ photos: await listPhotos() });
+});
+
+/* ------------------------ 저장한 문장 / 단어장 ------------------------ */
+
+app.get('/api/saved', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+  const [items, keys] = await Promise.all([listSaved(userId), savedKeysOf(userId)]);
+  return c.json({ items, keys });
+});
+
+app.post('/api/saved', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  const messageId = typeof body?.messageId === 'string' ? body.messageId : '';
+  const text = typeof body?.text === 'string' ? body.text.trim() : '';
+  const lang = isLangCode(body?.lang) ? body.lang : null;
+  if (!messageId || !text || !lang) return c.json({ error: '저장할 문장이 없습니다.' }, 400);
+
+  const item = await saveSentence(userId, {
+    messageId,
+    lang,
+    text,
+    ...(isLangCode(body?.pairLang) ? { pairLang: body.pairLang } : {}),
+    ...(typeof body?.pairText === 'string' && body.pairText.trim()
+      ? { pairText: body.pairText.trim() }
+      : {}),
+    ...(typeof body?.note === 'string' && body.note.trim() ? { note: body.note.trim() } : {}),
+  });
+  return c.json({ item });
+});
+
+app.delete('/api/saved/:id', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+  await deleteSaved(userId, c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+app.get('/api/vocab', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+  return c.json({ entries: await listVocab(userId) });
+});
+
+app.post('/api/vocab', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  // 설명은 문장을 잘라서 주기 때문에 조각 끝에 물음표·쉼표가 붙어 온다. 떼고 담는다.
+  const term = cleanTerm(typeof body?.term === 'string' ? body.term : '');
+  const meaning = typeof body?.meaning === 'string' ? body.meaning.trim() : '';
+  const lang = isLangCode(body?.lang) ? body.lang : null;
+  if (!term || !meaning || !lang) return c.json({ error: '단어와 뜻이 필요합니다.' }, 400);
+
+  const entry = await saveVocab(userId, {
+    term,
+    lang,
+    meaning,
+    ...(typeof body?.reading === 'string' && body.reading.trim()
+      ? { reading: body.reading.trim() }
+      : {}),
+    ...(typeof body?.note === 'string' && body.note.trim() ? { note: body.note.trim() } : {}),
+    ...(typeof body?.messageId === 'string' ? { messageId: body.messageId } : {}),
+  });
+  return c.json({ entry });
+});
+
+app.delete('/api/vocab/:id', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+  await deleteVocab(userId, c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+/* ------------------------------ 알림 ------------------------------ */
+
+app.get('/api/push/key', (c) => {
+  const key = publicKey();
+  return key ? c.json({ key }) : c.json({ error: '알림을 쓸 수 없습니다.' }, 503);
+});
+
+app.post('/api/push/subscribe', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { subscription?: unknown } | null;
+  const ok = await subscribe(userId, (body?.subscription ?? {}) as never);
+  return ok ? c.json({ ok: true }) : c.json({ error: '알림 등록 정보가 올바르지 않습니다.' }, 400);
+});
+
+app.post('/api/push/unsubscribe', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  const body = (await c.req.json().catch(() => null)) as { endpoint?: unknown } | null;
+  if (typeof body?.endpoint === 'string') await unsubscribe(body.endpoint);
+  return c.json({ ok: true });
 });
 
 /* --------------------------- 문장 설명 --------------------------- */
@@ -430,7 +685,8 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
   switch (event.type) {
     case 'send': {
       const text = event.text.trim();
-      if (!text) return;
+      // 사진이나 음성만 보낼 수도 있다. 둘 다 없으면 보낼 게 없는 것이다.
+      if (!text && !event.attachmentId) return;
       if (text.length > MAX_MESSAGE_LENGTH) {
         send(socket, { type: 'error', message: `메시지가 너무 깁니다 (최대 ${MAX_MESSAGE_LENGTH}자).` });
         return;
@@ -441,17 +697,31 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
       }
 
       const profile = await profileOf(userId);
+      const messageId = crypto.randomUUID();
+
+      // 첨부는 이미 올라와 있다. 올린 사람이 같고 아직 어디에도 붙지 않았을 때만 붙는다.
+      let attachment: Attachment | null = null;
+      if (event.attachmentId) {
+        attachment = await attachToMessage(event.attachmentId, messageId, userId);
+        if (!attachment) {
+          send(socket, { type: 'error', message: '첨부한 파일을 찾지 못했습니다.' });
+          return;
+        }
+      }
+
       const message = await insertMessage({
-        id: crypto.randomUUID(),
+        id: messageId,
         senderId: userId,
         sourceText: text,
         sourceLang: isLangCode(event.sourceLang) ? event.sourceLang : profile.nativeLang,
         createdAt: Date.now(),
         ...(event.translationNote?.trim() ? { translationNote: event.translationNote.trim() } : {}),
+        ...(attachment ? { attachment } : {}),
       });
 
       // 번역을 기다리지 않고 원문을 먼저 띄운다. 번역은 곧 update 로 따라붙는다.
       broadcastMessage('message', message, { socket, clientId: event.clientId });
+      awaitingNotify.add(message.id);
       enqueueTranslation(message.id);
       return;
     }
@@ -484,6 +754,13 @@ try {
   await initDatabase();
   // 파일로 관리하던 용어집을 DB 로 옮긴다. 비어 있을 때 한 번만 옮겨 담는다.
   await seedGlossary(config.glossary);
+
+  // 알림 서명 키. 없으면 이때 한 번 만들어 DB 에 넣는다.
+  await initPush();
+
+  // 고르기만 하고 보내지 않은 사진·음성. 아무도 못 보는 데이터라 치운다.
+  const orphans = await purgeOrphanAttachments();
+  if (orphans > 0) console.log(`보내지 않은 첨부 ${orphans}건을 정리했습니다.`);
 
   // 번역 도중 서버가 꺼졌던 메시지들. 그냥 두면 영원히 "번역하는 중…" 으로 남는다.
   const stuck = await pendingMessageIds();

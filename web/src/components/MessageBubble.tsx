@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLongPress } from '../useLongPress';
 import { useT, type StringKey } from '../i18n';
 import { LANGUAGE_NAMES, type ChatMessage, type LangCode } from '@fran/shared';
+import { attachmentUrl, formatDuration } from '../media';
 
 interface Props {
   message: ChatMessage;
@@ -102,13 +103,47 @@ export default function MessageBubble({
           setExpanded((value) => !value);
         }}
       >
+        {message.attachment?.kind === 'image' && (
+          <a
+            className="bubble__photo"
+            href={attachmentUrl(message.attachment.id)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={attachmentUrl(message.attachment.id)}
+              alt={t('bubble.photo')}
+              loading="lazy"
+              width={message.attachment.width}
+              height={message.attachment.height}
+            />
+          </a>
+        )}
+
+        {message.attachment?.kind === 'audio' && (
+          <audio
+            className="bubble__audio"
+            src={attachmentUrl(message.attachment.id)}
+            controls
+            preload="none"
+            onClick={(event) => event.stopPropagation()}
+          />
+        )}
+
+        {message.attachment?.kind === 'audio' && message.attachment.durationMs && (
+          <span className="bubble__audioTime">
+            {t('bubble.voice')} · {formatDuration(message.attachment.durationMs)}
+          </span>
+        )}
+
         {headline ? (
           <p className="bubble__text">{headline}</p>
         ) : message.translationStatus === 'failed' ? (
           <p className="bubble__text bubble__text--muted">{message.sourceText}</p>
-        ) : (
+        ) : message.sourceText.trim() ? (
           <p className="bubble__text bubble__text--pending">{t('bubble.translating')}</p>
-        )}
+        ) : null}
 
         {sentAs && (
           <div className="bubble__sentAs">

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getToken, rememberedUser, setActiveUser, setToken } from './api';
-import ChatRoom from './components/ChatRoom';
+import Shell from './components/Shell';
 import Login from './components/Login';
 import { TranslateContext, browserUiLang, createTranslate, type UiLang } from './i18n';
 
@@ -46,7 +46,7 @@ export default function App() {
   return (
     <TranslateContext.Provider value={t}>
       {token ? (
-        <ChatRoom token={token} onLogout={handleLogout} onUiLang={setUiLang} />
+        <Shell token={token} onLogout={handleLogout} onUiLang={setUiLang} />
       ) : (
         <Login
           onLogin={handleLogin}

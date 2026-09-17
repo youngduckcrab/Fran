@@ -63,7 +63,14 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     setState((previous) => {
       switch (event.type) {
         case 'hello':
-          return { ...previous, me: event.me, peer: event.peer, messages: event.messages };
+          // 다시 이어졌으니 "연결하지 못했습니다" 는 치운다.
+          return {
+            ...previous,
+            me: event.me,
+            peer: event.peer,
+            messages: event.messages,
+            error: previous.error === 'disconnected' ? null : previous.error,
+          };
         case 'message':
           if (previous.messages.some((m) => m.id === event.message.id)) return previous;
           return { ...previous, messages: [...previous.messages, event.message], peerTyping: false };
@@ -170,8 +177,18 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   }, []);
 
   const sendMessage = useCallback(
-    (text: string, translationNote?: string, sourceLang?: LangCode) => {
-      emit({ type: 'send', clientId: newClientId(), text, sourceLang, translationNote });
+    (
+      text: string,
+      options: { translationNote?: string; sourceLang?: LangCode; attachmentId?: string } = {},
+    ) => {
+      emit({
+        type: 'send',
+        clientId: newClientId(),
+        text,
+        sourceLang: options.sourceLang,
+        translationNote: options.translationNote,
+        attachmentId: options.attachmentId,
+      });
     },
     [emit],
   );
@@ -195,3 +212,6 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
 
   return { ...state, sendMessage, retranslate, setTyping, setProfile, setGlossary, dismissError };
 }
+
+/** 화면들이 주고받는 대화 상태. Shell 이 한 번 만들어 아래로 내려준다. */
+export type Chat = ReturnType<typeof useChat>;

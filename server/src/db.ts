@@ -2,15 +2,21 @@ import crypto from 'node:crypto';
 import pg from 'pg';
 import {
   isLangCode,
+  type Attachment,
+  type AttachmentKind,
   type ChatMessage,
   type GlossaryDraft,
   type GlossaryEntry,
   type LangCode,
   type MessageExplanation,
+  type SavedSentence,
+  type SavedSentenceDraft,
   type Translation,
   type TranslationErrorCode,
   type TranslationNote,
   type TranslationStatus,
+  type VocabDraft,
+  type VocabEntry,
 } from '@fran/shared';
 import { config } from './config.js';
 
@@ -76,11 +82,73 @@ const SCHEMA = `
     display_langs TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS attachments (
+    id          TEXT   PRIMARY KEY,
+    kind        TEXT   NOT NULL,
+    mime        TEXT   NOT NULL,
+    bytes       BYTEA  NOT NULL,
+    size        INTEGER NOT NULL,
+    width       INTEGER,
+    height      INTEGER,
+    duration_ms INTEGER,
+    sender_id   TEXT   NOT NULL,
+    message_id  TEXT,
+    created_at  BIGINT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments (message_id);
+
+  CREATE TABLE IF NOT EXISTS saved_sentences (
+    id         TEXT   PRIMARY KEY,
+    user_id    TEXT   NOT NULL,
+    message_id TEXT   NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    lang       TEXT   NOT NULL,
+    text       TEXT   NOT NULL,
+    pair_lang  TEXT,
+    pair_text  TEXT,
+    note       TEXT,
+    created_at BIGINT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_saved_user ON saved_sentences (user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS vocab (
+    id         TEXT   PRIMARY KEY,
+    user_id    TEXT   NOT NULL,
+    term       TEXT   NOT NULL,
+    lang       TEXT   NOT NULL,
+    reading    TEXT,
+    meaning    TEXT   NOT NULL,
+    note       TEXT,
+    message_id TEXT,
+    created_at BIGINT NOT NULL
+  );
+
+  -- 같은 단어를 두 번 담아도 줄이 늘지 않게 한다.
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_unique ON vocab (user_id, lang, LOWER(term));
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint   TEXT   PRIMARY KEY,
+    user_id    TEXT   NOT NULL,
+    p256dh     TEXT   NOT NULL,
+    auth       TEXT   NOT NULL,
+    created_at BIGINT NOT NULL
+  );
+
+  -- 서버가 스스로 만들어 두고두고 써야 하는 값(알림 서명 키 등).
+  -- 환경변수로 받으면 사람이 한 번 더 손을 대야 하고, 재배포 때마다 새로 만들면
+  -- 이미 등록된 알림이 전부 무효가 된다.
+  CREATE TABLE IF NOT EXISTS app_secrets (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
   -- CREATE TABLE IF NOT EXISTS 는 이미 있는 테이블에 컬럼을 더해 주지 않는다.
   -- 먼저 배포된 DB 에도 새 컬럼이 생기도록 따로 적어 둔다. 여러 번 돌려도 안전하다.
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_error      TEXT;
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_error_code TEXT;
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_note       TEXT;
+  ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS wallpaper TEXT;
 `;
 
 /** 서버가 요청을 받기 전에 한 번 부른다. 스키마가 없으면 만든다. */
@@ -113,6 +181,31 @@ interface TranslationRow {
   created_at: number;
 }
 
+interface AttachmentRow {
+  id: string;
+  kind: string;
+  mime: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  message_id: string | null;
+  created_at: number;
+}
+
+function toAttachment(row: AttachmentRow): Attachment {
+  return {
+    id: row.id,
+    kind: row.kind as AttachmentKind,
+    mime: row.mime,
+    size: row.size,
+    ...(row.width ? { width: row.width } : {}),
+    ...(row.height ? { height: row.height } : {}),
+    ...(row.duration_ms ? { durationMs: row.duration_ms } : {}),
+    createdAt: row.created_at,
+  };
+}
+
 function parseJson<T>(raw: string, fallback: T): T {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -130,6 +223,17 @@ async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
     `SELECT * FROM translations WHERE message_id = ANY($1::text[])`,
     [rows.map((row) => row.id)],
   );
+
+  const { rows: attachmentRows } = await pool.query<AttachmentRow>(
+    // bytes 는 빼고 읽는다. 목록을 그릴 때 사진 원본까지 들고 올 이유가 없다.
+    `SELECT id, kind, mime, size, width, height, duration_ms, message_id, created_at
+       FROM attachments WHERE message_id = ANY($1::text[])`,
+    [rows.map((row) => row.id)],
+  );
+  const attachments = new Map<string, Attachment>();
+  for (const row of attachmentRows) {
+    if (row.message_id) attachments.set(row.message_id, toAttachment(row));
+  }
 
   const byMessage = new Map<string, Partial<Record<LangCode, Translation>>>();
   for (const row of translationRows) {
@@ -158,6 +262,7 @@ async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
       : {}),
     ...(row.translation_note ? { translationNote: row.translation_note } : {}),
     translations: byMessage.get(row.id) ?? {},
+    ...(attachments.has(row.id) ? { attachment: attachments.get(row.id) as Attachment } : {}),
   }));
 }
 
@@ -168,6 +273,7 @@ export async function insertMessage(message: {
   sourceLang: LangCode;
   createdAt: number;
   translationNote?: string;
+  attachment?: Attachment;
 }): Promise<ChatMessage> {
   await pool.query(
     `INSERT INTO messages (id, sender_id, source_text, source_lang, created_at, translation_status, translation_note)
@@ -182,6 +288,104 @@ export async function insertMessage(message: {
     ],
   );
   return { ...message, translationStatus: 'pending', translations: {} };
+}
+
+/* ------------------------------ 첨부 ------------------------------ */
+
+export async function insertAttachment(input: {
+  kind: AttachmentKind;
+  mime: string;
+  bytes: Buffer;
+  width?: number;
+  height?: number;
+  durationMs?: number;
+  senderId: string;
+}): Promise<Attachment> {
+  const id = crypto.randomUUID();
+  const createdAt = Date.now();
+  await pool.query(
+    `INSERT INTO attachments (id, kind, mime, bytes, size, width, height, duration_ms, sender_id, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      id,
+      input.kind,
+      input.mime,
+      input.bytes,
+      input.bytes.byteLength,
+      input.width ?? null,
+      input.height ?? null,
+      input.durationMs ?? null,
+      input.senderId,
+      createdAt,
+    ],
+  );
+  return {
+    id,
+    kind: input.kind,
+    mime: input.mime,
+    size: input.bytes.byteLength,
+    ...(input.width ? { width: input.width } : {}),
+    ...(input.height ? { height: input.height } : {}),
+    ...(input.durationMs ? { durationMs: input.durationMs } : {}),
+    createdAt,
+  };
+}
+
+/**
+ * 첨부를 메시지에 붙인다. 아직 아무 메시지에도 붙지 않았고 올린 사람이 같을 때만.
+ * 남의 첨부 id 를 적어 보내서 남의 사진을 자기 메시지로 만드는 일을 막는다.
+ */
+export async function attachToMessage(
+  attachmentId: string,
+  messageId: string,
+  senderId: string,
+): Promise<Attachment | null> {
+  const { rows } = await pool.query<AttachmentRow>(
+    `UPDATE attachments SET message_id = $1
+      WHERE id = $2 AND sender_id = $3 AND message_id IS NULL
+      RETURNING id, kind, mime, size, width, height, duration_ms, message_id, created_at`,
+    [messageId, attachmentId, senderId],
+  );
+  const row = rows[0];
+  return row ? toAttachment(row) : null;
+}
+
+export async function getAttachmentBytes(
+  id: string,
+): Promise<{ mime: string; bytes: Buffer } | null> {
+  const { rows } = await pool.query<{ mime: string; bytes: Buffer }>(
+    `SELECT mime, bytes FROM attachments WHERE id = $1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+/** 대화방 사진첩. 메시지에 붙은 사진만, 최근 것부터. */
+export async function listPhotos(limit = 200): Promise<Array<Attachment & { messageId: string; senderId: string }>> {
+  const { rows } = await pool.query<AttachmentRow & { sender_id: string }>(
+    `SELECT id, kind, mime, size, width, height, duration_ms, message_id, sender_id, created_at
+       FROM attachments
+      WHERE kind = 'image' AND message_id IS NOT NULL
+      ORDER BY created_at DESC LIMIT $1`,
+    [limit],
+  );
+  return rows.map((row) => ({
+    ...toAttachment(row),
+    messageId: row.message_id as string,
+    senderId: row.sender_id,
+  }));
+}
+
+/**
+ * 메시지에 끝내 붙지 못한 첨부를 치운다. 사진을 고른 뒤 보내지 않고 나가면
+ * 아무도 못 보는 데이터만 DB 에 남는다. 무료 DB 는 용량이 넉넉하지 않다.
+ */
+export async function purgeOrphanAttachments(olderThanMs = 24 * 60 * 60 * 1000): Promise<number> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM attachments WHERE message_id IS NULL AND created_at < $1`,
+    [Date.now() - olderThanMs],
+  );
+  return rowCount ?? 0;
 }
 
 export async function setTranslationNote(messageId: string, note: string | undefined): Promise<void> {
@@ -260,6 +464,7 @@ interface SettingsRow {
   user_id: string;
   native_lang: string;
   display_langs: string;
+  wallpaper: string | null;
 }
 
 async function settingsOf(userId: string): Promise<SettingsRow | null> {
@@ -387,5 +592,223 @@ export async function saveExplanation(messageId: string, explanation: MessageExp
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (message_id, target_lang, explain_lang) DO UPDATE SET payload = EXCLUDED.payload`,
     [messageId, explanation.targetLang, explanation.explainLang, JSON.stringify(explanation)],
+  );
+}
+
+/* --------------------- 저장한 문장 (보관함) --------------------- */
+
+interface SavedRow {
+  id: string;
+  user_id: string;
+  message_id: string;
+  lang: string;
+  text: string;
+  pair_lang: string | null;
+  pair_text: string | null;
+  note: string | null;
+  created_at: number;
+}
+
+function toSaved(row: SavedRow): SavedSentence {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    messageId: row.message_id,
+    lang: isLangCode(row.lang) ? row.lang : 'ko',
+    text: row.text,
+    ...(row.pair_lang && isLangCode(row.pair_lang) ? { pairLang: row.pair_lang } : {}),
+    ...(row.pair_text ? { pairText: row.pair_text } : {}),
+    ...(row.note ? { note: row.note } : {}),
+    createdAt: row.created_at,
+  };
+}
+
+export async function listSaved(userId: string): Promise<SavedSentence[]> {
+  const { rows } = await pool.query<SavedRow>(
+    `SELECT * FROM saved_sentences WHERE user_id = $1 ORDER BY created_at DESC`,
+    [userId],
+  );
+  return rows.map(toSaved);
+}
+
+export async function saveSentence(userId: string, draft: SavedSentenceDraft): Promise<SavedSentence> {
+  const entry: SavedSentence = {
+    id: crypto.randomUUID(),
+    userId,
+    messageId: draft.messageId,
+    lang: draft.lang,
+    text: draft.text,
+    ...(draft.pairLang ? { pairLang: draft.pairLang } : {}),
+    ...(draft.pairText ? { pairText: draft.pairText } : {}),
+    ...(draft.note ? { note: draft.note } : {}),
+    createdAt: Date.now(),
+  };
+  await pool.query(
+    `INSERT INTO saved_sentences (id, user_id, message_id, lang, text, pair_lang, pair_text, note, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      entry.id,
+      userId,
+      entry.messageId,
+      entry.lang,
+      entry.text,
+      entry.pairLang ?? null,
+      entry.pairText ?? null,
+      entry.note ?? null,
+      entry.createdAt,
+    ],
+  );
+  return entry;
+}
+
+/** 자기 것만 지울 수 있다. */
+export async function deleteSaved(userId: string, id: string): Promise<void> {
+  await pool.query(`DELETE FROM saved_sentences WHERE id = $1 AND user_id = $2`, [id, userId]);
+}
+
+/** 이 메시지의 이 언어 문장을 이미 저장해 뒀는지. 화면에서 별을 채워 보여주려고. */
+export async function savedKeysOf(userId: string): Promise<string[]> {
+  const { rows } = await pool.query<{ message_id: string; lang: string }>(
+    `SELECT message_id, lang FROM saved_sentences WHERE user_id = $1`,
+    [userId],
+  );
+  return rows.map((row) => `${row.message_id}:${row.lang}`);
+}
+
+/* ------------------------------ 단어장 ------------------------------ */
+
+interface VocabRow {
+  id: string;
+  user_id: string;
+  term: string;
+  lang: string;
+  reading: string | null;
+  meaning: string;
+  note: string | null;
+  message_id: string | null;
+  created_at: number;
+}
+
+function toVocab(row: VocabRow): VocabEntry {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    term: row.term,
+    lang: isLangCode(row.lang) ? row.lang : 'es',
+    ...(row.reading ? { reading: row.reading } : {}),
+    meaning: row.meaning,
+    ...(row.note ? { note: row.note } : {}),
+    ...(row.message_id ? { messageId: row.message_id } : {}),
+    createdAt: row.created_at,
+  };
+}
+
+export async function listVocab(userId: string): Promise<VocabEntry[]> {
+  const { rows } = await pool.query<VocabRow>(
+    `SELECT * FROM vocab WHERE user_id = $1 ORDER BY created_at DESC`,
+    [userId],
+  );
+  return rows.map(toVocab);
+}
+
+/**
+ * 같은 단어를 또 담으면 새 줄을 만들지 않고 뜻만 최신으로 바꾼다.
+ * 대화하다 보면 같은 단어를 여러 번 만나는데, 그때마다 줄이 늘면 단어장이 못 쓰게 된다.
+ */
+export async function saveVocab(userId: string, draft: VocabDraft): Promise<VocabEntry> {
+  const { rows } = await pool.query<VocabRow>(
+    `INSERT INTO vocab (id, user_id, term, lang, reading, meaning, note, message_id, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (user_id, lang, LOWER(term)) DO UPDATE SET
+       reading = EXCLUDED.reading, meaning = EXCLUDED.meaning,
+       note = EXCLUDED.note, message_id = EXCLUDED.message_id
+     RETURNING *`,
+    [
+      crypto.randomUUID(),
+      userId,
+      draft.term.trim(),
+      draft.lang,
+      draft.reading?.trim() || null,
+      draft.meaning.trim(),
+      draft.note?.trim() || null,
+      draft.messageId ?? null,
+      Date.now(),
+    ],
+  );
+  return toVocab(rows[0] as VocabRow);
+}
+
+export async function deleteVocab(userId: string, id: string): Promise<void> {
+  await pool.query(`DELETE FROM vocab WHERE id = $1 AND user_id = $2`, [id, userId]);
+}
+
+/* ---------------------------- 배경화면 ---------------------------- */
+
+export async function getWallpaper(userId: string): Promise<string | undefined> {
+  const row = await settingsOf(userId);
+  return row?.wallpaper ?? undefined;
+}
+
+export async function saveWallpaper(userId: string, wallpaper: string, fallback: {
+  nativeLang: LangCode;
+  displayLangs: LangCode[];
+}): Promise<void> {
+  // 설정 줄이 아직 없을 수도 있다(설정을 한 번도 저장하지 않은 사람).
+  await pool.query(
+    `INSERT INTO user_settings (user_id, native_lang, display_langs, wallpaper)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id) DO UPDATE SET wallpaper = EXCLUDED.wallpaper`,
+    [userId, fallback.nativeLang, fallback.displayLangs.join(','), wallpaper],
+  );
+}
+
+/* ------------------------------ 알림 ------------------------------ */
+
+export interface PushSubscriptionRow {
+  endpoint: string;
+  userId: string;
+  p256dh: string;
+  auth: string;
+}
+
+export async function savePushSubscription(sub: PushSubscriptionRow): Promise<void> {
+  await pool.query(
+    `INSERT INTO push_subscriptions (endpoint, user_id, p256dh, auth, created_at)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (endpoint) DO UPDATE SET
+       user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth`,
+    [sub.endpoint, sub.userId, sub.p256dh, sub.auth, Date.now()],
+  );
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  await pool.query(`DELETE FROM push_subscriptions WHERE endpoint = $1`, [endpoint]);
+}
+
+export async function listPushSubscriptions(userId: string): Promise<PushSubscriptionRow[]> {
+  const { rows } = await pool.query<{ endpoint: string; user_id: string; p256dh: string; auth: string }>(
+    `SELECT endpoint, user_id, p256dh, auth FROM push_subscriptions WHERE user_id = $1`,
+    [userId],
+  );
+  return rows.map((row) => ({
+    endpoint: row.endpoint,
+    userId: row.user_id,
+    p256dh: row.p256dh,
+    auth: row.auth,
+  }));
+}
+
+/* --------------------- 서버가 스스로 간직하는 값 --------------------- */
+
+export async function getSecret(key: string): Promise<string | null> {
+  const { rows } = await pool.query<{ value: string }>(`SELECT value FROM app_secrets WHERE key = $1`, [key]);
+  return rows[0]?.value ?? null;
+}
+
+export async function setSecret(key: string, value: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO app_secrets (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, value],
   );
 }

@@ -98,6 +98,69 @@ const ko = {
   'error.network': '번역 서버에 연결하지 못했습니다.',
   'error.modelNotFound': '번역 모델 설정이 잘못되었습니다.',
   'error.refused': '이 메시지는 번역할 수 없었습니다.',
+
+  'home.chat': '채팅',
+  'home.chatEmpty': '아직 주고받은 말이 없어요',
+  'home.saved': '저장한 문장',
+  'home.vocab': '단어장',
+  'home.album': '사진첩',
+  'home.unread': '안 읽은 메시지 {count}개',
+  'home.back': '홈',
+  'home.items': '{count}개',
+  'home.photos': '사진 {count}장',
+
+  'composer.photo': '사진 보내기',
+  'composer.record': '음성 녹음',
+  'composer.recording': '녹음 중 {time}',
+  'composer.sendRecording': '멈추고 보내기',
+  'composer.cancelRecording': '취소',
+  'composer.uploading': '올리는 중…',
+  'composer.photoReady': '사진이 준비됐어요',
+  'composer.voiceReady': '음성이 준비됐어요 ({time})',
+  'composer.removeAttachment': '빼기',
+  'composer.micDenied': '마이크를 쓸 수 없어요. 권한을 확인해 주세요.',
+
+  'bubble.photo': '사진',
+  'bubble.voice': '음성 메시지',
+
+  'actions.save': '이 문장 저장',
+  'actions.saveHint': '나중에 모아서 볼 수 있어요',
+  'actions.saved': '저장했어요',
+
+  'saved.title': '저장한 문장',
+  'saved.empty': '아직 저장한 문장이 없어요. 말풍선을 길게 눌러 저장할 수 있어요.',
+  'saved.delete': '지우기',
+
+  'vocab.title': '단어장',
+  'vocab.empty': '아직 담은 단어가 없어요. 설명 화면에서 + 를 눌러 담을 수 있어요.',
+  'vocab.add': '단어장에 담기',
+  'vocab.added': '담았어요',
+  'vocab.delete': '지우기',
+
+  'album.title': '사진첩',
+  'album.empty': '아직 주고받은 사진이 없어요.',
+  'album.setWallpaper': '배경으로',
+
+  'settings.wallpaper': '배경화면',
+  'settings.wallpaperHint': '사진첩에 있는 사진도 배경으로 쓸 수 있어요.',
+  'settings.notify': '알림',
+  'settings.notifyOn': '새 메시지 알림 받기',
+  'settings.notifyHint': '앱을 닫아 두었을 때 폰으로 알려줘요.',
+  'settings.notifyDenied': '브라우저에서 알림이 막혀 있어요. 브라우저 설정에서 허용해 주세요.',
+  'settings.notifyUnsupported': '이 브라우저에서는 알림을 쓸 수 없어요. 홈 화면에 추가하면 될 수도 있어요.',
+  'settings.notifyFailed': '알림을 켜지 못했어요.',
+
+  'wall.default': '기본',
+  'wall.night': '밤',
+  'wall.dawn': '새벽',
+  'wall.forest': '숲',
+  'wall.sand': '모래',
+  'wall.rose': '장미',
+  'wall.mono': '단색',
+  'wall.photo': '사진',
+
+  'chat.reconnectingShort': '연결 중…',
+
   'error.unknown': '번역하지 못했습니다.',
 } as const;
 
@@ -189,6 +252,68 @@ const es: Record<StringKey, string> = {
   'error.modelNotFound': 'La configuración del modelo de traducción es incorrecta.',
   'error.refused': 'Este mensaje no se pudo traducir.',
   'error.unknown': 'No se pudo traducir.',
+
+  'home.chat': 'Chat',
+  'home.chatEmpty': 'Todavía no hay mensajes',
+  'home.saved': 'Frases guardadas',
+  'home.vocab': 'Vocabulario',
+  'home.album': 'Fotos',
+  'home.unread': '{count} mensajes sin leer',
+  'home.back': 'Inicio',
+  'home.items': '{count}',
+  'home.photos': '{count} fotos',
+
+  'composer.photo': 'Enviar foto',
+  'composer.record': 'Grabar voz',
+  'composer.recording': 'Grabando {time}',
+  'composer.sendRecording': 'Parar y enviar',
+  'composer.cancelRecording': 'Cancelar',
+  'composer.uploading': 'Subiendo…',
+  'composer.photoReady': 'Foto lista',
+  'composer.voiceReady': 'Audio listo ({time})',
+  'composer.removeAttachment': 'Quitar',
+  'composer.micDenied': 'No se puede usar el micrófono. Revisa los permisos.',
+
+  'bubble.photo': 'Foto',
+  'bubble.voice': 'Mensaje de voz',
+
+  'actions.save': 'Guardar esta frase',
+  'actions.saveHint': 'Para repasarla después',
+  'actions.saved': 'Guardada',
+
+  'saved.title': 'Frases guardadas',
+  'saved.empty': 'Aún no guardaste ninguna frase. Mantén pulsado un mensaje para guardarlo.',
+  'saved.delete': 'Borrar',
+
+  'vocab.title': 'Vocabulario',
+  'vocab.empty': 'Aún no hay palabras. Pulsa + en la explicación para añadirlas.',
+  'vocab.add': 'Añadir al vocabulario',
+  'vocab.added': 'Añadida',
+  'vocab.delete': 'Borrar',
+
+  'album.title': 'Fotos',
+  'album.empty': 'Todavía no hay fotos.',
+  'album.setWallpaper': 'De fondo',
+
+  'settings.wallpaper': 'Fondo',
+  'settings.wallpaperHint': 'También puedes usar una foto del chat.',
+  'settings.notify': 'Avisos',
+  'settings.notifyOn': 'Avisarme de mensajes nuevos',
+  'settings.notifyHint': 'Te avisa en el teléfono cuando la app está cerrada.',
+  'settings.notifyDenied': 'El navegador tiene los avisos bloqueados. Permítelos en los ajustes.',
+  'settings.notifyUnsupported': 'Este navegador no puede avisarte. Prueba a añadir la app a la pantalla de inicio.',
+  'settings.notifyFailed': 'No se pudieron activar los avisos.',
+
+  'wall.default': 'Normal',
+  'wall.night': 'Noche',
+  'wall.dawn': 'Amanecer',
+  'wall.forest': 'Bosque',
+  'wall.sand': 'Arena',
+  'wall.rose': 'Rosa',
+  'wall.mono': 'Liso',
+  'wall.photo': 'Foto',
+
+  'chat.reconnectingShort': 'Conectando…',
 };
 
 const en: Record<StringKey, string> = {
@@ -277,6 +402,68 @@ const en: Record<StringKey, string> = {
   'error.modelNotFound': 'The translation model setting is wrong.',
   'error.refused': "This message couldn't be translated.",
   'error.unknown': "Couldn't translate this.",
+
+  'home.chat': 'Chat',
+  'home.chatEmpty': 'No messages yet',
+  'home.saved': 'Saved sentences',
+  'home.vocab': 'Vocabulary',
+  'home.album': 'Photos',
+  'home.unread': '{count} unread',
+  'home.back': 'Home',
+  'home.items': '{count}',
+  'home.photos': '{count} photos',
+
+  'composer.photo': 'Send a photo',
+  'composer.record': 'Record voice',
+  'composer.recording': 'Recording {time}',
+  'composer.sendRecording': 'Stop and send',
+  'composer.cancelRecording': 'Cancel',
+  'composer.uploading': 'Uploading…',
+  'composer.photoReady': 'Photo ready',
+  'composer.voiceReady': 'Audio ready ({time})',
+  'composer.removeAttachment': 'Remove',
+  'composer.micDenied': "Can't use the microphone. Check permissions.",
+
+  'bubble.photo': 'Photo',
+  'bubble.voice': 'Voice message',
+
+  'actions.save': 'Save this sentence',
+  'actions.saveHint': 'To go over it later',
+  'actions.saved': 'Saved',
+
+  'saved.title': 'Saved sentences',
+  'saved.empty': 'Nothing saved yet. Press and hold a message to save it.',
+  'saved.delete': 'Delete',
+
+  'vocab.title': 'Vocabulary',
+  'vocab.empty': 'No words yet. Tap + in an explanation to add one.',
+  'vocab.add': 'Add to vocabulary',
+  'vocab.added': 'Added',
+  'vocab.delete': 'Delete',
+
+  'album.title': 'Photos',
+  'album.empty': 'No photos yet.',
+  'album.setWallpaper': 'Use as background',
+
+  'settings.wallpaper': 'Background',
+  'settings.wallpaperHint': 'You can also use a photo from the chat.',
+  'settings.notify': 'Notifications',
+  'settings.notifyOn': 'Notify me of new messages',
+  'settings.notifyHint': 'Your phone tells you when the app is closed.',
+  'settings.notifyDenied': 'Notifications are blocked in this browser. Allow them in its settings.',
+  'settings.notifyUnsupported': "This browser can't notify you. Adding the app to your home screen may help.",
+  'settings.notifyFailed': "Couldn't turn notifications on.",
+
+  'wall.default': 'Default',
+  'wall.night': 'Night',
+  'wall.dawn': 'Dawn',
+  'wall.forest': 'Forest',
+  'wall.sand': 'Sand',
+  'wall.rose': 'Rose',
+  'wall.mono': 'Mono',
+  'wall.photo': 'Photo',
+
+  'chat.reconnectingShort': 'Connecting…',
 };
 
 const STRINGS: Record<UiLang, Record<StringKey, string>> = { ko, es, en };

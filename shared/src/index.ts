@@ -26,6 +26,8 @@ export interface UserProfile {
   nativeLang: LangCode;
   /** 상대 메시지를 어떤 언어로 받아볼지. 첫 번째가 주 언어. */
   displayLangs: LangCode[];
+  /** 대화방 배경. 기본 배경 id 이거나 `photo:<첨부 id>`. */
+  wallpaper?: string;
 }
 
 /** 번역문에 딸려오는 짧은 표현 설명. 학습용. */
@@ -61,6 +63,25 @@ export type TranslationErrorCode =
   | 'refused'
   | 'unknown';
 
+/* ---------- 첨부 (사진 / 음성) ---------- */
+
+export type AttachmentKind = 'image' | 'audio';
+
+/** 메시지에 딸린 사진이나 음성. 파일 자체는 DB 에 있고 여기엔 설명만 담는다. */
+export interface Attachment {
+  id: string;
+  kind: AttachmentKind;
+  mime: string;
+  /** 바이트 수. 화면에 크기를 보여주거나 너무 큰 것을 막는 데 쓴다. */
+  size: number;
+  /** 사진일 때. 받기 전에 자리를 잡아 두면 화면이 덜 튄다. */
+  width?: number;
+  height?: number;
+  /** 음성일 때, 길이(밀리초). */
+  durationMs?: number;
+  createdAt: number;
+}
+
 export interface ChatMessage {
   id: string;
   senderId: string;
@@ -80,6 +101,8 @@ export interface ChatMessage {
   translationNote?: string;
   /** 언어 코드 -> 번역. 원문 언어는 여기 포함되지 않는다. */
   translations: Partial<Record<LangCode, Translation>>;
+  /** 사진이나 음성. 글 없이 첨부만 보낼 수도 있다. */
+  attachment?: Attachment;
 }
 
 /* ---------- 문장 설명 (학습용) ---------- */
@@ -130,6 +153,74 @@ export interface GlossaryEntry {
 /** 저장할 때 쓰는 형태. id 와 updatedAt 은 서버가 매긴다. */
 export type GlossaryDraft = Omit<GlossaryEntry, 'id' | 'updatedAt'>;
 
+/* ---------- 모아 보기 (저장한 문장 / 단어장) ---------- */
+
+/**
+ * 나중에 다시 보려고 저장해 둔 문장.
+ *
+ * 메시지를 가리키기만 하면 번역을 다시 돌렸을 때 저장해 둔 문장이 바뀌어 버린다.
+ * 그때 그 문장 그대로를 함께 적어 둔다.
+ */
+export interface SavedSentence {
+  id: string;
+  /** 저장한 사람. 각자의 보관함이다. */
+  userId: string;
+  messageId: string;
+  /** 저장한 문장의 언어. */
+  lang: LangCode;
+  text: string;
+  /** 짝이 되는 내 언어 문장(있으면). 보관함에서 뜻을 같이 보기 위해. */
+  pairLang?: LangCode;
+  pairText?: string;
+  note?: string;
+  createdAt: number;
+}
+
+export type SavedSentenceDraft = Omit<SavedSentence, 'id' | 'userId' | 'createdAt'>;
+
+/** 단어장 한 줄. 설명 화면에서 조각을 그대로 담아 온다. */
+export interface VocabEntry {
+  id: string;
+  userId: string;
+  /** 표제어. 기호(¿ ? , …)는 떼고 담는다. */
+  term: string;
+  lang: LangCode;
+  /** 읽는 법(한자·한글처럼 읽기 어려운 문자일 때). */
+  reading?: string;
+  meaning: string;
+  note?: string;
+  /** 어느 메시지에서 담았는지. 되짚어 보기 위해. */
+  messageId?: string;
+  createdAt: number;
+}
+
+export type VocabDraft = Omit<VocabEntry, 'id' | 'userId' | 'createdAt'>;
+
+/**
+ * 표제어에서 문장부호를 떼어낸다. "¿Dormiste" → "Dormiste"
+ * 설명은 문장을 잘라서 주기 때문에 조각 끝에 물음표나 쉼표가 붙어 온다.
+ * 그대로 단어장에 담으면 같은 단어가 여러 줄로 쌓인다.
+ */
+export function cleanTerm(raw: string): string {
+  return raw
+    .replace(/[¿?¡!.,;:…"“”'‘’()\[\]{}<>«»。、！？「」『』・]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* ---------- 배경화면 ---------- */
+
+/** 기본으로 고를 수 있는 배경. 'custom' 은 직접 올린 사진이라 여기 없다. */
+export const WALLPAPERS = ['default', 'night', 'dawn', 'forest', 'sand', 'rose', 'mono'] as const;
+export type WallpaperId = (typeof WALLPAPERS)[number];
+
+/**
+ * 배경화면 설정값. 기본 배경은 그 id 를, 직접 올린 사진은 `photo:<첨부 id>` 를 쓴다.
+ */
+export function isWallpaperId(value: unknown): value is WallpaperId {
+  return typeof value === 'string' && (WALLPAPERS as readonly string[]).includes(value);
+}
+
 /* ---------- WebSocket 프로토콜 ---------- */
 
 export type ClientEvent =
@@ -138,6 +229,8 @@ export type ClientEvent =
       clientId: string;
       text: string;
       sourceLang?: LangCode;
+      /** 먼저 올려 둔 사진·음성의 id. 글 없이 이것만 보낼 수도 있다. */
+      attachmentId?: string;
       /** 이 메시지에만 적용할 번역 지시. 상대에게는 보이지 않는다. */
       translationNote?: string;
     }

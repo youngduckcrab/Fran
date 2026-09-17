@@ -1,7 +1,15 @@
-import { useState } from 'react';
-import { LANGUAGES, LANGUAGE_NAMES, type LangCode, type UserProfile } from '@fran/shared';
-import { saveSettings } from '../api';
-import { useT } from '../i18n';
+import { useEffect, useState } from 'react';
+import {
+  LANGUAGES,
+  LANGUAGE_NAMES,
+  WALLPAPERS,
+  type LangCode,
+  type UserProfile,
+} from '@fran/shared';
+import { saveSettings, saveWallpaper } from '../api';
+import { useT, type StringKey } from '../i18n';
+import { disablePush, enablePush, pushState, type PushState } from '../push';
+import { wallpaperPhotoId } from '../wallpaper';
 
 interface Props {
   profile: UserProfile;
@@ -35,6 +43,41 @@ export default function Settings({
   /** 목록의 첫 번째가 주 언어. 순서를 바꿔 어떤 번역을 크게 볼지 정한다. */
   const promote = (lang: LangCode) => {
     setDisplayLangs((current) => [lang, ...current.filter((item) => item !== lang)]);
+  };
+
+  /* ---- 배경화면 ---- */
+  const [wallpaper, setWallpaper] = useState<string>(profile.wallpaper ?? 'default');
+  const photoWall = wallpaperPhotoId(profile.wallpaper);
+
+  const chooseWallpaper = async (value: string) => {
+    const previous = wallpaper;
+    setWallpaper(value); // 누르자마자 바뀌는 게 보여야 고르는 맛이 있다
+    try {
+      onSaved(await saveWallpaper(value));
+    } catch (cause) {
+      setWallpaper(previous);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  /* ---- 알림 ---- */
+  const [push, setPush] = useState<PushState>('unsupported');
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    void pushState().then(setPush);
+  }, []);
+
+  const togglePush = async (want: boolean) => {
+    setPushBusy(true);
+    setError(null);
+    try {
+      setPush(want ? await enablePush() : await disablePush());
+    } catch {
+      setError(t('settings.notifyFailed'));
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   const submit = async () => {
@@ -117,6 +160,54 @@ export default function Settings({
             />
             {t('settings.showSource')}
           </label>
+        </section>
+
+        <section className="sheet__section">
+          <h3>{t('settings.wallpaper')}</h3>
+          <p className="sheet__hint">{t('settings.wallpaperHint')}</p>
+          <div className="walls">
+            {WALLPAPERS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className={`walls__item wall wall--${id} ${wallpaper === id ? 'is-on' : ''}`}
+                onClick={() => void chooseWallpaper(id)}
+              >
+                <span>{t(`wall.${id}` as StringKey)}</span>
+              </button>
+            ))}
+            {photoWall && (
+              <button
+                type="button"
+                className={`walls__item ${wallpaper === profile.wallpaper ? 'is-on' : ''}`}
+                onClick={() => void chooseWallpaper(profile.wallpaper as string)}
+              >
+                <span>{t('wall.photo')}</span>
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section className="sheet__section">
+          <h3>{t('settings.notify')}</h3>
+          {push === 'unsupported' ? (
+            <p className="sheet__hint">{t('settings.notifyUnsupported')}</p>
+          ) : push === 'denied' ? (
+            <p className="sheet__hint">{t('settings.notifyDenied')}</p>
+          ) : (
+            <>
+              <label className="sheet__toggle">
+                <input
+                  type="checkbox"
+                  checked={push === 'on'}
+                  disabled={pushBusy}
+                  onChange={(event) => void togglePush(event.target.checked)}
+                />
+                {t('settings.notifyOn')}
+              </label>
+              <p className="sheet__hint">{t('settings.notifyHint')}</p>
+            </>
+          )}
         </section>
 
         {error && <p className="sheet__error">{error}</p>}

@@ -1,0 +1,69 @@
+import { useEffect, useState } from 'react';
+import { LANGUAGE_NAMES, type SavedSentence } from '@fran/shared';
+import { deleteSaved, fetchSaved } from '../api';
+import { useT } from '../i18n';
+import { useSpeaker } from '../speech';
+
+interface Props {
+  onBack: () => void;
+}
+
+/** 나중에 다시 보려고 저장해 둔 문장들. */
+export default function SavedList({ onBack }: Props) {
+  const t = useT();
+  const [items, setItems] = useState<SavedSentence[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const speaker = useSpeaker();
+
+  useEffect(() => {
+    fetchSaved()
+      .then((result) => setItems(result.items))
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
+  }, []);
+
+  const remove = async (id: string) => {
+    setItems((current) => current?.filter((item) => item.id !== id) ?? null);
+    await deleteSaved(id).catch(() => undefined);
+  };
+
+  return (
+    <div className="page">
+      <header className="page__header">
+        <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
+          ‹
+        </button>
+        <h1>{t('saved.title')}</h1>
+      </header>
+
+      {error && <p className="sheet__error">{error}</p>}
+      {items && items.length === 0 && <p className="page__empty">{t('saved.empty')}</p>}
+
+      <ul className="cards">
+        {(items ?? []).map((item) => (
+          <li key={item.id} className="card">
+            <p className="card__main">
+              {item.text}
+              {speaker.supported && (
+                <button
+                  type="button"
+                  className={`bubble__speak ${speaker.speakingKey === item.id ? 'is-on' : ''}`}
+                  aria-label={speaker.speakingKey === item.id ? t('bubble.stop') : t('bubble.listen')}
+                  onClick={() => speaker.toggle(item.id, item.text, item.lang)}
+                >
+                  {speaker.speakingKey === item.id ? '■' : '▶'}
+                </button>
+              )}
+            </p>
+            {item.pairText && <p className="card__sub">{item.pairText}</p>}
+            <div className="card__foot">
+              <span className="card__tag">{LANGUAGE_NAMES[item.lang]}</span>
+              <button type="button" className="card__delete" onClick={() => void remove(item.id)}>
+                {t('saved.delete')}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
