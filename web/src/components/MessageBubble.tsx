@@ -10,6 +10,10 @@ interface Props {
   primaryLang: LangCode;
   /** 곁들여 보고 싶은 학습 언어들. */
   extraLangs: LangCode[];
+  /** 상대가 읽는 언어. 내가 보낸 메시지가 상대에게 어떻게 갔는지 보여주는 데 쓴다. */
+  peerLang: LangCode;
+  /** 상대 이름. 위 안내에 쓴다. */
+  peerName: string;
   alwaysShowSource: boolean;
   onRetranslate: (messageId: string, translationNote?: string) => void;
   /** 길게 눌렀을 때. 메뉴는 부모가 띄운다. */
@@ -25,6 +29,8 @@ export default function MessageBubble({
   mine,
   primaryLang,
   extraLangs,
+  peerLang,
+  peerName,
   alwaysShowSource,
   onRetranslate,
   onLongPress,
@@ -45,6 +51,10 @@ export default function MessageBubble({
 
   const notes = expanded ? (primary?.notes ?? []) : [];
 
+  // 내가 보낸 말이 상대에게 어떻게 도착했는지. 번역기를 쓰는 사람에게는 이게 가장
+  // 궁금한 부분이고, 서로의 언어를 배우려는 앱이라면 늘 보여야 한다.
+  const sentAs = mine && peerLang !== message.sourceLang ? message.translations[peerLang] : undefined;
+
   return (
     <li className={`bubble ${mine ? 'bubble--mine' : 'bubble--theirs'}`}>
       <div
@@ -62,6 +72,13 @@ export default function MessageBubble({
           <p className="bubble__text bubble__text--muted">{message.sourceText}</p>
         ) : (
           <p className="bubble__text bubble__text--pending">{t('bubble.translating')}</p>
+        )}
+
+        {sentAs && (
+          <p className="bubble__sentAs">
+            <span className="bubble__sentAsLabel">{t('bubble.sentAs', { name: peerName })}</span>
+            {sentAs.text}
+          </p>
         )}
 
         {showSource && (

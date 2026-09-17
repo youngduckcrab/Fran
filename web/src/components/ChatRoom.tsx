@@ -64,10 +64,17 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
   };
 
   const primaryLang: LangCode = chat.me?.displayLangs[0] ?? chat.me?.nativeLang ?? 'ko';
+  /** 상대가 실제로 읽는 언어. 내 메시지가 어떻게 갔는지 보여줄 때 쓴다. */
+  const peerLang: LangCode = chat.peer?.displayLangs[0] ?? chat.peer?.nativeLang ?? 'es';
 
   useEffect(() => {
     if (chat.me) onUiLang(toUiLang(primaryLang));
   }, [chat.me, primaryLang, onUiLang]);
+
+  // iOS 는 홈 화면에 추가할 때 문서 제목을 쓴다. 상대 이름으로 두면 아이콘이 그 사람이 된다.
+  useEffect(() => {
+    if (chat.peer) document.title = chat.peer.name;
+  }, [chat.peer]);
   const extraLangs = chat.me?.displayLangs.slice(1) ?? [];
 
   return (
@@ -109,6 +116,8 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
             mine={message.senderId === chat.me?.id}
             primaryLang={message.senderId === chat.me?.id ? message.sourceLang : primaryLang}
             extraLangs={extraLangs}
+            peerLang={peerLang}
+            peerName={chat.peer?.name ?? ''}
             alwaysShowSource={alwaysShowSource}
             onRetranslate={chat.retranslate}
             onLongPress={setPicked}

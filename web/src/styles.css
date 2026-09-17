@@ -705,3 +705,22 @@ textarea {
   font-weight: 600;
   text-align: center;
 }
+
+/* 내가 보낸 말이 상대에게 어떻게 갔는지 */
+.bubble__sentAs {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 14px;
+  opacity: 0.92;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 이 줄에는 사람 이름이 들어간다. 대문자로 바꾸면 "FRAN" 이 되어 버린다. */
+.bubble__sentAsLabel {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}

@@ -43,6 +43,7 @@ const ko = {
   'bubble.retry': '다시 시도',
   'bubble.failed': '번역하지 못했습니다.',
   'bubble.onlyYou': '나에게만 보입니다',
+  'bubble.sentAs': '{name} 에게는 이렇게 갔어요',
 
   'actions.title': '메시지 메뉴',
   'actions.explain': '설명',
@@ -129,6 +130,7 @@ const es: Record<StringKey, string> = {
   'bubble.retry': 'Reintentar',
   'bubble.failed': 'No se pudo traducir.',
   'bubble.onlyYou': 'Solo tú lo ves',
+  'bubble.sentAs': 'Así lo recibió {name}',
 
   'actions.title': 'Opciones del mensaje',
   'actions.explain': 'Explicar',
@@ -213,6 +215,7 @@ const en: Record<StringKey, string> = {
   'bubble.retry': 'Try again',
   'bubble.failed': "Couldn't translate this.",
   'bubble.onlyYou': 'Only you can see this',
+  'bubble.sentAs': 'How {name} received it',
 
   'actions.title': 'Message options',
   'actions.explain': 'Explain',

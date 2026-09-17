@@ -376,6 +376,46 @@ app.delete('/api/glossary/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+/* --------------------------- 앱 설치 --------------------------- */
+
+/**
+ * 홈 화면에 추가할 때 쓰는 매니페스트. 사람마다 다르게 준다.
+ *
+ * 하나로 두면 두 사람이 같은 이름·같은 시작 주소로 설치돼서, 설치한 앱을 열어도
+ * 자기 화면이 아니라 선택 화면이 뜬다. ?u= 를 보고 시작 주소를 그 사람 것으로 잡고,
+ * 이름은 상대의 이름으로 둔다 — 한 사람하고만 쓰는 메신저이기 때문이다.
+ */
+app.get('/manifest.webmanifest', async (c) => {
+  const requested = c.req.query('u');
+  const profiles = await bothProfiles();
+  const viewer = profiles.find((profile) => profile.id === requested);
+  const peer = viewer ? profiles.find((profile) => profile.id !== viewer.id) : undefined;
+
+  const startUrl = viewer ? `/?u=${encodeURIComponent(viewer.id)}` : '/';
+  const name = peer?.name ?? 'Fran';
+
+  return c.json(
+    {
+      name,
+      short_name: name,
+      description: '둘만 쓰는 번역 메신저',
+      lang: viewer?.displayLangs[0] ?? 'ko',
+      start_url: startUrl,
+      scope: '/',
+      display: 'standalone',
+      background_color: '#12121a',
+      theme_color: '#12121a',
+      icons: [
+        { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
+    },
+    200,
+    { 'content-type': 'application/manifest+json' },
+  );
+});
+
 // 빌드된 웹을 같은 프로세스에서 서빙한다(배포를 단순하게 유지).
 if (fs.existsSync(config.webDist)) {
   app.use('/*', serveStatic({ root: config.webDist }));
