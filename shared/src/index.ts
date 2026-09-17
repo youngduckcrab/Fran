@@ -46,6 +46,21 @@ export interface Translation {
 
 export type TranslationStatus = 'pending' | 'done' | 'failed';
 
+/**
+ * 번역 실패 사유. 문구 대신 코드를 보내서 읽는 사람의 언어로 보여준다.
+ * 서버 문구를 그대로 띄우면 한쪽은 못 읽는다.
+ */
+export type TranslationErrorCode =
+  | 'noApiKey'
+  | 'invalidApiKey'
+  | 'quotaMinute'
+  | 'quotaDay'
+  | 'overloaded'
+  | 'network'
+  | 'modelNotFound'
+  | 'refused'
+  | 'unknown';
+
 export interface ChatMessage {
   id: string;
   senderId: string;
@@ -56,6 +71,8 @@ export interface ChatMessage {
   translationStatus: TranslationStatus;
   /** 번역이 실패한 이유. 상대는 서버 로그를 볼 수 없으므로 화면에 띄운다. */
   translationError?: string;
+  /** 위 문구의 사유 코드. 화면은 이걸 보고 각자의 언어로 보여준다. */
+  translationErrorCode?: TranslationErrorCode;
   /**
    * 보낸 사람이 이 메시지에만 붙인 번역 지시. 예: "이번엔 amor 로 해줘"
    * 받는 사람에게는 전달하지 않는다. 서버가 보낸 사람에게만 실어 보낸다.

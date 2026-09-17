@@ -146,12 +146,8 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
         }
         // 연결된 적이 있든 없든, 계속 실패하고 있다면 그 사실을 알려야 한다.
         // 헤더의 "다시 연결하는 중…"만 조용히 도는 것으로는 뭐가 문제인지 알 수 없다.
-        setState((previous) => ({
-          ...previous,
-          error:
-            previous.error ??
-            '서버에 연결하지 못했습니다. 서버가 실행 중인지 터미널을 확인해 주세요. 계속 다시 시도합니다.',
-        }));
+        // 문구는 화면에서 각자의 언어로 붙인다. 여기서는 사유만 남긴다.
+        setState((previous) => ({ ...previous, error: previous.error ?? 'disconnected' }));
       }
 
       const delay = Math.min(RECONNECT_BASE_MS * attempts.current, RECONNECT_MAX_MS);

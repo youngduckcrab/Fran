@@ -180,9 +180,12 @@ async function runTranslation(messageId: string): Promise<void> {
     }
     await setTranslationStatus(messageId, 'done');
   } catch (error) {
-    const reason = error instanceof TranslationError ? error.message : String(error);
-    console.error(`[translate] ${messageId} 실패: ${reason}`);
-    await setTranslationStatus(messageId, 'failed', reason);
+    const failure =
+      error instanceof TranslationError
+        ? { message: error.message, code: error.code }
+        : { message: String(error), code: 'unknown' as const };
+    console.error(`[translate] ${messageId} 실패: ${failure.message}`);
+    await setTranslationStatus(messageId, 'failed', failure);
   }
 
   await publishUpdate(messageId);
@@ -214,9 +217,17 @@ app.post('/api/login', async (c) => {
 });
 
 /** 로그인 화면에 띄울 두 사람의 목록. 패스코드는 절대 내보내지 않는다. */
-app.get('/api/users', (c) =>
-  c.json(config.users.map((user) => ({ id: user.profile.id, name: user.profile.name }))),
-);
+/** 로그인 화면용 공개 정보. 화면 문구를 각자의 언어로 띄우려면 언어가 필요하다. */
+app.get('/api/users', async (c) => {
+  const profiles = await bothProfiles();
+  return c.json(
+    profiles.map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      uiLang: profile.displayLangs[0] ?? profile.nativeLang,
+    })),
+  );
+});
 
 function authenticate(c: { req: { header: (name: string) => string | undefined } }): string | null {
   const header = c.req.header('authorization');

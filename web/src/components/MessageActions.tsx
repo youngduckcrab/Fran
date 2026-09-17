@@ -1,3 +1,5 @@
+import { useT } from '../i18n';
+
 interface Props {
   /** 실패한 메시지에만 재번역을 띄운다. */
   canRetranslate: boolean;
@@ -15,23 +17,24 @@ export default function MessageActions({
   onRetranslate,
   onClose,
 }: Props) {
+  const t = useT();
   return (
-    <div className="sheet" role="dialog" aria-label="메시지 메뉴" onClick={onClose}>
+    <div className="sheet" role="dialog" aria-label={t('actions.title')} onClick={onClose}>
       <div className="sheet__panel actions" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="actions__item" onClick={onExplain}>
-          <b>설명</b>
-          <span>단어와 문법을 뜯어봅니다</span>
+          <b>{t('actions.explain')}</b>
+          <span>{t('actions.explainHint')}</span>
         </button>
         <button type="button" className="actions__item" onClick={onCopy}>
-          <b>복사</b>
+          <b>{t('actions.copy')}</b>
         </button>
         {canRetranslate && (
           <button type="button" className="actions__item" onClick={onRetranslate}>
-            <b>다시 번역</b>
+            <b>{t('actions.retranslate')}</b>
           </button>
         )}
         <button type="button" className="actions__item actions__cancel" onClick={onClose}>
-          닫기
+          {t('actions.close')}
         </button>
       </div>
     </div>

@@ -57,10 +57,14 @@ export class ClaudeProvider implements TranslationProvider {
       const status = (cause as { status?: number }).status;
       // 529(과부하)와 5xx 는 잠시 뒤면 대개 풀린다.
       if (status === 529 || (typeof status === 'number' && status >= 500)) {
-        throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true);
+        throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true, {
+          code: 'overloaded',
+        });
       }
       if (status === 429) {
-        throw new TranslationError('요청이 너무 잦습니다. 잠시 뒤 다시 시도해 주세요.');
+        throw new TranslationError('요청이 너무 잦습니다. 잠시 뒤 다시 시도해 주세요.', false, {
+          code: 'quotaMinute',
+        });
       }
       throw new TranslationError(`Claude 호출 실패: ${cause instanceof Error ? cause.message : String(cause)}`);
     }
@@ -68,6 +72,8 @@ export class ClaudeProvider implements TranslationProvider {
     if (response.stop_reason === 'refusal') {
       throw new TranslationError(
         `모델이 이 메시지의 번역을 거절했습니다 (${response.stop_details?.category ?? 'unknown'}).`,
+        false,
+        { code: 'refused' },
       );
     }
     if (response.stop_reason === 'max_tokens') {

@@ -40,7 +40,11 @@ export function getProvider(): TranslationProvider {
   const { provider, gemini, claude } = config.translation;
   if (provider === 'gemini') {
     if (!gemini.apiKey) {
-      throw new TranslationError('GEMINI_API_KEY 가 없습니다. https://aistudio.google.com/apikey 에서 발급하세요.');
+      throw new TranslationError(
+        'GEMINI_API_KEY 가 없습니다. https://aistudio.google.com/apikey 에서 발급하세요.',
+        false,
+        { code: 'noApiKey' },
+      );
     }
     cached = new GeminiProvider({
       apiKey: gemini.apiKey,
@@ -50,7 +54,11 @@ export function getProvider(): TranslationProvider {
     });
   } else {
     if (!claude.apiKey && !process.env.ANTHROPIC_AUTH_TOKEN) {
-      throw new TranslationError('ANTHROPIC_API_KEY 가 없습니다. https://console.anthropic.com 에서 발급하세요.');
+      throw new TranslationError(
+        'ANTHROPIC_API_KEY 가 없습니다. https://console.anthropic.com 에서 발급하세요.',
+        false,
+        { code: 'noApiKey' },
+      );
     }
     cached = new ClaudeProvider({ apiKey: claude.apiKey, model: claude.model, effort: claude.effort });
   }

@@ -43,6 +43,12 @@
 한 번 번역한 메시지는 다시 번역하지 않는다. 대화를 다시 열어도 API 비용이 들지 않는다.
 다시 번역하고 싶으면 `retranslate` 이벤트로 명시적으로 요청한다.
 
+**화면 문구는 사람마다 다르다.**
+번역만 해주고 화면은 한 언어로 두면 한쪽은 앱 자체를 못 쓴다. 화면 언어는 그 사람의
+"받아볼 언어" 첫 번째를 따라가고, 로그인 전에는 주소의 `?u=` 나 브라우저 설정으로 정한다.
+서버가 내려주는 실패 사유도 문구가 아니라 코드(`translationErrorCode`)로 보내서 화면에서
+각자의 언어로 푼다. 서버 문구를 그대로 띄우면 결국 한쪽은 못 읽는다.
+
 **설정이 틀렸다고 앱을 세우지 않는다.**
 없으면 앱이 성립하지 않는 값(`AUTH_SECRET`, 두 사람의 정보)만 시작을 막는다.
 `CLAUDE_EFFORT` 나 `GEMINI_SAFETY_THRESHOLD` 같은 조절용 설정이 이상하면 경고를 찍고
@@ -95,7 +101,8 @@ user_settings (
 | `scripts/free-ports.mjs` | `npm run dev` 전에 이전 프로세스를 정리 (/proc 을 직접 읽는다) |
 | `server/glossary.json` | 애칭·고유명사·둘만 아는 표현 |
 | `web/src/useChat.ts` | WebSocket 연결과 재연결, 클라이언트 상태 |
-| `web/src/components/` | 로그인 / 채팅방 / 말풍선 / 설정 |
+| `web/src/i18n.ts` | 화면 문구(한국어·스페인어·영어)와 언어 선택 |
+| `web/src/components/` | 로그인 / 채팅방 / 말풍선 / 설정 / 용어집 / 설명 |
 
 ## WebSocket 프로토콜
 

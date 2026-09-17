@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LANGUAGES, LANGUAGE_NAMES, type GlossaryEntry, type LangCode } from '@fran/shared';
 import { deleteGlossaryEntry, saveGlossaryEntry } from '../api';
+import { useT } from '../i18n';
 
 interface Props {
   entries: GlossaryEntry[];
@@ -29,6 +30,7 @@ function toDraft(entry: GlossaryEntry): Draft {
 }
 
 export default function Glossary({ entries, onChanged, onClose }: Props) {
+  const t = useT();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,23 +66,22 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
   };
 
   return (
-    <div className="sheet" role="dialog" aria-label="용어집">
+    <div className="sheet" role="dialog" aria-label={t('glossary.title')}>
       <div className="sheet__panel">
         <header className="sheet__header">
-          <h2>용어집</h2>
-          <button type="button" className="sheet__close" onClick={onClose} aria-label="닫기">
+          <h2>{t('glossary.title')}</h2>
+          <button type="button" className="sheet__close" onClick={onClose} aria-label={t('actions.close')}>
             ✕
           </button>
         </header>
         <p className="sheet__hint">
-          애칭·별명·둘만 아는 표현을 여기 적어두면 번역이 매번 그 규칙을 따릅니다.
-          "이렇게는 쓰지 말 것"도 정할 수 있습니다.
+          {t('glossary.hint')}
         </p>
 
         {draft === null ? (
           <>
             <ul className="glossary">
-              {entries.length === 0 && <li className="glossary__empty">아직 등록한 표현이 없습니다.</li>}
+              {entries.length === 0 && <li className="glossary__empty">{t('glossary.empty')}</li>}
               {entries.map((entry) => (
                 <li key={entry.id} className="glossary__item">
                   <button type="button" className="glossary__edit" onClick={() => setDraft(toDraft(entry))}>
@@ -88,7 +89,7 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
                     <span className="glossary__to">
                       {Object.entries(entry.translations ?? {})
                         .map(([lang, value]) => `${lang}: ${value}`)
-                        .join(' · ') || '번역하지 않고 그대로'}
+                        .join(' · ') || t('glossary.asIs')}
                     </span>
                     {entry.avoid && entry.avoid.length > 0 && (
                       <span className="glossary__avoid">✕ {entry.avoid.join(', ')}</span>
@@ -100,26 +101,26 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
             {error && <p className="sheet__error">{error}</p>}
             <div className="sheet__actions">
               <button type="button" className="sheet__save" onClick={() => setDraft({ ...EMPTY })}>
-                표현 추가
+                {t('glossary.add')}
               </button>
             </div>
           </>
         ) : (
           <>
             <section className="sheet__section">
-              <h3>표현</h3>
-              <p className="sheet__hint">내가 쓰는 말 그대로. 예: 애기</p>
+              <h3>{t('glossary.term')}</h3>
+              <p className="sheet__hint">{t('glossary.termHint')}</p>
               <input
                 className="login__input"
                 value={draft.term}
-                placeholder="애기"
+                placeholder={t('glossary.termPlaceholder')}
                 onChange={(event) => setDraft({ ...draft, term: event.target.value })}
               />
             </section>
 
             <section className="sheet__section">
-              <h3>이렇게 번역해 줘</h3>
-              <p className="sheet__hint">비워두면 번역하지 않고 원문 그대로 둡니다.</p>
+              <h3>{t('glossary.to')}</h3>
+              <p className="sheet__hint">{t('glossary.toHint')}</p>
               {LANGUAGES.map((lang) => (
                 <label key={lang} className="glossary__field">
                   <span>{LANGUAGE_NAMES[lang]}</span>
@@ -139,8 +140,8 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
             </section>
 
             <section className="sheet__section">
-              <h3>이렇게는 쓰지 마</h3>
-              <p className="sheet__hint">쉼표로 구분. 예: amor, cariño</p>
+              <h3>{t('glossary.avoid')}</h3>
+              <p className="sheet__hint">{t('glossary.avoidHint')}</p>
               <input
                 className="login__input"
                 value={draft.avoid}
@@ -150,11 +151,11 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
             </section>
 
             <section className="sheet__section">
-              <h3>메모 (선택)</h3>
+              <h3>{t('glossary.note')}</h3>
               <input
                 className="login__input"
                 value={draft.note}
-                placeholder="연인 사이 애칭"
+                placeholder={t('glossary.notePlaceholder')}
                 onChange={(event) => setDraft({ ...draft, note: event.target.value })}
               />
             </section>
@@ -163,7 +164,7 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
 
             <div className="sheet__actions">
               <button type="button" className="sheet__logout" onClick={() => setDraft(null)}>
-                취소
+                {t('glossary.cancel')}
               </button>
               {draft.id && (
                 <button
@@ -171,7 +172,7 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
                   className="sheet__logout"
                   onClick={() => draft.id && void run(() => deleteGlossaryEntry(draft.id!))}
                 >
-                  삭제
+                  {t('glossary.delete')}
                 </button>
               )}
               <button
@@ -180,7 +181,7 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
                 onClick={save}
                 disabled={busy || !draft.term.trim()}
               >
-                {busy ? '저장 중…' : '저장'}
+                {busy ? t('settings.saving') : t('settings.save')}
               </button>
             </div>
           </>

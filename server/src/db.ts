@@ -8,6 +8,7 @@ import {
   type LangCode,
   type MessageExplanation,
   type Translation,
+  type TranslationErrorCode,
   type TranslationNote,
   type TranslationStatus,
 } from '@fran/shared';
@@ -36,6 +37,7 @@ const SCHEMA = `
     created_at         BIGINT NOT NULL,
     translation_status TEXT   NOT NULL DEFAULT 'pending',
     translation_error  TEXT,
+    translation_error_code TEXT,
     translation_note   TEXT
   );
 
@@ -92,6 +94,7 @@ interface MessageRow {
   created_at: number;
   translation_status: string;
   translation_error: string | null;
+  translation_error_code: string | null;
   translation_note: string | null;
 }
 
@@ -144,6 +147,9 @@ async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
     createdAt: row.created_at,
     translationStatus: row.translation_status as TranslationStatus,
     ...(row.translation_error ? { translationError: row.translation_error } : {}),
+    ...(row.translation_error_code
+      ? { translationErrorCode: row.translation_error_code as TranslationErrorCode }
+      : {}),
     ...(row.translation_note ? { translationNote: row.translation_note } : {}),
     translations: byMessage.get(row.id) ?? {},
   }));
@@ -216,13 +222,13 @@ export async function saveTranslation(messageId: string, translation: Translatio
 export async function setTranslationStatus(
   messageId: string,
   status: TranslationStatus,
-  error?: string,
+  failure?: { message: string; code: TranslationErrorCode },
 ): Promise<void> {
-  await pool.query(`UPDATE messages SET translation_status = $1, translation_error = $2 WHERE id = $3`, [
-    status,
-    error ?? null,
-    messageId,
-  ]);
+  await pool.query(
+    `UPDATE messages SET translation_status = $1, translation_error = $2, translation_error_code = $3
+      WHERE id = $4`,
+    [status, failure?.message ?? null, failure?.code ?? null, messageId],
+  );
 }
 
 export async function clearTranslations(messageId: string): Promise<void> {

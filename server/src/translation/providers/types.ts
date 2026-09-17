@@ -1,3 +1,5 @@
+import type { TranslationErrorCode } from '@fran/shared';
+
 /** 번역 한 건에 대한 provider 공통 요청/응답. */
 
 export interface ProviderRequest {
@@ -32,6 +34,9 @@ export interface TranslationProvider {
 
 /** 번역이 실패한 이유를 사람이 읽을 수 있게 담는다. */
 export class TranslationError extends Error {
+  /** 화면이 각자의 언어로 보여줄 수 있도록 사유를 코드로도 남긴다. */
+  readonly code: TranslationErrorCode;
+
   /**
    * 잠시 뒤 다시 해보면 될 종류인지. 모델 과부하(503)나 일시적 네트워크 장애가
    * 여기 해당한다. 키가 틀렸거나 모델 이름이 없는 것은 몇 번을 해도 같다.
@@ -48,9 +53,10 @@ export class TranslationError extends Error {
   constructor(
     message: string,
     retryable = false,
-    options: { retryAfterMs?: number; retryLimit?: number } = {},
+    options: { retryAfterMs?: number; retryLimit?: number; code?: TranslationErrorCode } = {},
   ) {
     super(message);
+    this.code = options.code ?? 'unknown';
     this.retryable = retryable;
     this.retryAfterMs = options.retryAfterMs;
     this.retryLimit = options.retryLimit;

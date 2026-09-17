@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LANGUAGES, LANGUAGE_NAMES, type LangCode, type UserProfile } from '@fran/shared';
 import { saveSettings } from '../api';
+import { useT } from '../i18n';
 
 interface Props {
   profile: UserProfile;
@@ -19,6 +20,7 @@ export default function Settings({
   onClose,
   onLogout,
 }: Props) {
+  const t = useT();
   const [nativeLang, setNativeLang] = useState<LangCode>(profile.nativeLang);
   const [displayLangs, setDisplayLangs] = useState<LangCode[]>(profile.displayLangs);
   const [error, setError] = useState<string | null>(null);
@@ -49,18 +51,18 @@ export default function Settings({
   };
 
   return (
-    <div className="sheet" role="dialog" aria-label="설정">
+    <div className="sheet" role="dialog" aria-label={t('settings.title')}>
       <div className="sheet__panel">
         <header className="sheet__header">
-          <h2>설정</h2>
-          <button type="button" className="sheet__close" onClick={onClose} aria-label="닫기">
+          <h2>{t('settings.title')}</h2>
+          <button type="button" className="sheet__close" onClick={onClose} aria-label={t('actions.close')}>
             ✕
           </button>
         </header>
 
         <section className="sheet__section">
-          <h3>내가 쓰는 언어</h3>
-          <p className="sheet__hint">입력한 문장이 이 언어라고 가정하고 번역합니다.</p>
+          <h3>{t('settings.myLang')}</h3>
+          <p className="sheet__hint">{t('settings.myLangHint')}</p>
           <div className="chips">
             {LANGUAGES.map((lang) => (
               <button
@@ -76,9 +78,9 @@ export default function Settings({
         </section>
 
         <section className="sheet__section">
-          <h3>내가 받아볼 언어</h3>
+          <h3>{t('settings.readLang')}</h3>
           <p className="sheet__hint">
-            맨 위 언어가 크게 표시됩니다. 공부 중인 언어를 추가하면 말풍선을 눌렀을 때 함께 보입니다.
+            {t('settings.readLangHint')}
           </p>
           <div className="chips">
             {LANGUAGES.map((lang) => (
@@ -113,7 +115,7 @@ export default function Settings({
               checked={alwaysShowSource}
               onChange={(event) => onToggleSource(event.target.checked)}
             />
-            원문을 항상 함께 보기
+            {t('settings.showSource')}
           </label>
         </section>
 
@@ -121,7 +123,7 @@ export default function Settings({
 
         <div className="sheet__actions">
           <button type="button" className="sheet__logout" onClick={onLogout}>
-            로그아웃
+            {t('settings.logout')}
           </button>
           <button
             type="button"
@@ -129,7 +131,7 @@ export default function Settings({
             onClick={submit}
             disabled={busy || displayLangs.length === 0}
           >
-            {busy ? '저장 중…' : '저장'}
+            {busy ? t('settings.saving') : t('settings.save')}
           </button>
         </div>
       </div>

@@ -25,6 +25,8 @@ async function parseError(response: Response): Promise<never> {
 export interface LoginOption {
   id: string;
   name: string;
+  /** 이 사람이 화면을 어느 언어로 볼지. 로그인 전에도 문구를 맞추기 위해 쓴다. */
+  uiLang: LangCode;
 }
 
 export async function fetchUsers(): Promise<LoginOption[]> {

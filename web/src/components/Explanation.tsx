@@ -6,6 +6,7 @@ import {
   type MessageExplanation,
 } from '@fran/shared';
 import { explainMessage } from '../api';
+import { useT } from '../i18n';
 
 interface Props {
   message: ChatMessage;
@@ -23,6 +24,7 @@ function availableLangs(message: ChatMessage): LangCode[] {
 }
 
 export default function Explanation({ message, initialLang, onClose }: Props) {
+  const t = useT();
   const langs = availableLangs(message);
   const [lang, setLang] = useState<LangCode>(langs.includes(initialLang) ? initialLang : message.sourceLang);
   const [explanation, setExplanation] = useState<MessageExplanation | null>(null);
@@ -50,11 +52,11 @@ export default function Explanation({ message, initialLang, onClose }: Props) {
     lang === message.sourceLang ? message.sourceText : message.translations[lang]?.text ?? '';
 
   return (
-    <div className="sheet" role="dialog" aria-label="문장 설명">
+    <div className="sheet" role="dialog" aria-label={t('explain.title')}>
       <div className="sheet__panel">
         <header className="sheet__header">
-          <h2>설명</h2>
-          <button type="button" className="sheet__close" onClick={onClose} aria-label="닫기">
+          <h2>{t('explain.title')}</h2>
+          <button type="button" className="sheet__close" onClick={onClose} aria-label={t('actions.close')}>
             ✕
           </button>
         </header>
@@ -76,7 +78,7 @@ export default function Explanation({ message, initialLang, onClose }: Props) {
 
         <p className="explain__sentence">{sentence}</p>
 
-        {busy && <p className="explain__loading">읽어보는 중…</p>}
+        {busy && <p className="explain__loading">{t('explain.loading')}</p>}
         {error && <p className="sheet__error">{error}</p>}
 
         {explanation && (
@@ -100,7 +102,7 @@ export default function Explanation({ message, initialLang, onClose }: Props) {
 
             {explanation.points.length > 0 && (
               <section className="sheet__section">
-                <h3>짚고 갈 점</h3>
+                <h3>{t('explain.points')}</h3>
                 <ul className="explain__points">
                   {explanation.points.map((point, index) => (
                     <li key={index}>{point}</li>
@@ -111,7 +113,7 @@ export default function Explanation({ message, initialLang, onClose }: Props) {
 
             {explanation.replies.length > 0 && (
               <section className="sheet__section">
-                <h3>이렇게 답할 수 있어요</h3>
+                <h3>{t('explain.replies')}</h3>
                 <ul className="explain__replies">
                   {explanation.replies.map((reply, index) => (
                     <li key={index}>{reply}</li>

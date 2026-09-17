@@ -61,21 +61,26 @@ export class GeminiProvider implements TranslationProvider {
       // 자주 만나는 실패에는 무엇을 해야 하는지까지 적어 준다.
       if (/API_KEY_INVALID|API key not valid/i.test(message)) {
         throw new TranslationError(
-          'GEMINI_API_KEY 가 올바르지 않습니다. https://aistudio.google.com/apikey 에서 키를 다시 확인하고 ' +
-            '.env 에 붙여 넣은 뒤 서버를 재시작하세요(.env 는 시작할 때 한 번만 읽습니다).',
+          'GEMINI_API_KEY 가 올바르지 않습니다. https://aistudio.google.com/apikey 에서 키를 다시 확인하세요.',
+          false,
+          { code: 'invalidApiKey' },
         );
       }
       if (/429|RESOURCE_EXHAUSTED|quota/i.test(message)) throw quotaError(message);
       // 모델 과부하와 서버 오류는 잠시 뒤면 대개 풀린다.
       if (/\b(500|502|503|504)\b|UNAVAILABLE|INTERNAL|high demand|overloaded/i.test(message)) {
-        throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true);
+        throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true, {
+          code: 'overloaded',
+        });
       }
       if (/fetch failed|ECONNRESET|ETIMEDOUT|network/i.test(message)) {
-        throw new TranslationError('네트워크 문제로 모델에 연결하지 못했습니다.', true);
+        throw new TranslationError('네트워크 문제로 모델에 연결하지 못했습니다.', true, { code: 'network' });
       }
       if (/404|NOT_FOUND|not found/i.test(message)) {
         throw new TranslationError(
           `모델 "${this.model}" 을 찾을 수 없습니다. 'npm run models --workspace=server' 로 쓸 수 있는 모델을 확인하세요. (${message})`,
+          false,
+          { code: 'modelNotFound' },
         );
       }
       throw new TranslationError(`Gemini 호출 실패: ${message}`);
@@ -128,6 +133,8 @@ function quotaError(raw: string): TranslationError {
     return new TranslationError(
       '오늘 쓸 수 있는 무료 요청을 다 썼습니다. 하루 한도는 태평양 시간 자정' +
         '(한국 시간 오후 4~5시쯤)에 초기화됩니다.',
+      false,
+      { code: 'quotaDay' },
     );
   }
 
@@ -137,6 +144,7 @@ function quotaError(raw: string): TranslationError {
   return new TranslationError(`분당 요청 한도를 넘었습니다. ${hint} 뒤 다시 시도해 주세요.`, retryable, {
     retryAfterMs: waitMs,
     retryLimit: 1,
+    code: 'quotaMinute',
   });
 }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLongPress } from '../useLongPress';
+import { useT, type StringKey } from '../i18n';
 import { LANGUAGE_NAMES, type ChatMessage, type LangCode } from '@fran/shared';
 
 interface Props {
@@ -28,6 +29,7 @@ export default function MessageBubble({
   onRetranslate,
   onLongPress,
 }: Props) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const { handlers, consumeClick } = useLongPress(() => onLongPress(message));
 
@@ -59,7 +61,7 @@ export default function MessageBubble({
         ) : message.translationStatus === 'failed' ? (
           <p className="bubble__text bubble__text--muted">{message.sourceText}</p>
         ) : (
-          <p className="bubble__text bubble__text--pending">번역하는 중…</p>
+          <p className="bubble__text bubble__text--pending">{t('bubble.translating')}</p>
         )}
 
         {showSource && (
@@ -89,16 +91,18 @@ export default function MessageBubble({
       </div>
 
       {mine && message.translationNote && (
-        <p className="bubble__note" title="나에게만 보입니다">
+        <p className="bubble__note" title={t('bubble.onlyYou')}>
           ✎ {message.translationNote}
         </p>
       )}
 
       {message.translationStatus === 'failed' && (
         <p className="bubble__failure">
-          {message.translationError ?? '번역하지 못했습니다.'}
+          {message.translationErrorCode
+            ? t(`error.${message.translationErrorCode}` as StringKey)
+            : (message.translationError ?? t('bubble.failed'))}
           <button type="button" className="bubble__retry" onClick={() => onRetranslate(message.id)}>
-            다시 시도
+            {t('bubble.retry')}
           </button>
         </p>
       )}

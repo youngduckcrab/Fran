@@ -6,16 +6,20 @@ import Glossary from './Glossary';
 import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
 import Settings from './Settings';
+import { toUiLang, useT, type UiLang } from '../i18n';
 
 interface Props {
   token: string;
   onLogout: () => void;
+  /** 내 표시 언어가 정해지면 화면 문구도 그 언어로 맞춘다. */
+  onUiLang: (lang: UiLang) => void;
 }
 
 const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
 const TYPING_IDLE_MS = 1500;
 
-export default function ChatRoom({ token, onLogout }: Props) {
+export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
+  const t = useT();
   const chat = useChat(token, onLogout);
   const [draft, setDraft] = useState('');
   /** 이번 메시지에만 붙일 번역 지시. 보낸 뒤 비워진다. */
@@ -60,36 +64,40 @@ export default function ChatRoom({ token, onLogout }: Props) {
   };
 
   const primaryLang: LangCode = chat.me?.displayLangs[0] ?? chat.me?.nativeLang ?? 'ko';
+
+  useEffect(() => {
+    if (chat.me) onUiLang(toUiLang(primaryLang));
+  }, [chat.me, primaryLang, onUiLang]);
   const extraLangs = chat.me?.displayLangs.slice(1) ?? [];
 
   return (
     <div className="chat">
       <header className="chat__header">
         <div>
-          <h1 className="chat__peer">{chat.peer?.name ?? '연결 중'}</h1>
+          <h1 className="chat__peer">{chat.peer?.name ?? t('chat.connecting')}</h1>
           <p className="chat__status">
             {chat.connection !== 'open'
-              ? '다시 연결하는 중…'
+              ? t('chat.reconnecting')
               : chat.peerTyping
-                ? '입력 중…'
+                ? t('chat.typing')
                 : chat.peerOnline
-                  ? '접속 중'
-                  : '오프라인'}
+                  ? t('chat.online')
+                  : t('chat.offline')}
           </p>
         </div>
         <div className="chat__actions">
           <button type="button" className="chat__settings" onClick={() => setGlossaryOpen(true)}>
-            용어집
+            {t('chat.glossary')}
           </button>
           <button type="button" className="chat__settings" onClick={() => setSettingsOpen(true)}>
-            설정
+            {t('chat.settings')}
           </button>
         </div>
       </header>
 
       {chat.error && (
         <div className="chat__banner" onClick={chat.dismissError}>
-          {chat.error}
+          {chat.error === 'disconnected' ? t('chat.disconnected') : chat.error}
         </div>
       )}
 
@@ -115,10 +123,10 @@ export default function ChatRoom({ token, onLogout }: Props) {
             className="note__input"
             value={note}
             autoFocus
-            placeholder="이 메시지만: 어떻게 번역할지 (예: amor 로 해줘)"
+            placeholder={t('note.placeholder')}
             onChange={(event) => setNote(event.target.value)}
           />
-          <p className="note__hint">상대에게는 보이지 않습니다. 보내고 나면 지워집니다.</p>
+          <p className="note__hint">{t('note.hint')}</p>
         </div>
       )}
 
@@ -127,8 +135,8 @@ export default function ChatRoom({ token, onLogout }: Props) {
           type="button"
           className={`composer__note ${noteOpen || note ? 'is-on' : ''}`}
           onClick={() => setNoteOpen((open) => !open)}
-          aria-label="번역 지시"
-          title="이 메시지만 번역 지시"
+          aria-label={t('note.button')}
+          title={t('note.button')}
         >
           ✎
         </button>
@@ -136,7 +144,7 @@ export default function ChatRoom({ token, onLogout }: Props) {
           className="composer__input"
           rows={1}
           value={draft}
-          placeholder={`${chat.peer?.name ?? '상대'}에게 보내기`}
+          placeholder={t('chat.sendTo', { name: chat.peer?.name ?? '' })}
           onChange={(event) => handleDraftChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -146,7 +154,7 @@ export default function ChatRoom({ token, onLogout }: Props) {
           }}
         />
         <button className="composer__send" type="submit" disabled={!draft.trim()}>
-          보내기
+          {t('chat.send')}
         </button>
       </form>
 
