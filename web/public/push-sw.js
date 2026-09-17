@@ -15,6 +15,12 @@ self.addEventListener('push', (event) => {
     data = { body: event.data ? event.data.text() : '' };
   }
 
+  // 앱 아이콘에 안 읽은 수를 붙인다. 지원하지 않는 기기에서는 조용히 넘어간다.
+  if (typeof data.unread === 'number' && self.navigator && self.navigator.setAppBadge) {
+    if (data.unread > 0) self.navigator.setAppBadge(data.unread).catch(() => undefined);
+    else self.navigator.clearAppBadge().catch(() => undefined);
+  }
+
   event.waitUntil(
     self.registration.showNotification(data.title || 'Fran', {
       body: data.body || '',

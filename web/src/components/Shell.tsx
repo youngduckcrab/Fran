@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LangCode } from '@fran/shared';
 import { useChat } from '../useChat';
 import { fetchPhotos, fetchSaved, fetchVocab } from '../api';
@@ -78,28 +78,27 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   }, [chat.peer]);
 
   /* ---- 안 읽은 메시지 ---- */
-  const [unread, setUnread] = useState(0);
-  const seen = useRef(0);
-  /** 처음 받아온 지난 대화는 "새로 온 것"이 아니다. */
-  const primed = useRef(false);
 
+  /**
+   * 내가 어디까지 읽었는지는 서버가 기억한다. 화면에서 세던 때는 앱을 껐다 켜면
+   * 숫자가 사라졌고, 폰과 컴퓨터에서 각각 다르게 셌다.
+   */
+  const myReadAt = chat.readAt[chat.me?.id ?? ''] ?? 0;
+  const unread = chat.messages.filter(
+    (message) => message.senderId !== chat.me?.id && message.createdAt > myReadAt,
+  ).length;
+
+  // 홈 화면 아이콘에도 숫자를 붙인다(지원하는 기기에서만).
   useEffect(() => {
-    // 채팅을 보고 있으면 읽은 것으로 친다.
-    if (view === 'chat') {
-      seen.current = chat.messages.length;
-      primed.current = true;
-      setUnread(0);
-      return;
-    }
-    if (!primed.current) {
-      if (chat.messages.length > 0) primed.current = true;
-      seen.current = chat.messages.length;
-      return;
-    }
-    const fresh = chat.messages.slice(seen.current).filter((m) => m.senderId !== chat.me?.id);
-    if (fresh.length > 0) setUnread((count) => count + fresh.length);
-    seen.current = chat.messages.length;
-  }, [chat.messages, chat.me?.id, view]);
+    const badge = navigator as Navigator & {
+      setAppBadge?: (count?: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    if (!badge.setAppBadge) return;
+    const done =
+      unread > 0 ? badge.setAppBadge(unread) : (badge.clearAppBadge?.() ?? Promise.resolve());
+    void done.catch(() => undefined);
+  }, [unread]);
 
   const lastMessage = chat.messages[chat.messages.length - 1];
   const extraLangs = useMemo(() => chat.me?.displayLangs.slice(1) ?? [], [chat.me]);

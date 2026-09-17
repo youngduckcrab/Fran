@@ -35,10 +35,12 @@ import { config, findUserById, peerOf } from './config.js';
 import {
   attachToMessage,
   clearTranslations,
+  countUnread,
   deleteSaved,
   deleteVocab,
   getAttachmentBytes,
   getAudioForTranscription,
+  getReadState,
   getTheme,
   getVocab,
   getWallpaper,
@@ -47,6 +49,7 @@ import {
   listPhotos,
   listSaved,
   listVocab,
+  markRead,
   purgeOrphanAttachments,
   saveSentence,
   saveVocab,
@@ -340,11 +343,16 @@ async function notifyNewMessage(messageId: string): Promise<void> {
   const label = message.attachment ? kindLabel(readingLang, message.attachment.kind) : '';
   const body = [label, text].filter(Boolean).join('  ').trim();
 
+  // 폰 아이콘에 붙일 숫자. 알림이 여러 통 쌓였을 때 몇 통인지 보이게 한다.
+  const readState = await getReadState();
+  const unread = await countUnread(recipient, readState[recipient] ?? 0);
+
   await notify(recipient, {
     title: sender.name,
     body: body || '…',
     url: `/?u=${encodeURIComponent(recipient)}`,
     messageId: message.id,
+    unread,
   });
 }
 
@@ -938,8 +946,13 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
       broadcast({ type: 'typing', userId, isTyping: event.isTyping }, socket);
       return;
 
-    case 'read':
+    case 'read': {
+      if (typeof event.at !== 'number' || !Number.isFinite(event.at)) return;
+      const at = await markRead(userId, event.at);
+      // 상대 화면의 "읽음"을 바로 켜 준다.
+      broadcast({ type: 'read', userId, at });
       return;
+    }
   }
 }
 
@@ -1011,11 +1024,12 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
   sockets.set(socket, userId);
 
   void (async () => {
-    const [me, peer, recent, glossary] = await Promise.all([
+    const [me, peer, recent, glossary, readAt] = await Promise.all([
       profileOf(userId),
       profileOf(peerOf(userId).profile.id),
       getRecentMessages(50),
       listGlossary(),
+      getReadState(),
     ]);
     if (socket.readyState !== socket.OPEN) return;
 
@@ -1024,6 +1038,7 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
       me,
       peer,
       messages: recent.map((message) => messageFor(userId, message)),
+      readAt,
     });
     send(socket, { type: 'glossary', entries: glossary });
     send(socket, { type: 'presence', userId: peer.id, online: isOnline(peer.id) });

@@ -286,18 +286,28 @@ export type ClientEvent =
   | { type: 'typing'; isTyping: boolean }
   /** 지시를 바꿔서 다시 번역할 수 있다. 생략하면 기존 지시를 그대로 쓴다. */
   | { type: 'retranslate'; messageId: string; translationNote?: string }
-  | { type: 'read'; messageId: string }
+  /** 여기까지 읽었다. 값은 읽은 마지막 메시지의 시각. */
+  | { type: 'read'; at: number }
   /** 이모지 반응. 같은 이모지를 다시 누르거나 null 을 보내면 지운다. */
   | { type: 'react'; messageId: string; emoji: string | null };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */
-  | { type: 'hello'; me: UserProfile; peer: UserProfile; messages: ChatMessage[] }
+  | {
+      type: 'hello';
+      me: UserProfile;
+      peer: UserProfile;
+      messages: ChatMessage[];
+      /** 사람 id -> 그 사람이 어디까지 읽었는지(시각). */
+      readAt: Record<string, number>;
+    }
   /** 새 메시지. 원문만 담겨 도착하고, 번역은 뒤이어 update 로 온다. */
   | { type: 'message'; message: ChatMessage; clientId?: string }
   | { type: 'message_updated'; message: ChatMessage }
   | { type: 'typing'; userId: string; isTyping: boolean }
   | { type: 'presence'; userId: string; online: boolean }
+  /** 상대가 여기까지 읽었다. */
+  | { type: 'read'; userId: string; at: number }
   | { type: 'error'; message: string }
   /** 용어집이 바뀌었다. 양쪽 화면을 맞춘다. */
   | { type: 'glossary'; entries: GlossaryEntry[] };

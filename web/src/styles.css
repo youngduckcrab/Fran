@@ -1982,3 +1982,17 @@ button:active:not(:disabled) {
   color: var(--ok);
   font-size: 14px;
 }
+
+/* ---------- 읽음 표시 ---------- */
+
+.bubble__read {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.55;
+}
+
+/* 상대가 읽으면 색이 들어온다. */
+.bubble__read.is-on {
+  color: var(--accent);
+  opacity: 1;
+}

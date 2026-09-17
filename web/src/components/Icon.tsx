@@ -20,7 +20,8 @@ export type IconName =
   | 'back'
   | 'heart'
   | 'sparkle'
-  | 'check';
+  | 'check'
+  | 'checks';
 
 interface Props {
   name: IconName;
@@ -75,6 +76,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="M5.5 12.5 10 17l8.5-9" />,
+  // 두 번 겹친 체크 = 상대가 읽었다.
+  checks: (
+    <>
+      <path d="M2.5 12.5 7 17l8.5-9" />
+      <path d="M11 14.5 12.5 16l8-8.5" />
+    </>
+  ),
 };
 
 /** 속이 찬 그림들. 선만 그리면 너무 가늘어 보이는 것들이다. */

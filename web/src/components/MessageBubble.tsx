@@ -36,6 +36,8 @@ interface Props {
   repliedTo?: ChatMessage;
   /** 나 자신의 id. 내 반응인지 구분한다. */
   myId: string;
+  /** 상대가 이 메시지를 읽었는지. 내가 보낸 것에만 쓴다. */
+  readByPeer: boolean;
 }
 
 function formatTime(timestamp: number): string {
@@ -58,6 +60,7 @@ export default function MessageBubble({
   onReply,
   repliedTo,
   myId,
+  readByPeer,
   onRetranslate,
 }: Props) {
   const t = useT();
@@ -280,6 +283,16 @@ export default function MessageBubble({
       <div className="bubble__meta">
         {canHearSource && speaker(sourceKey, own, message.sourceLang)}
         <time dateTime={new Date(message.createdAt).toISOString()}>{formatTime(message.createdAt)}</time>
+        {/* 내가 보낸 것에만. 체크 하나는 보냈다, 둘은 상대가 읽었다. */}
+        {mine && (
+          <span
+            className={`bubble__read ${readByPeer ? 'is-on' : ''}`}
+            title={readByPeer ? t('bubble.read') : t('bubble.sent')}
+            aria-label={readByPeer ? t('bubble.read') : t('bubble.sent')}
+          >
+            <Icon name={readByPeer ? 'checks' : 'check'} size={14} />
+          </span>
+        )}
       </div>
     </li>
   );

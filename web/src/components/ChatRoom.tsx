@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChatMessage, LangCode } from '@fran/shared';
 import type { Chat } from '../useChat';
 import { useT } from '../i18n';
@@ -54,6 +54,25 @@ export default function ChatRoom({
   useLayoutEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [chat.messages, chat.peerTyping]);
+
+  /**
+   * 대화를 보고 있으면 읽은 것으로 친다.
+   *
+   * 화면이 떠 있어도 폰을 주머니에 넣어 둔 상태(가려진 탭)에서는 읽었다고 하지 않는다.
+   * 다시 앱으로 돌아오면 그때 표시한다.
+   */
+  const newest = chat.messages[chat.messages.length - 1]?.createdAt ?? 0;
+  const { markRead } = chat;
+
+  useEffect(() => {
+    if (!newest) return;
+    const mark = () => {
+      if (document.visibilityState === 'visible') markRead(newest);
+    };
+    mark();
+    document.addEventListener('visibilitychange', mark);
+    return () => document.removeEventListener('visibilitychange', mark);
+  }, [newest, markRead]);
 
   /** 상대가 실제로 읽는 언어. 내 메시지가 어떻게 갔는지 보여줄 때 쓴다. */
   const peerLang: LangCode = chat.peer?.displayLangs[0] ?? chat.peer?.nativeLang ?? 'es';
@@ -116,6 +135,7 @@ export default function ChatRoom({
               ? { repliedTo: byId.get(message.replyTo) as ChatMessage }
               : {})}
             myId={chat.me?.id ?? ''}
+            readByPeer={(chat.readAt[chat.peer?.id ?? ''] ?? 0) >= message.createdAt}
           />
         ))}
         <div ref={bottomRef} />

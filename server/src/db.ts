@@ -153,6 +153,12 @@ const SCHEMA = `
   -- 서버가 스스로 만들어 두고두고 써야 하는 값(알림 서명 키 등).
   -- 환경변수로 받으면 사람이 한 번 더 손을 대야 하고, 재배포 때마다 새로 만들면
   -- 이미 등록된 알림이 전부 무효가 된다.
+  -- 각자 어디까지 읽었는지. 메시지마다 남기면 줄이 무한정 늘어난다.
+  CREATE TABLE IF NOT EXISTS read_state (
+    user_id      TEXT   PRIMARY KEY,
+    last_read_at BIGINT NOT NULL
+  );
+
   -- 앱에서 바꾼 로그인 비밀번호. 바꾸기 전에는 줄이 없고, 그때는 .env 값을 쓴다.
   CREATE TABLE IF NOT EXISTS credentials (
     user_id       TEXT    PRIMARY KEY,
@@ -1044,4 +1050,39 @@ export async function saveCredential(userId: string, hash: string): Promise<Cred
     [userId, hash, Date.now()],
   );
   return { hash, tokenVersion: rows[0]?.token_version ?? 2 };
+}
+
+/* ----------------------------- 읽음 표시 ----------------------------- */
+
+/** 사람 id -> 어디까지 읽었는지(시각). */
+export async function getReadState(): Promise<Record<string, number>> {
+  const { rows } = await pool.query<{ user_id: string; last_read_at: number }>(
+    `SELECT user_id, last_read_at FROM read_state`,
+  );
+  return Object.fromEntries(rows.map((row) => [row.user_id, row.last_read_at]));
+}
+
+/**
+ * 여기까지 읽었다고 적는다.
+ *
+ * 뒤로는 가지 않는다(GREATEST). 지난 대화를 보려고 위로 올라갔다가 내려온 것뿐인데
+ * 읽은 표시가 되돌아가면 상대 화면에서 읽음이 사라진다.
+ */
+export async function markRead(userId: string, at: number): Promise<number> {
+  const { rows } = await pool.query<{ last_read_at: number }>(
+    `INSERT INTO read_state (user_id, last_read_at) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET last_read_at = GREATEST(read_state.last_read_at, EXCLUDED.last_read_at)
+     RETURNING last_read_at`,
+    [userId, at],
+  );
+  return rows[0]?.last_read_at ?? at;
+}
+
+/** 이 사람이 아직 안 읽은, 상대가 보낸 메시지 수. */
+export async function countUnread(userId: string, since: number): Promise<number> {
+  const { rows } = await pool.query<{ count: number }>(
+    `SELECT COUNT(*)::int AS count FROM messages WHERE sender_id <> $1 AND created_at > $2`,
+    [userId, since],
+  );
+  return rows[0]?.count ?? 0;
 }

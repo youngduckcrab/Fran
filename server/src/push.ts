@@ -67,6 +67,8 @@ export interface PushPayload {
   /** 알림을 눌렀을 때 열 주소. 그 사람의 앱 주소. */
   url: string;
   messageId: string;
+  /** 이 사람이 아직 안 읽은 메시지 수. 폰 아이콘에 숫자로 붙인다. */
+  unread?: number;
 }
 
 /**

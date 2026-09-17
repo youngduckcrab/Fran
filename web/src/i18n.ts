@@ -132,6 +132,8 @@ const ko = {
 
   'bubble.photo': '사진',
   'bubble.voice': '음성 메시지',
+  'bubble.sent': '보냄',
+  'bubble.read': '읽음',
   'bubble.transcript': '받아쓴 글',
   'bubble.transcribing': '무슨 말인지 듣는 중…',
   'bubble.transcribeFailed': '받아쓰지 못했어요.',
@@ -326,6 +328,8 @@ const es: Record<StringKey, string> = {
 
   'bubble.photo': 'Foto',
   'bubble.voice': 'Mensaje de voz',
+  'bubble.sent': 'Enviado',
+  'bubble.read': 'Leído',
   'bubble.transcript': 'Lo que se dijo',
   'bubble.transcribing': 'Escuchando…',
   'bubble.transcribeFailed': 'No se pudo transcribir.',
@@ -516,6 +520,8 @@ const en: Record<StringKey, string> = {
 
   'bubble.photo': 'Photo',
   'bubble.voice': 'Voice message',
+  'bubble.sent': 'Sent',
+  'bubble.read': 'Read',
   'bubble.transcript': 'What was said',
   'bubble.transcribing': 'Listening…',
   'bubble.transcribeFailed': "Couldn't transcribe this.",

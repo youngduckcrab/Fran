@@ -16,6 +16,8 @@ export interface ChatState {
   me: UserProfile | null;
   peer: UserProfile | null;
   messages: ChatMessage[];
+  /** 사람 id -> 어디까지 읽었는지(시각). */
+  readAt: Record<string, number>;
   peerOnline: boolean;
   peerTyping: boolean;
   error: string | null;
@@ -53,6 +55,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     me: null,
     peer: null,
     messages: [],
+    readAt: {},
     peerOnline: false,
     peerTyping: false,
     error: null,
@@ -69,6 +72,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
             me: event.me,
             peer: event.peer,
             messages: event.messages,
+            readAt: event.readAt,
             error: previous.error === 'disconnected' ? null : previous.error,
           };
         case 'message':
@@ -87,6 +91,11 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
           return previous.peer && event.userId === previous.peer.id
             ? { ...previous, peerTyping: event.isTyping }
             : previous;
+        case 'read':
+          // 읽은 자리는 뒤로 가지 않는다.
+          return (previous.readAt[event.userId] ?? 0) >= event.at
+            ? previous
+            : { ...previous, readAt: { ...previous.readAt, [event.userId]: event.at } };
         case 'glossary':
           return { ...previous, glossary: event.entries };
         case 'error':
@@ -199,6 +208,26 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     [emit],
   );
 
+  /**
+   * 여기까지 읽었다고 알린다.
+   *
+   * 이미 그만큼 읽은 것으로 돼 있으면 보내지 않는다. 말풍선이 새로 그려질 때마다
+   * 같은 값을 계속 보내면 서버와 상대 화면이 쓸데없이 바빠진다.
+   */
+  const markRead = useCallback(
+    (at: number) => {
+      const mine = state.me?.id;
+      if (!mine || (state.readAt[mine] ?? 0) >= at) return;
+      emit({ type: 'read', at });
+      setState((previous) =>
+        (previous.readAt[mine] ?? 0) >= at
+          ? previous
+          : { ...previous, readAt: { ...previous.readAt, [mine]: at } },
+      );
+    },
+    [emit, state.me?.id, state.readAt],
+  );
+
   /** 말풍선에 이모지 하나. 같은 걸 다시 누르면 지워진다. */
   const react = useCallback(
     (messageId: string, emoji: string | null) => emit({ type: 'react', messageId, emoji }),
@@ -225,6 +254,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   return {
     ...state,
     sendMessage,
+    markRead,
     react,
     retranslate,
     setTyping,
