@@ -100,22 +100,34 @@ export default function MessageBubble({
   // 쪽에서 상대 언어로 들을 수 있다.)
   const sourceKey = `${message.id}:source`;
   const sentAsKey = `${message.id}:sentAs`;
+  const primaryKey = `${message.id}:primary`;
   const canHearSource = speechSupported && !mine && Boolean(own);
 
-  const speaker = (key: string, text: string, lang: LangCode) => (
-    <button
-      type="button"
-      className={`bubble__speak ${speakingKey === key ? 'is-on' : ''}`}
-      aria-label={speakingKey === key ? t('bubble.stop') : t('bubble.listen')}
-      title={speakingKey === key ? t('bubble.stop') : t('bubble.listen')}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSpeak(key, text, lang);
-      }}
-    >
-      <Icon name={speakingKey === key ? 'stop' : 'play'} size={13} />
-    </button>
-  );
+  /**
+   * 소리 버튼. 줄마다 하나씩 붙어서, 그 줄에 적힌 말을 읽는다.
+   * 무엇을 읽는지(원문인지 번역인지)를 설명에 적어 둔다 — 버튼이 둘 다 같게 생겼기 때문이다.
+   */
+  const speaker = (key: string, text: string, lang: LangCode, what: 'source' | 'translation') => {
+    const label = speakingKey === key
+      ? t('bubble.stop')
+      : what === 'source'
+        ? t('bubble.listenSource')
+        : t('bubble.listenTranslation');
+    return (
+      <button
+        type="button"
+        className={`bubble__speak ${speakingKey === key ? 'is-on' : ''}`}
+        aria-label={label}
+        title={label}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSpeak(key, text, lang);
+        }}
+      >
+        <Icon name={speakingKey === key ? 'stop' : 'play'} size={13} />
+      </button>
+    );
+  };
 
   return (
     <li className={`bubble ${mine ? 'bubble--mine' : 'bubble--theirs'}`}>
@@ -180,7 +192,11 @@ export default function MessageBubble({
         )}
 
         {headline ? (
-          <p className="bubble__text">{headline}</p>
+          <p className="bubble__text">
+            {headline}
+            {/* 크게 보이는 줄이 번역문일 때. 내 언어로 어떻게 들리는지도 들어볼 수 있다. */}
+            {speechSupported && !isSourceLanguage && speaker(primaryKey, headline, primaryLang, 'translation')}
+          </p>
         ) : message.translationStatus === 'failed' ? (
           <p className="bubble__text bubble__text--muted">{own}</p>
         ) : own ? (
@@ -204,7 +220,7 @@ export default function MessageBubble({
             {!sentAsHidden && (
               <p className="bubble__sentAsText">
                 {sentAs.text}
-                {speechSupported && speaker(sentAsKey, sentAs.text, peerLang)}
+                {speechSupported && speaker(sentAsKey, sentAs.text, peerLang, 'translation')}
               </p>
             )}
             {failedSpeechKey === sentAsKey && (
@@ -231,6 +247,7 @@ export default function MessageBubble({
               {audio ? t('bubble.transcript') : LANGUAGE_NAMES[message.sourceLang]}
             </span>
             {own}
+            {canHearSource && speaker(sourceKey, own, message.sourceLang, 'source')}
           </p>
         )}
 
@@ -287,7 +304,8 @@ export default function MessageBubble({
       )}
 
       <div className="bubble__meta">
-        {canHearSource && speaker(sourceKey, own, message.sourceLang)}
+        {/* 원문 줄이 접혀 있을 때만. 펼치면 그 줄에 붙은 버튼이 같은 일을 한다. */}
+        {canHearSource && !showSource && speaker(sourceKey, own, message.sourceLang, 'source')}
         <time dateTime={new Date(message.createdAt).toISOString()}>{formatTime(message.createdAt)}</time>
         {/* 내가 보낸 것에만. 체크 하나는 보냈다, 둘은 상대가 읽었다. */}
         {mine && (

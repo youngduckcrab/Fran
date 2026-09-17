@@ -45,6 +45,8 @@ const ko = {
   'bubble.onlyYou': '나에게만 보입니다',
   'bubble.sentAs': '{name} 에게는 이렇게 갔어요',
   'bubble.listen': '소리로 듣기',
+  'bubble.listenSource': '원문 듣기',
+  'bubble.listenTranslation': '번역 듣기',
   'bubble.stop': '그만 듣기',
   'bubble.noVoice': '이 기기에 {lang} 목소리가 없어요.',
 
@@ -252,6 +254,8 @@ const es: Record<StringKey, string> = {
   'bubble.onlyYou': 'Solo tú lo ves',
   'bubble.sentAs': 'Así lo recibió {name}',
   'bubble.listen': 'Escuchar',
+  'bubble.listenSource': 'Escuchar el original',
+  'bubble.listenTranslation': 'Escuchar la traducción',
   'bubble.stop': 'Detener',
   'bubble.noVoice': 'Este equipo no tiene una voz en {lang}.',
 
@@ -456,6 +460,8 @@ const en: Record<StringKey, string> = {
   'bubble.onlyYou': 'Only you can see this',
   'bubble.sentAs': 'How {name} received it',
   'bubble.listen': 'Listen',
+  'bubble.listenSource': 'Listen to the original',
+  'bubble.listenTranslation': 'Listen to the translation',
   'bubble.stop': 'Stop',
   'bubble.noVoice': 'This device has no {lang} voice.',
 

@@ -86,7 +86,28 @@ export default function SavedList({ onBack }: Props) {
                 </button>
               )}
             </p>
-            {item.pairText && <p className="card__sub">{item.pairText}</p>}
+            {item.pairText && (
+              <p className="card__sub">
+                {item.pairText}
+                {/* 짝이 되는 문장도 들을 수 있다. 저장해 둔 문장은 대개 소리 내 보려고 담는다. */}
+                {speaker.supported && item.pairLang && (
+                  <button
+                    type="button"
+                    className={`bubble__speak ${speaker.speakingKey === `${item.id}:pair` ? 'is-on' : ''}`}
+                    aria-label={t('bubble.listenTranslation')}
+                    title={t('bubble.listenTranslation')}
+                    onClick={() =>
+                      speaker.toggle(`${item.id}:pair`, item.pairText as string, item.pairLang as LangCode)
+                    }
+                  >
+                    <Icon
+                      name={speaker.speakingKey === `${item.id}:pair` ? 'stop' : 'play'}
+                      size={13}
+                    />
+                  </button>
+                )}
+              </p>
+            )}
             <div className="card__foot">
               <span className="card__tag">{new Date(item.createdAt).toLocaleDateString()}</span>
               <button type="button" className="card__delete" onClick={() => void remove(item.id)}>
