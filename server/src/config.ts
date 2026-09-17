@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { isLangCode, type GlossaryEntry, type LangCode, type UserProfile } from '@fran/shared';
+import { LANGUAGES, isLangCode, type GlossaryEntry, type LangCode, type UserProfile } from '@fran/shared';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,6 +18,10 @@ function fromRoot(target: string): string {
   return path.isAbsolute(target) ? target : path.resolve(repoRoot, target);
 }
 
+/**
+ * 없으면 앱이 성립하지 않는 값만 여기서 막는다. 서명 비밀키나 두 사람의 정보처럼
+ * 적당히 기본값을 골라 줄 수 없는 것들이다.
+ */
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -26,23 +30,38 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * 조절용 설정이 잘못돼 있다고 앱 전체를 세우지는 않는다. 쓰지도 않는 provider 의
+ * 설정 한 줄 때문에 대화가 멈추는 편이, 기본값으로 도는 것보다 훨씬 나쁘다.
+ * 대신 무엇이 무시됐는지 시작할 때 분명히 알린다.
+ */
+function ignored<T>(name: string, value: string, fallback: T, expected: string): T {
+  console.warn(
+    `⚠️  환경변수 ${name} 의 값 "${value}" 을 알아볼 수 없어 무시합니다. ` +
+      `(가능한 값: ${expected}) 기본값 "${String(fallback)}" 으로 계속합니다.`,
+  );
+  return fallback;
+}
+
 function lang(name: string, fallback: LangCode): LangCode {
   const value = process.env[name];
   if (value === undefined) return fallback;
-  if (!isLangCode(value)) {
-    throw new Error(`환경변수 ${name} 의 값 "${value}" 은 지원하지 않는 언어입니다.`);
-  }
-  return value;
+  return isLangCode(value) ? value : ignored(name, value, fallback, LANGUAGES.join(' | '));
 }
 
 function int(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined) return fallback;
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`환경변수 ${name} 은 숫자여야 합니다.`);
-  }
-  return parsed;
+  return Number.isFinite(parsed) ? parsed : ignored(name, raw, fallback, '숫자');
+}
+
+/** 정해진 값 중 하나여야 하는 설정. 아니면 기본값으로 넘어간다. */
+function oneOf<T extends string>(name: string, allowed: readonly T[], fallback: T): T {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const value = raw.trim().toLowerCase() as T;
+  return allowed.includes(value) ? value : ignored(name, raw, fallback, allowed.join(' | '));
 }
 
 export interface UserSecret {
@@ -81,24 +100,8 @@ function loadGlossary(): GlossaryEntry[] {
   return [];
 }
 
-function provider(): 'gemini' | 'claude' {
-  const value = (process.env.TRANSLATION_PROVIDER ?? 'gemini').toLowerCase();
-  if (value !== 'gemini' && value !== 'claude') {
-    throw new Error(`TRANSLATION_PROVIDER 는 gemini 또는 claude 여야 합니다 (받은 값: ${value}).`);
-  }
-  return value;
-}
-
+const PROVIDERS = ['gemini', 'claude'] as const;
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'off'] as const;
-type ClaudeEffort = (typeof CLAUDE_EFFORTS)[number];
-
-function claudeEffort(): ClaudeEffort {
-  const value = (process.env.CLAUDE_EFFORT ?? 'low').toLowerCase();
-  if (!(CLAUDE_EFFORTS as readonly string[]).includes(value)) {
-    throw new Error(`CLAUDE_EFFORT 는 ${CLAUDE_EFFORTS.join(' | ')} 중 하나여야 합니다.`);
-  }
-  return value as ClaudeEffort;
-}
 
 export const config = {
   port: int('PORT', 8787),
@@ -109,7 +112,7 @@ export const config = {
   /** 로그인 토큰 유효기간. 둘만 쓰는 앱이라 길게 잡는다. */
   tokenTtlMs: 1000 * 60 * 60 * 24 * 90,
   translation: {
-    provider: provider(),
+    provider: oneOf('TRANSLATION_PROVIDER', PROVIDERS, 'gemini'),
     /** 번역할 때 참고할 직전 메시지 수. */
     contextSize: int('TRANSLATION_CONTEXT_SIZE', 12),
     gemini: {
@@ -122,7 +125,7 @@ export const config = {
     claude: {
       apiKey: process.env.ANTHROPIC_API_KEY,
       model: process.env.CLAUDE_MODEL ?? 'claude-haiku-4-5',
-      effort: claudeEffort(),
+      effort: oneOf('CLAUDE_EFFORT', CLAUDE_EFFORTS, 'low'),
     },
   },
   users: [buildUser('A', 'ko'), buildUser('B', 'es')] as const,

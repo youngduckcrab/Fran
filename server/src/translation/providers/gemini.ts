@@ -142,10 +142,14 @@ function quotaError(raw: string): TranslationError {
 
 export function parseSafetyThreshold(value: string | undefined): HarmBlockThreshold {
   if (!value) return HarmBlockThreshold.BLOCK_NONE;
-  const upper = value.toUpperCase();
+  const upper = value.trim().toUpperCase();
   const allowed = Object.values(HarmBlockThreshold) as string[];
-  if (!allowed.includes(upper)) {
-    throw new Error(`GEMINI_SAFETY_THRESHOLD 값이 올바르지 않습니다. 가능한 값: ${allowed.join(', ')}`);
-  }
-  return upper as HarmBlockThreshold;
+  if (allowed.includes(upper)) return upper as HarmBlockThreshold;
+
+  // 조절용 설정 하나 때문에 번역을 통째로 막지는 않는다.
+  console.warn(
+    `⚠️  환경변수 GEMINI_SAFETY_THRESHOLD 의 값 "${value}" 을 알아볼 수 없어 무시합니다. ` +
+      `(가능한 값: ${allowed.join(', ')}) 기본값 BLOCK_NONE 으로 계속합니다.`,
+  );
+  return HarmBlockThreshold.BLOCK_NONE;
 }
