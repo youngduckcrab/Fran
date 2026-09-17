@@ -270,6 +270,18 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   }
 });
 
+// 포트가 막혀 있는 건 흔한 일이다(앞서 띄운 서버가 안 죽었거나, 다른 앱이 쓰거나).
+// 스택 트레이스 대신 무엇을 해야 하는지 알려준다.
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code !== 'EADDRINUSE') throw error;
+  console.error(`\n✗ 포트 ${config.port} 가 이미 사용 중입니다.`);
+  console.error('  앞서 띄운 서버가 아직 살아 있을 가능성이 큽니다. 정리한 뒤 다시 실행하세요:\n');
+  console.error(`    npx kill-port ${config.port}\n`);
+  console.error('  그래도 안 되면 터미널을 새로 열고:\n');
+  console.error("    pkill -f 'src/index.ts'\n");
+  process.exit(1);
+});
+
 const wss = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (request, socket, head) => {
