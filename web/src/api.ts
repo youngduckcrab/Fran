@@ -55,6 +55,23 @@ export async function saveSettings(
   return body.profile;
 }
 
+/**
+ * WebSocket 이 끊긴 이유가 토큰 때문인지 확인한다.
+ * 소켓의 close 이벤트만으로는 401 과 네트워크 장애를 구분할 수 없어서,
+ * 인증이 필요한 엔드포인트에 한 번 물어본다.
+ */
+export async function isTokenValid(token: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/messages?limit=1', {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    return response.status !== 401;
+  } catch {
+    // 네트워크가 죽은 것이라면 토큰 탓이 아니다. 로그아웃시키지 않는다.
+    return true;
+  }
+}
+
 export function websocketUrl(token: string): string {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}`;

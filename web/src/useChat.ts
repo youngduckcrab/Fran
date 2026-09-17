@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatMessage, ClientEvent, LangCode, ServerEvent, UserProfile } from '@fran/shared';
-import { websocketUrl } from './api';
+import { isTokenValid, websocketUrl } from './api';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
 
@@ -14,7 +14,10 @@ export interface ChatState {
   error: string | null;
 }
 
-const RECONNECT_DELAY_MS = 2000;
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 15000;
+/** 이 횟수만큼 hello 없이 실패하면 토큰이 죽은 건지 서버에 확인해 본다. */
+const VERIFY_AFTER_ATTEMPTS = 2;
 
 /**
  * 내가 보낸 메시지를 서버 응답과 맞춰보기 위한 임시 식별자.
@@ -32,10 +35,10 @@ function newClientId(): string {
 
 export function useChat(token: string | null, onUnauthorized: () => void) {
   const socketRef = useRef<WebSocket | null>(null);
-  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const closedByUs = useRef(false);
   /** hello 를 한 번이라도 받았는지. 토큰 만료와 단순 네트워크 끊김을 구분한다. */
   const authenticated = useRef(false);
+  /** 연속 실패 횟수. hello 를 받으면 0 으로 돌아간다. */
+  const attempts = useRef(0);
 
   const [state, setState] = useState<ChatState>({
     connection: 'connecting',
@@ -76,37 +79,75 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
 
   useEffect(() => {
     if (!token) return;
-    closedByUs.current = false;
+
+    // StrictMode 는 개발 모드에서 effect 를 두 번 실행한다. 첫 소켓의 close 이벤트가
+    // 두 번째 연결이 시작된 뒤에 도착하므로, 이 effect 인스턴스가 아직 살아 있는지와
+    // 지금 보는 소켓이 최신인지를 함께 확인해야 한다.
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
+      if (cancelled) return;
       setState((previous) => ({ ...previous, connection: 'connecting' }));
+
       const socket = new WebSocket(websocketUrl(token));
       socketRef.current = socket;
 
-      socket.onopen = () => setState((previous) => ({ ...previous, connection: 'open', error: null }));
+      const isCurrent = () => !cancelled && socketRef.current === socket;
+
+      socket.onopen = () => {
+        if (!isCurrent()) return;
+        setState((previous) => ({ ...previous, connection: 'open' }));
+      };
+
       socket.onmessage = (raw) => {
+        if (!isCurrent()) return;
         const event = JSON.parse(raw.data as string) as ServerEvent;
-        if (event.type === 'hello') authenticated.current = true;
+        if (event.type === 'hello') {
+          authenticated.current = true;
+          attempts.current = 0;
+        }
         applyEvent(event);
       };
+
       socket.onclose = () => {
+        // 정리됐거나 이미 더 최신 연결이 있으면 이 이벤트는 남은 소켓의 것이다.
+        if (!isCurrent()) return;
         setState((previous) => ({ ...previous, connection: 'closed' }));
-        if (closedByUs.current) return;
-        // hello 를 한 번도 못 받고 끊겼다면 업그레이드 단계에서 401 을 맞은 것이다.
-        if (!authenticated.current) {
+        void scheduleReconnect();
+      };
+    };
+
+    const scheduleReconnect = async () => {
+      if (cancelled) return;
+      attempts.current += 1;
+
+      // 끊긴 이유가 토큰 때문인지 네트워크 때문인지 소켓만 봐서는 알 수 없다.
+      // 몇 번 실패하면 서버에 직접 물어보고, 토큰이 죽었을 때만 로그아웃시킨다.
+      if (!authenticated.current && attempts.current >= VERIFY_AFTER_ATTEMPTS) {
+        const valid = await isTokenValid(token);
+        if (cancelled) return;
+        if (!valid) {
           onUnauthorized();
           return;
         }
-        reconnectRef.current = setTimeout(connect, RECONNECT_DELAY_MS);
-      };
+        setState((previous) => ({
+          ...previous,
+          error: previous.error ?? '서버에 연결하지 못했습니다. 계속 다시 시도합니다.',
+        }));
+      }
+
+      const delay = Math.min(RECONNECT_BASE_MS * attempts.current, RECONNECT_MAX_MS);
+      retryTimer = setTimeout(connect, delay);
     };
 
     connect();
 
     return () => {
-      closedByUs.current = true;
-      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
       socketRef.current?.close();
+      socketRef.current = null;
     };
   }, [token, applyEvent, onUnauthorized]);
 
