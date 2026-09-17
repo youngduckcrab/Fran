@@ -1,0 +1,20 @@
+{
+  "name": "Fran",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+  "postCreateCommand": "npm install",
+  "forwardPorts": [5173, 8787],
+  "portsAttributes": {
+    "5173": { "label": "web", "onAutoForward": "openBrowser" },
+    "8787": { "label": "server", "onAutoForward": "silent" }
+  },
+  "remoteEnv": {
+    // Codespaces 는 https://<이름>-5173.app.github.dev 로 포트를 열어준다.
+    // Vite 가 낯선 도메인을 거부하지 않도록 미리 허용해 둔다.
+    "VITE_ALLOWED_HOSTS": ".app.github.dev"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  }
+}

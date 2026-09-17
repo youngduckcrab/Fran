@@ -59,6 +59,46 @@ Windows는 첫 실행 때 뜨는 "네트워크 액세스 허용" 대화상자를
 **홈 화면에 추가**해서 앱처럼 쓰는 것까지는 이 상태로도 된다. 다만 서비스 워커
 (오프라인 캐시)는 HTTPS 에서만 동작하므로, PWA 를 제대로 확인하려면 아래 터널이 필요하다.
 
+### 컴퓨터가 없다면
+
+폰만 있어도 된다. 두 가지 길이 있다.
+
+**1. GitHub Codespaces — 지금 당장 보고 싶을 때**
+
+저장소 페이지에서 `Code` → `Codespaces` → `Create codespace`. 클라우드에 개발 환경이
+뜨고 폰 브라우저에서 그대로 쓸 수 있다. `.devcontainer/` 설정이 있어서 `npm install` 까지
+자동으로 돌아간다.
+
+```bash
+# Codespaces 터미널에서
+cp .env.example .env     # 편집기로 GEMINI_API_KEY, AUTH_SECRET, 패스코드 채우기
+npm run dev
+```
+
+포트 5173 이 자동으로 https 주소로 열린다. 그 주소를 폰 브라우저에서 열면 끝이다.
+https 라서 PWA(홈 화면에 추가, 오프라인 캐시)도 제대로 동작한다.
+Fran 에게도 보여주려면 포트 가시성을 Public 으로 바꾼다.
+
+끄면 사라지는 임시 환경이고 무료 사용 시간에 한도가 있으니, 계속 쓸 거라면 아래 배포로.
+
+**2. 배포 — 계속 쓸 때**
+
+`Dockerfile` 이 들어 있어서 컨테이너를 돌릴 수 있는 곳이면 어디든 올라간다.
+Docker 를 쓰지 않는 호스트라면 이 두 줄만 설정하면 된다.
+
+| 설정 | 값 |
+| --- | --- |
+| Build command | `npm ci && npm run build` |
+| Start command | `npm start` |
+| Health check | `/healthz` |
+
+환경변수는 `.env.example` 의 항목을 호스트의 환경변수 설정에 그대로 넣는다.
+`PORT` 는 호스트가 지정해 주면 그대로 따른다.
+
+> **SQLite 파일은 영구 디스크에 두어야 한다.** 볼륨을 붙이고
+> `DATABASE_PATH=/data/fran.sqlite` 로 지정할 것. 이걸 빠뜨리면 재배포할 때마다
+> 대화 기록이 사라진다. Dockerfile 은 `/data` 를 볼륨으로 잡아두었다.
+
 ### 상대와 함께 테스트하기 (다른 나라)
 
 로컬 주소로는 접속할 수 없으니 둘 중 하나가 필요하다.
