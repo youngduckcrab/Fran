@@ -17,8 +17,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "start": "npm run start --workspace=server",
     "postinstall": "npm run build --workspace=shared",
-    "predev": "node scripts/free-ports.mjs 5173 8787",
-    "free-ports": "node scripts/free-ports.mjs 5173 8787"
+    "predev": "node scripts/free-ports.mjs 5173 8787 && node scripts/share-port.mjs 5173",
+    "free-ports": "node scripts/free-ports.mjs 5173 8787",
+    "share": "node scripts/share-port.mjs 5173"
   },
   "engines": {
     "node": ">=20"
