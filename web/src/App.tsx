@@ -46,7 +46,16 @@ export default function App() {
   return (
     <TranslateContext.Provider value={t}>
       {token ? (
-        <Shell token={token} onLogout={handleLogout} onUiLang={setUiLang} />
+        <Shell
+          token={token}
+          onLogout={handleLogout}
+          onUiLang={setUiLang}
+          onToken={(next) => {
+            // 비밀번호를 바꾸면 서버가 새 토큰을 준다. 갈아 끼워야 이 기기가 로그인을 유지한다.
+            setToken(next, userId);
+            setTokenState(next);
+          }}
+        />
       ) : (
         <Login
           onLogin={handleLogin}

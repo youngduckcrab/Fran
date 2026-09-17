@@ -21,7 +21,16 @@ import {
   type ServerEvent,
   type UserProfile,
 } from '@fran/shared';
-import { checkPasscode, issueToken, verifyToken } from './auth.js';
+import {
+  MAX_PASSCODE_LENGTH,
+  MIN_PASSCODE_LENGTH,
+  changePasscode,
+  checkPasscode,
+  hasOwnPasscode,
+  initAuth,
+  issueToken,
+  verifyToken,
+} from './auth.js';
 import { config, findUserById, peerOf } from './config.js';
 import {
   attachToMessage,
@@ -85,16 +94,17 @@ const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 
 // 주소를 공개로 열어두면 패스코드가 유일한 자물쇠다. 예시 값 그대로면 잠그지 않은 것과 같다.
-for (const user of config.users) {
-  if (/^change-me/i.test(user.passcode)) {
+function warnAboutDefaultPasscodes(): void {
+  for (const user of config.users) {
+    // 앱에서 직접 바꿨다면 .env 값은 더 이상 쓰이지 않는다.
+    if (hasOwnPasscode(user.profile.id)) continue;
+    if (!/^change-me/i.test(user.passcode)) continue;
+
     console.warn(
       `⚠️  ${user.profile.name} 의 패스코드가 예시 값(${user.passcode}) 그대로입니다. ` +
         '저장소에 공개된 값이므로 아는 사람은 누구나 들어올 수 있습니다.',
     );
-    console.warn(
-      `   바꾸려면: sed -i 's/^USER_${config.users[0] === user ? 'A' : 'B'}_PASSCODE=.*/USER_` +
-        `${config.users[0] === user ? 'A' : 'B'}_PASSCODE=원하는값/' .env  (뒤에 서버 재시작)`,
-    );
+    console.warn('   앱의 설정 → 비밀번호 바꾸기 에서 바꾸면 됩니다.');
   }
 }
 
@@ -435,6 +445,38 @@ app.put('/api/wallpaper', async (c) => {
     displayLangs: current.displayLangs,
   });
   return c.json({ profile: await profileOf(userId) });
+});
+
+/**
+ * 비밀번호 바꾸기.
+ *
+ * 바꾸고 나면 예전 비밀번호로 받아 둔 토큰은 전부 무효가 된다. 바꾸는 이유가 대개
+ * "누가 아는 것 같다"인데 이미 들어와 있는 쪽이 남으면 바꾼 의미가 없다.
+ * 대신 바꾼 사람에게는 새 토큰을 바로 돌려줘서 그 기기만 로그인이 유지된다.
+ */
+app.post('/api/passcode', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  const current = typeof body?.current === 'string' ? body.current.trim() : '';
+  const next = typeof body?.next === 'string' ? body.next.trim() : '';
+
+  if (!checkPasscode(userId, current)) {
+    return c.json({ error: '지금 비밀번호가 맞지 않습니다.', code: 'wrongCurrent' }, 403);
+  }
+  if (next.length < MIN_PASSCODE_LENGTH || next.length > MAX_PASSCODE_LENGTH) {
+    return c.json({ error: `비밀번호는 ${MIN_PASSCODE_LENGTH}자 이상이어야 합니다.`, code: 'tooShort' }, 400);
+  }
+  if (next === current) {
+    return c.json({ error: '지금 쓰는 것과 같은 비밀번호입니다.', code: 'same' }, 400);
+  }
+
+  await changePasscode(userId, next);
+  console.log(`${userId} 의 비밀번호가 바뀌었습니다. 예전 토큰은 모두 무효가 됩니다.`);
+
+  // 바꾼 기기는 그대로 쓸 수 있도록 새 토큰을 준다.
+  return c.json({ token: issueToken(userId) });
 });
 
 /** 앱 색. 사람마다 따로 고른다. */
@@ -906,6 +948,10 @@ try {
   await initDatabase();
   // 파일로 관리하던 용어집을 DB 로 옮긴다. 비어 있을 때 한 번만 옮겨 담는다.
   await seedGlossary(config.glossary);
+
+  // 앱에서 바꾼 비밀번호를 읽어 둔다. 없으면 .env 값을 그대로 쓴다.
+  await initAuth();
+  warnAboutDefaultPasscodes();
 
   // 알림 서명 키. 없으면 이때 한 번 만들어 DB 에 넣는다.
   await initPush();

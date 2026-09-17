@@ -1968,3 +1968,17 @@ button:active:not(:disabled) {
   display: inline-flex;
   color: var(--accent);
 }
+
+/* ---------- 비밀번호 바꾸기 ---------- */
+
+.passcode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet__done {
+  margin: 8px 0 0;
+  color: var(--ok);
+  font-size: 14px;
+}

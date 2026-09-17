@@ -268,3 +268,24 @@ export async function saveTheme(theme: ThemeId): Promise<UserProfile> {
   if (!response.ok) await parseError(response);
   return ((await response.json()) as { profile: UserProfile }).profile;
 }
+
+/**
+ * 비밀번호 바꾸기.
+ *
+ * 바꾸면 예전 토큰은 서버에서 무효가 되므로, 돌려받은 새 토큰으로 갈아 끼워야
+ * 이 기기의 로그인이 유지된다. 실패 사유는 코드로 온다(화면에서 각자의 언어로 푼다).
+ */
+export async function changePasscode(current: string, next: string): Promise<string> {
+  const response = await fetch('/api/passcode', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ current, next }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { error?: string; code?: string } | null;
+    const error = new Error(body?.error ?? '비밀번호를 바꾸지 못했습니다.');
+    (error as Error & { code?: string }).code = body?.code;
+    throw error;
+  }
+  return ((await response.json()) as { token: string }).token;
+}

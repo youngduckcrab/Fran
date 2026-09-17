@@ -17,6 +17,8 @@ interface Props {
   token: string;
   onLogout: () => void;
   onUiLang: (lang: UiLang) => void;
+  /** 비밀번호를 바꾸면 서버가 새 토큰을 준다. */
+  onToken: (token: string) => void;
 }
 
 const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
@@ -27,7 +29,7 @@ const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
  * 화면마다 연결을 새로 잡으면 홈에 다녀올 때마다 대화를 다시 받아오고, 그 사이에
  * 온 메시지를 놓친다. 연결은 위에 두고 화면만 갈아 끼운다.
  */
-export default function Shell({ token, onLogout, onUiLang }: Props) {
+export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const chat = useChat(token, onLogout);
   const [view, setView] = useState<View>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -176,6 +178,7 @@ export default function Shell({ token, onLogout, onUiLang }: Props) {
           onSaved={chat.setProfile}
           onClose={() => setSettingsOpen(false)}
           onLogout={onLogout}
+          onToken={onToken}
         />
       )}
     </>

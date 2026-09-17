@@ -153,6 +153,14 @@ const SCHEMA = `
   -- 서버가 스스로 만들어 두고두고 써야 하는 값(알림 서명 키 등).
   -- 환경변수로 받으면 사람이 한 번 더 손을 대야 하고, 재배포 때마다 새로 만들면
   -- 이미 등록된 알림이 전부 무효가 된다.
+  -- 앱에서 바꾼 로그인 비밀번호. 바꾸기 전에는 줄이 없고, 그때는 .env 값을 쓴다.
+  CREATE TABLE IF NOT EXISTS credentials (
+    user_id       TEXT    PRIMARY KEY,
+    passcode_hash TEXT    NOT NULL,
+    token_version INTEGER NOT NULL DEFAULT 1,
+    updated_at    BIGINT  NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS app_secrets (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -1000,4 +1008,40 @@ export async function setVocabExample(
     [example.sentence, example.translation, id, userId],
   );
   return rows[0] ? toVocab(rows[0]) : null;
+}
+
+/* --------------------------- 로그인 비밀번호 --------------------------- */
+
+export interface Credential {
+  /** scrypt 로 만든 저장용 값. 원문 비밀번호는 어디에도 남기지 않는다. */
+  hash: string;
+  /**
+   * 발급한 토큰의 세대. 비밀번호를 바꾸면 하나 올린다.
+   * 그러면 예전 비밀번호로 받아 둔 토큰은 전부 무효가 된다 — 비밀번호를 바꾸는 이유가
+   * 대개 "누가 아는 것 같다"인데, 이미 들어와 있는 쪽이 그대로 남으면 바꾼 의미가 없다.
+   */
+  tokenVersion: number;
+}
+
+export async function loadCredentials(): Promise<Map<string, Credential>> {
+  const { rows } = await pool.query<{ user_id: string; passcode_hash: string; token_version: number }>(
+    `SELECT user_id, passcode_hash, token_version FROM credentials`,
+  );
+  return new Map(
+    rows.map((row) => [row.user_id, { hash: row.passcode_hash, tokenVersion: row.token_version }]),
+  );
+}
+
+export async function saveCredential(userId: string, hash: string): Promise<Credential> {
+  const { rows } = await pool.query<{ token_version: number }>(
+    `INSERT INTO credentials (user_id, passcode_hash, token_version, updated_at)
+     VALUES ($1, $2, 2, $3)
+     ON CONFLICT (user_id) DO UPDATE SET
+       passcode_hash = EXCLUDED.passcode_hash,
+       token_version = credentials.token_version + 1,
+       updated_at = EXCLUDED.updated_at
+     RETURNING token_version`,
+    [userId, hash, Date.now()],
+  );
+  return { hash, tokenVersion: rows[0]?.token_version ?? 2 };
 }

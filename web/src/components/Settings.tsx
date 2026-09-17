@@ -8,7 +8,7 @@ import {
   type ThemeId,
   type UserProfile,
 } from '@fran/shared';
-import { saveSettings, saveTheme, saveWallpaper } from '../api';
+import { changePasscode, saveSettings, saveTheme, saveWallpaper } from '../api';
 import { useT, type StringKey } from '../i18n';
 import { disablePush, enablePush, pushState, type PushState } from '../push';
 import { applyTheme } from '../theme';
@@ -23,6 +23,8 @@ interface Props {
   onSaved: (profile: UserProfile) => void;
   onClose: () => void;
   onLogout: () => void;
+  /** 비밀번호를 바꾸면 새 토큰이 나온다. 위로 올려 보낸다. */
+  onToken: (token: string) => void;
 }
 
 export default function Settings({
@@ -32,6 +34,7 @@ export default function Settings({
   onSaved,
   onClose,
   onLogout,
+  onToken,
 }: Props) {
   const t = useT();
   const [nativeLang, setNativeLang] = useState<LangCode>(profile.nativeLang);
@@ -98,6 +101,41 @@ export default function Settings({
     } catch (cause) {
       setWallpaper(previous);
       setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  /* ---- 비밀번호 ---- */
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [passBusy, setPassBusy] = useState(false);
+  const [passDone, setPassDone] = useState(false);
+  const [passError, setPassError] = useState<string | null>(null);
+
+  const submitPasscode = async () => {
+    setPassBusy(true);
+    setPassError(null);
+    setPassDone(false);
+    try {
+      onToken(await changePasscode(current, next));
+      setCurrent('');
+      setNext('');
+      setPassDone(true);
+    } catch (cause) {
+      // 사유는 코드로 온다. 문구는 읽는 사람의 언어로 여기서 붙인다.
+      const code = (cause as { code?: string }).code;
+      setPassError(
+        code === 'wrongCurrent'
+          ? t('settings.passcodeWrong')
+          : code === 'tooShort'
+            ? t('settings.passcodeShort')
+            : code === 'same'
+              ? t('settings.passcodeSame')
+              : cause instanceof Error
+                ? cause.message
+                : String(cause),
+      );
+    } finally {
+      setPassBusy(false);
     }
   };
 
@@ -268,6 +306,39 @@ export default function Settings({
             <Icon name="image" size={18} />
             {wallBusy ? t('composer.uploading') : t('settings.wallpaperPick')}
           </button>
+        </section>
+
+        <section className="sheet__section">
+          <h3>{t('settings.passcode')}</h3>
+          <p className="sheet__hint">{t('settings.passcodeHint')}</p>
+          <div className="passcode">
+            <input
+              className="login__input"
+              type="password"
+              autoComplete="current-password"
+              placeholder={t('settings.passcodeCurrent')}
+              value={current}
+              onChange={(event) => setCurrent(event.target.value)}
+            />
+            <input
+              className="login__input"
+              type="password"
+              autoComplete="new-password"
+              placeholder={t('settings.passcodeNew')}
+              value={next}
+              onChange={(event) => setNext(event.target.value)}
+            />
+            <button
+              type="button"
+              className="sheet__save"
+              onClick={() => void submitPasscode()}
+              disabled={passBusy || !current || !next}
+            >
+              {passBusy ? t('settings.saving') : t('settings.passcodeChange')}
+            </button>
+          </div>
+          {passError && <p className="sheet__error">{passError}</p>}
+          {passDone && <p className="sheet__done">{t('settings.passcodeChanged')}</p>}
         </section>
 
         <section className="sheet__section">
