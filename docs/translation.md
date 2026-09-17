@@ -104,7 +104,7 @@ Gemini는 `responseJsonSchema` + `responseMimeType: 'application/json'`, Claude�
 
 | 환경변수 | 기본값 | 뜻 |
 | --- | --- | --- |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | `npm run models --workspace=server` 로 실제 쓸 수 있는 이름 확인 |
+| `GEMINI_MODEL` | `gemini-flash-latest` | 항상 최신 flash 를 따라간다. 버전을 고정하려면 `npm run models --workspace=server` 로 이름 확인 |
 | `GEMINI_THINKING_BUDGET` | `0` | 0은 사고 끄기. 번역은 오래 생각해서 크게 나아지는 작업이 아니고, 끄면 빠르고 무료 할당량도 아낀다. `-1` 은 자동 |
 | `GEMINI_SAFETY_THRESHOLD` | `BLOCK_NONE` | 아래 참고 |
 
@@ -121,7 +121,7 @@ Gemini는 `responseJsonSchema` + `responseMimeType: 'application/json'`, Claude�
 **사용량은 로그에 남는다.** 번역할 때마다 이런 줄이 찍힌다:
 
 ```
-[usage] gemini/gemini-2.5-flash in=1243 out=118 412ms | 누적 37회 in=44982 out=4166
+[usage] gemini/gemini-flash-latest in=1243 out=118 412ms | 누적 37회 in=44982 out=4166
 ```
 
 무료 티어를 쓰는 동안에는 이게 "한도에 얼마나 가까운지"를 보는 용도이고,

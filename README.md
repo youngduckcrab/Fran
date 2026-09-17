@@ -120,7 +120,7 @@ Docker 를 쓰지 않는 호스트라면 이 두 줄만 설정하면 된다.
 | `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) 에서 발급. **무료 티어로 시작한다** |
 | `AUTH_SECRET` | 로그인 토큰 서명용. `openssl rand -hex 32` 로 만들면 된다 |
 | `USER_A_*`, `USER_B_*` | 두 사람의 이름·기본 언어·패스코드. 패스코드는 서로 다르게 |
-| `GEMINI_MODEL` | 기본 `gemini-2.5-flash` |
+| `GEMINI_MODEL` | 기본 `gemini-flash-latest` |
 | `TRANSLATION_CONTEXT_SIZE` | 번역할 때 참고할 직전 메시지 수. 기본 12 |
 
 키가 없어도 서버는 뜬다. 메시지는 정상적으로 오가고 번역만 실패한다.

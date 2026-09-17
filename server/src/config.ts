@@ -114,7 +114,7 @@ export const config = {
     contextSize: int('TRANSLATION_CONTEXT_SIZE', 12),
     gemini: {
       apiKey: process.env.GEMINI_API_KEY,
-      model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      model: process.env.GEMINI_MODEL ?? 'gemini-flash-latest',
       /** 0 = 사고 끄기. -1 = 자동. 무료 티어에서는 꺼두는 편이 빠르고 할당량도 아낀다. */
       thinkingBudget: int('GEMINI_THINKING_BUDGET', 0),
       safetyThreshold: process.env.GEMINI_SAFETY_THRESHOLD,
