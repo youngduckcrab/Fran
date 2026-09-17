@@ -36,25 +36,62 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/';
+
+  const data = event.notification.data || {};
+  const target = new URL(data.url || '/', self.location.origin);
+  // 사람마다 주소가 다르다(?u=me / ?u=fran). 같은 사람의 창을 찾을 때 이걸로 견준다.
+  const who = target.search;
 
   event.waitUntil(
     (async () => {
-      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      // 이미 열려 있는 창이 있으면 그걸 띄운다. 누를 때마다 새 창이 생기면 곤란하다.
-      for (const client of windows) {
-        if ('focus' in client) {
-          if ('navigate' in client) {
-            try {
-              await client.navigate(target);
-            } catch (error) {
-              /* 다른 출처로 옮겨간 창이면 그냥 띄우기만 한다 */
-            }
+      let windows = [];
+      try {
+        windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      } catch (error) {
+        windows = [];
+      }
+
+      const sameOrigin = windows.filter((client) => {
+        try {
+          return new URL(client.url).origin === self.location.origin;
+        } catch (error) {
+          return false;
+        }
+      });
+
+      const samePerson = sameOrigin.find((client) => {
+        try {
+          return new URL(client.url).search === who;
+        } catch (error) {
+          return false;
+        }
+      });
+
+      const existing = samePerson || sameOrigin[0];
+
+      if (existing) {
+        try {
+          // 띄우는 것이 먼저다. navigate() 를 먼저 부르면 창 손잡이가 갈려서
+          // 뒤이은 focus() 가 아무 일도 하지 않는다 — 눌러도 안 열리는 이유였다.
+          const focused = (await existing.focus()) || existing;
+
+          if (samePerson) {
+            // 이미 그 사람의 창이다. 새로 고치지 말고 채팅만 열게 알려 준다.
+            focused.postMessage({ type: 'open-chat' });
+          } else if (typeof focused.navigate === 'function') {
+            await focused.navigate(target.href);
           }
-          return client.focus();
+          return;
+        } catch (error) {
+          /* 띄우지 못했으면 아래에서 새로 연다 */
         }
       }
-      return self.clients.openWindow(target);
+
+      try {
+        await self.clients.openWindow(target.href);
+      } catch (error) {
+        /* 더 할 수 있는 것이 없다 */
+      }
     })(),
   );
 });

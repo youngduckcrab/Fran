@@ -128,6 +128,19 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
 
   const alerted = alertId ? chat.messages.find((message) => message.id === alertId) : undefined;
 
+  /**
+   * 알림을 눌렀을 때. 앱이 이미 그 사람으로 열려 있으면 새로 고치지 않고
+   * 서비스 워커가 여기로 알려 준다. 그 말을 듣고 채팅으로 넘어간다.
+   */
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if ((event.data as { type?: string } | null)?.type === 'open-chat') setView('chat');
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
+
   // 홈 화면 아이콘에도 숫자를 붙인다(지원하는 기기에서만).
   useEffect(() => {
     const badge = navigator as Navigator & {
