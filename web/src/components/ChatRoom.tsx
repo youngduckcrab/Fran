@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, LangCode } from '@fran/shared';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { messageText, type ChatMessage, type LangCode } from '@fran/shared';
 import type { Chat } from '../useChat';
 import { saveSentence } from '../api';
 import { useT } from '../i18n';
@@ -52,26 +52,16 @@ export default function ChatRoom({
   /** 상대가 실제로 읽는 언어. 내 메시지가 어떻게 갔는지 보여줄 때 쓴다. */
   const peerLang: LangCode = chat.peer?.displayLangs[0] ?? chat.peer?.nativeLang ?? 'es';
 
-  const [showSentAs, setShowSentAs] = useState(
-    () => localStorage.getItem('fran.showSentAs') !== '0',
-  );
-  const toggleSentAs = useCallback(() => {
-    setShowSentAs((open) => {
-      localStorage.setItem('fran.showSentAs', open ? '0' : '1');
-      return !open;
-    });
-  }, []);
-
   /** 지금 화면에 보이는 문장을 저장한다. 번역을 다시 돌려도 저장본은 그대로 남는다. */
   const save = async (message: ChatMessage) => {
     const mine = message.senderId === chat.me?.id;
     const lang = mine ? message.sourceLang : primaryLang;
-    const text = lang === message.sourceLang ? message.sourceText : message.translations[lang]?.text;
+    const own = messageText(message);
+    const text = lang === message.sourceLang ? own : message.translations[lang]?.text;
     if (!text) return;
 
     const pairLang = lang === message.sourceLang ? peerLang : message.sourceLang;
-    const pairText =
-      pairLang === message.sourceLang ? message.sourceText : message.translations[pairLang]?.text;
+    const pairText = pairLang === message.sourceLang ? own : message.translations[pairLang]?.text;
 
     try {
       await saveSentence({
@@ -129,8 +119,6 @@ export default function ChatRoom({
             extraLangs={extraLangs}
             peerLang={peerLang}
             peerName={chat.peer?.name ?? ''}
-            showSentAs={showSentAs}
-            onToggleSentAs={toggleSentAs}
             alwaysShowSource={alwaysShowSource}
             speechSupported={speaker.supported}
             speakingKey={speaker.speakingKey}

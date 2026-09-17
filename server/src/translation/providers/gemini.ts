@@ -46,7 +46,18 @@ export class GeminiProvider implements TranslationProvider {
     try {
       response = await this.client.models.generateContent({
         model: this.model,
-        contents: userPrompt,
+        // 소리가 있으면 글과 함께 들려준다. 없으면 예전처럼 글만 보낸다.
+        contents: request.audio
+          ? [
+              {
+                role: 'user',
+                parts: [
+                  { inlineData: { mimeType: request.audio.mime, data: request.audio.base64 } },
+                  { text: userPrompt },
+                ],
+              },
+            ]
+          : userPrompt,
         config: {
           systemInstruction: systemPrompt,
           responseMimeType: 'application/json',

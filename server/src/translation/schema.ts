@@ -37,7 +37,25 @@ export const OUTPUT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** 받아쓰기 결과. 들은 글과 그 언어. */
+export const TRANSCRIPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    text: { type: 'string' },
+    lang: { type: 'string', enum: [...LANGUAGES] },
+  },
+  required: ['text', 'lang'],
+  additionalProperties: false,
+} as const;
+
 const langEnum = z.enum(LANGUAGES);
+
+export const transcriptSchema = z.object({
+  text: z.string(),
+  lang: langEnum,
+});
+
+export type TranscriptResult = z.infer<typeof transcriptSchema>;
 
 /** 스키마를 강제해도 모델 출력은 결국 남의 데이터다. 쓰기 전에 한 번 더 검증한다. */
 export const resultSchema = z.object({

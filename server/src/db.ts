@@ -91,6 +91,9 @@ const SCHEMA = `
     width       INTEGER,
     height      INTEGER,
     duration_ms INTEGER,
+    transcript      TEXT,
+    transcript_lang TEXT,
+    transcript_status TEXT,
     sender_id   TEXT   NOT NULL,
     message_id  TEXT,
     created_at  BIGINT NOT NULL
@@ -149,6 +152,9 @@ const SCHEMA = `
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_error_code TEXT;
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_note       TEXT;
   ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS wallpaper TEXT;
+  ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript        TEXT;
+  ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_lang   TEXT;
+  ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_status TEXT;
 `;
 
 /** 서버가 요청을 받기 전에 한 번 부른다. 스키마가 없으면 만든다. */
@@ -189,6 +195,9 @@ interface AttachmentRow {
   width: number | null;
   height: number | null;
   duration_ms: number | null;
+  transcript: string | null;
+  transcript_lang: string | null;
+  transcript_status: string | null;
   message_id: string | null;
   created_at: number;
 }
@@ -202,6 +211,13 @@ function toAttachment(row: AttachmentRow): Attachment {
     ...(row.width ? { width: row.width } : {}),
     ...(row.height ? { height: row.height } : {}),
     ...(row.duration_ms ? { durationMs: row.duration_ms } : {}),
+    ...(row.transcript ? { transcript: row.transcript } : {}),
+    ...(row.transcript_lang && isLangCode(row.transcript_lang)
+      ? { transcriptLang: row.transcript_lang }
+      : {}),
+    ...(row.transcript_status
+      ? { transcriptStatus: row.transcript_status as TranslationStatus }
+      : {}),
     createdAt: row.created_at,
   };
 }
@@ -226,7 +242,8 @@ async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
 
   const { rows: attachmentRows } = await pool.query<AttachmentRow>(
     // bytes 는 빼고 읽는다. 목록을 그릴 때 사진 원본까지 들고 올 이유가 없다.
-    `SELECT id, kind, mime, size, width, height, duration_ms, message_id, created_at
+    `SELECT id, kind, mime, size, width, height, duration_ms,
+            transcript, transcript_lang, transcript_status, message_id, created_at
        FROM attachments WHERE message_id = ANY($1::text[])`,
     [rows.map((row) => row.id)],
   );
@@ -304,8 +321,9 @@ export async function insertAttachment(input: {
   const id = crypto.randomUUID();
   const createdAt = Date.now();
   await pool.query(
-    `INSERT INTO attachments (id, kind, mime, bytes, size, width, height, duration_ms, sender_id, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    `INSERT INTO attachments
+       (id, kind, mime, bytes, size, width, height, duration_ms, transcript_status, sender_id, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       id,
       input.kind,
@@ -315,6 +333,8 @@ export async function insertAttachment(input: {
       input.width ?? null,
       input.height ?? null,
       input.durationMs ?? null,
+      // 음성은 보내는 즉시 받아쓰기 차례를 기다린다.
+      input.kind === 'audio' ? 'pending' : null,
       input.senderId,
       createdAt,
     ],
@@ -327,6 +347,7 @@ export async function insertAttachment(input: {
     ...(input.width ? { width: input.width } : {}),
     ...(input.height ? { height: input.height } : {}),
     ...(input.durationMs ? { durationMs: input.durationMs } : {}),
+    ...(input.kind === 'audio' ? { transcriptStatus: 'pending' as TranslationStatus } : {}),
     createdAt,
   };
 }
@@ -343,7 +364,8 @@ export async function attachToMessage(
   const { rows } = await pool.query<AttachmentRow>(
     `UPDATE attachments SET message_id = $1
       WHERE id = $2 AND sender_id = $3 AND message_id IS NULL
-      RETURNING id, kind, mime, size, width, height, duration_ms, message_id, created_at`,
+      RETURNING id, kind, mime, size, width, height, duration_ms,
+                transcript, transcript_lang, transcript_status, message_id, created_at`,
     [messageId, attachmentId, senderId],
   );
   const row = rows[0];
@@ -363,7 +385,8 @@ export async function getAttachmentBytes(
 /** 대화방 사진첩. 메시지에 붙은 사진만, 최근 것부터. */
 export async function listPhotos(limit = 200): Promise<Array<Attachment & { messageId: string; senderId: string }>> {
   const { rows } = await pool.query<AttachmentRow & { sender_id: string }>(
-    `SELECT id, kind, mime, size, width, height, duration_ms, message_id, sender_id, created_at
+    `SELECT id, kind, mime, size, width, height, duration_ms,
+            transcript, transcript_lang, transcript_status, message_id, sender_id, created_at
        FROM attachments
       WHERE kind = 'image' AND message_id IS NOT NULL
       ORDER BY created_at DESC LIMIT $1`,
@@ -382,7 +405,13 @@ export async function listPhotos(limit = 200): Promise<Array<Attachment & { mess
  */
 export async function purgeOrphanAttachments(olderThanMs = 24 * 60 * 60 * 1000): Promise<number> {
   const { rowCount } = await pool.query(
-    `DELETE FROM attachments WHERE message_id IS NULL AND created_at < $1`,
+    // 배경화면으로 쓰는 사진은 메시지에 붙지 않는다. 치우면 배경이 깨진다.
+    `DELETE FROM attachments
+      WHERE message_id IS NULL AND created_at < $1
+        AND id NOT IN (
+          SELECT substring(wallpaper FROM 7) FROM user_settings
+           WHERE wallpaper LIKE 'photo:%'
+        )`,
     [Date.now() - olderThanMs],
   );
   return rowCount ?? 0;
@@ -810,5 +839,42 @@ export async function setSecret(key: string, value: string): Promise<void> {
     `INSERT INTO app_secrets (key, value) VALUES ($1, $2)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [key, value],
+  );
+}
+
+/** 받아쓰기 결과를 적어 둔다. 실패하면 사유 대신 상태만 남긴다(다시 시도할 수 있게). */
+export async function setTranscript(
+  attachmentId: string,
+  result: { text: string; lang: LangCode } | null,
+): Promise<void> {
+  await pool.query(
+    `UPDATE attachments
+        SET transcript = $1, transcript_lang = $2, transcript_status = $3
+      WHERE id = $4`,
+    [result?.text ?? null, result?.lang ?? null, result ? 'done' : 'failed', attachmentId],
+  );
+}
+
+/** 받아쓸 음성 원본. */
+export async function getAudioForTranscription(
+  attachmentId: string,
+): Promise<{ mime: string; bytes: Buffer } | null> {
+  const { rows } = await pool.query<{ mime: string; bytes: Buffer }>(
+    `SELECT mime, bytes FROM attachments WHERE id = $1 AND kind = 'audio'`,
+    [attachmentId],
+  );
+  return rows[0] ?? null;
+}
+
+/** 받아쓴 언어가 보낸 사람의 모국어와 다를 때. 번역은 이 언어를 원문으로 본다. */
+export async function setSourceLang(messageId: string, lang: LangCode): Promise<void> {
+  await pool.query(`UPDATE messages SET source_lang = $1 WHERE id = $2`, [lang, messageId]);
+}
+
+/** 받아쓰기를 다시 시도할 수 있게 되돌린다. */
+export async function retryTranscript(attachmentId: string): Promise<void> {
+  await pool.query(
+    `UPDATE attachments SET transcript_status = 'pending' WHERE id = $1 AND kind = 'audio'`,
+    [attachmentId],
   );
 }

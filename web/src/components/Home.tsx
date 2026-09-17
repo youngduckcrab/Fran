@@ -1,4 +1,4 @@
-import type { ChatMessage, LangCode, UserProfile } from '@fran/shared';
+import { messageText, type ChatMessage, type LangCode, type UserProfile } from '@fran/shared';
 import { useT, type Translate } from '../i18n';
 
 export type View = 'home' | 'chat' | 'saved' | 'vocab' | 'album';
@@ -24,10 +24,9 @@ function preview(
 ): string | null {
   if (!message) return null;
 
+  const own = messageText(message);
   const text =
-    message.sourceLang === primaryLang
-      ? message.sourceText
-      : (message.translations[primaryLang]?.text ?? message.sourceText);
+    message.sourceLang === primaryLang ? own : (message.translations[primaryLang]?.text ?? own);
 
   // 글 없이 사진이나 음성만 보낸 메시지도 있다. 빈 줄로 두면 대화가 없는 것처럼 보인다.
   const label = message.attachment

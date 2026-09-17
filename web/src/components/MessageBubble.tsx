@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLongPress } from '../useLongPress';
 import { useT, type StringKey } from '../i18n';
-import { LANGUAGE_NAMES, type ChatMessage, type LangCode } from '@fran/shared';
+import { LANGUAGE_NAMES, messageText, type ChatMessage, type LangCode } from '@fran/shared';
 import { attachmentUrl, formatDuration } from '../media';
 
 interface Props {
@@ -15,9 +15,6 @@ interface Props {
   peerLang: LangCode;
   /** 상대 이름. 위 안내에 쓴다. */
   peerName: string;
-  /** "상대에게 어떻게 갔나"를 펼쳐 둘지. 사람마다 한 번 정하면 전부에 적용된다. */
-  showSentAs: boolean;
-  onToggleSentAs: () => void;
   alwaysShowSource: boolean;
   /** 읽어주기. 브라우저가 못 하면 버튼을 띄우지 않는다. */
   speechSupported: boolean;
@@ -40,8 +37,6 @@ export default function MessageBubble({
   extraLangs,
   peerLang,
   peerName,
-  showSentAs,
-  onToggleSentAs,
   alwaysShowSource,
   speechSupported,
   speakingKey,
@@ -54,10 +49,15 @@ export default function MessageBubble({
   const [expanded, setExpanded] = useState(false);
   const { handlers, consumeClick } = useLongPress(() => onLongPress(message));
 
+  // 음성 메시지에는 사람이 타이핑한 글이 없다. 받아쓴 글이 원문 노릇을 한다.
+  const own = messageText(message);
+  const audio = message.attachment?.kind === 'audio' ? message.attachment : undefined;
+
   const isSourceLanguage = message.sourceLang === primaryLang;
   const primary = message.translations[primaryLang];
-  const headline = isSourceLanguage ? message.sourceText : primary?.text;
-  const showSource = !isSourceLanguage && (alwaysShowSource || expanded);
+  const headline = isSourceLanguage ? own : primary?.text;
+  // 받아쓴 글은 늘 보여준다. 뭐라고 말했는지가 이 앱에서 가장 배울 거리가 많은 부분이다.
+  const showSource = !isSourceLanguage && (alwaysShowSource || expanded || Boolean(audio));
 
   const extras = extraLangs
     .filter((lang) => lang !== primaryLang && lang !== message.sourceLang)
@@ -66,16 +66,17 @@ export default function MessageBubble({
 
   const notes = expanded ? (primary?.notes ?? []) : [];
 
-  // 내가 보낸 말이 상대에게 어떻게 도착했는지. 번역기를 쓰는 사람에게는 이게 가장
-  // 궁금한 부분이고, 서로의 언어를 배우려는 앱이라면 늘 보여야 한다.
+  // 내가 보낸 말이 상대에게 어떻게 도착했는지.
+  // 기본은 펼침이고, 말풍선을 누르면 접힌다. 한 번 접은 건 그 말풍선만 접힌 채로 둔다.
   const sentAs = mine && peerLang !== message.sourceLang ? message.translations[peerLang] : undefined;
+  const [sentAsHidden, setSentAsHidden] = useState(false);
 
   // 원문 읽어주기는 상대가 보낸 말에만 띄운다. 내가 쓴 내 말을 다시 들을 일은
   // 없고, 발음이 궁금한 건 늘 상대 쪽 언어다. (내 말은 아래 "이렇게 갔어요"
   // 쪽에서 상대 언어로 들을 수 있다.)
   const sourceKey = `${message.id}:source`;
   const sentAsKey = `${message.id}:sentAs`;
-  const canHearSource = speechSupported && !mine;
+  const canHearSource = speechSupported && !mine && Boolean(own);
 
   const speaker = (key: string, text: string, lang: LangCode) => (
     <button
@@ -100,7 +101,9 @@ export default function MessageBubble({
         onClick={() => {
           // 길게 눌러 메뉴를 연 뒤 따라오는 click 은 무시한다.
           if (consumeClick()) return;
-          setExpanded((value) => !value);
+          // 내 말풍선을 누르면 상대에게 간 번역을 접었다 편다. 받은 말풍선은 원문을 보여준다.
+          if (sentAs) setSentAsHidden((value) => !value);
+          else setExpanded((value) => !value);
         }}
       >
         {message.attachment?.kind === 'image' && (
@@ -140,8 +143,8 @@ export default function MessageBubble({
         {headline ? (
           <p className="bubble__text">{headline}</p>
         ) : message.translationStatus === 'failed' ? (
-          <p className="bubble__text bubble__text--muted">{message.sourceText}</p>
-        ) : message.sourceText.trim() ? (
+          <p className="bubble__text bubble__text--muted">{own}</p>
+        ) : own ? (
           <p className="bubble__text bubble__text--pending">{t('bubble.translating')}</p>
         ) : null}
 
@@ -150,16 +153,16 @@ export default function MessageBubble({
             <button
               type="button"
               className="bubble__sentAsLabel"
-              aria-expanded={showSentAs}
+              aria-expanded={!sentAsHidden}
               onClick={(event) => {
                 event.stopPropagation();
-                onToggleSentAs();
+                setSentAsHidden((value) => !value);
               }}
             >
               {t('bubble.sentAs', { name: peerName })}
-              <span aria-hidden="true">{showSentAs ? ' ▴' : ' ▾'}</span>
+              <span aria-hidden="true">{sentAsHidden ? ' ▾' : ' ▴'}</span>
             </button>
-            {showSentAs && (
+            {!sentAsHidden && (
               <p className="bubble__sentAsText">
                 {sentAs.text}
                 {speechSupported && speaker(sentAsKey, sentAs.text, peerLang)}
@@ -171,10 +174,24 @@ export default function MessageBubble({
           </div>
         )}
 
-        {showSource && (
+        {audio?.transcriptStatus === 'pending' && (
+          <p className="bubble__text bubble__text--pending">{t('bubble.transcribing')}</p>
+        )}
+        {audio?.transcriptStatus === 'failed' && !own && (
+          <p className="bubble__transcriptFailed">
+            {t('bubble.transcribeFailed')}
+            <button type="button" className="bubble__retry" onClick={() => onRetranslate(message.id)}>
+              {t('bubble.retry')}
+            </button>
+          </p>
+        )}
+
+        {showSource && own && (
           <p className="bubble__source">
-            <span className="bubble__lang">{LANGUAGE_NAMES[message.sourceLang]}</span>
-            {message.sourceText}
+            <span className="bubble__lang">
+              {audio ? t('bubble.transcript') : LANGUAGE_NAMES[message.sourceLang]}
+            </span>
+            {own}
           </p>
         )}
 
@@ -221,7 +238,7 @@ export default function MessageBubble({
       )}
 
       <div className="bubble__meta">
-        {canHearSource && speaker(sourceKey, message.sourceText, message.sourceLang)}
+        {canHearSource && speaker(sourceKey, own, message.sourceLang)}
         <time dateTime={new Date(message.createdAt).toISOString()}>{formatTime(message.createdAt)}</time>
       </div>
     </li>

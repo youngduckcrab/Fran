@@ -79,6 +79,12 @@ export interface Attachment {
   height?: number;
   /** 음성일 때, 길이(밀리초). */
   durationMs?: number;
+  /** 음성을 받아쓴 글. 모델이 들은 그대로. */
+  transcript?: string;
+  /** 받아쓴 글의 언어. 보낸 사람의 모국어와 다를 수도 있다(공부 삼아 말해 본 경우). */
+  transcriptLang?: LangCode;
+  /** 받아쓰기 진행 상태. 음성 첨부에만 있다. */
+  transcriptStatus?: TranslationStatus;
   createdAt: number;
 }
 
@@ -103,6 +109,18 @@ export interface ChatMessage {
   translations: Partial<Record<LangCode, Translation>>;
   /** 사진이나 음성. 글 없이 첨부만 보낼 수도 있다. */
   attachment?: Attachment;
+}
+
+/**
+ * 이 메시지의 "글". 직접 쓴 문장이 있으면 그것이고, 없으면 음성을 받아쓴 글이다.
+ *
+ * 번역·설명·알림·미리보기가 모두 이걸 본다. 음성 메시지는 사람이 아무것도 타이핑하지
+ * 않았어도 받아쓴 글이 원문 노릇을 한다.
+ */
+export function messageText(message: ChatMessage): string {
+  const typed = message.sourceText.trim();
+  if (typed) return typed;
+  return message.attachment?.transcript?.trim() ?? '';
 }
 
 /* ---------- 문장 설명 (학습용) ---------- */

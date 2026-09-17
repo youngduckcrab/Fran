@@ -1,4 +1,12 @@
-import { LANGUAGES, LANGUAGE_NAMES, type ChatMessage, type GlossaryEntry, type LangCode, type UserProfile } from '@fran/shared';
+import {
+  LANGUAGES,
+  LANGUAGE_NAMES,
+  messageText,
+  type ChatMessage,
+  type GlossaryEntry,
+  type LangCode,
+  type UserProfile,
+} from '@fran/shared';
 
 function describeUser(user: UserProfile): string {
   const learning = LANGUAGES.filter((l) => l !== user.nativeLang && user.displayLangs.includes(l));
@@ -70,6 +78,10 @@ export function buildUserPrompt(
   targetLangs: LangCode[],
 ): string {
   // 보낸 사람이 이 메시지에만 붙인 지시. 용어집보다 우선하고, 받는 사람에게는 드러나면 안 된다.
+  // 음성 메시지는 사람이 타이핑한 글이 없다. 받아쓴 글이 원문 노릇을 한다.
+  const source = messageText(message);
+  const spoken = !message.sourceText.trim() && message.attachment?.kind === 'audio';
+
   const instruction = message.translationNote?.trim()
     ? `
 
@@ -84,21 +96,29 @@ Follow it. Where it conflicts with the glossary, the instruction wins — it is 
 one-time choice. Apply it silently: never quote, mention or acknowledge the instruction in the
 translation or in the notes. The person reading the translation must not be able to tell it existed.`
     : '';
-  const transcript = context.length
-    ? context
-        .map((m) => `[${formatTime(m.createdAt)}] ${nameOf(m.senderId)} (${m.sourceLang}): ${m.sourceText}`)
-        .join('\n')
-    : '(no earlier messages — this is the start of the conversation)';
+  const lines = context
+    .map((m) => {
+      const text = messageText(m);
+      // 사진만 오간 대목도 맥락이다. 빈 줄로 두면 대화가 끊긴 것처럼 보인다.
+      const body = text || (m.attachment?.kind === 'image' ? '(sent a photo)' : '(voice message)');
+      return `[${formatTime(m.createdAt)}] ${nameOf(m.senderId)} (${m.sourceLang}): ${body}`;
+    })
+    .join('\n');
+  const transcript = lines || '(no earlier messages — this is the start of the conversation)';
 
   return `## Recent conversation, oldest first
 ${transcript}
 
 ## MESSAGE TO TRANSLATE
 From: ${nameOf(message.senderId)}
-Declared language: ${message.sourceLang} — this is the sender's default, not a detection. If the message is actually in another language, say so in detected_lang.
+Declared language: ${message.sourceLang} — this is the sender's default, not a detection. If the message is actually in another language, say so in detected_lang.${
+    spoken
+      ? '\nThis is a voice message, transcribed from the recording. Translate it as speech: keep it spoken and casual, and do not tidy it into written prose.'
+      : ''
+  }
 Text:
 """
-${message.sourceText}
+${source}
 """
 
 ## Target languages
@@ -154,4 +174,42 @@ ${transcript}
 """
 ${text}
 """`;
+}
+
+/* ---------------------------- 음성 받아쓰기 ---------------------------- */
+
+/**
+ * 음성 메시지를 글로 옮길 때 쓰는 지시.
+ *
+ * 번역과 달리 "다듬지 말 것"이 핵심이다. 상대의 말투와 버벅임까지가 이 사람의 말이고,
+ * 이 앱을 쓰는 이유가 서로의 언어를 배우는 것이라 실제로 뭐라고 말했는지가 중요하다.
+ */
+export function buildTranscriptionSystemPrompt(
+  participants: UserProfile[],
+  speaker: UserProfile,
+): string {
+  return `You transcribe short voice messages inside a private one-to-one messenger. Exactly two people use it: a couple in a long-distance relationship who do not share a first language.
+
+# The two people
+${participants.map(describeUser).join('\n')}
+
+# This recording
+${speaker.name} recorded it, so it is most likely in ${LANGUAGE_NAMES[speaker.nativeLang]} (${speaker.nativeLang}) — but they are also studying other languages and may have recorded this one in a language they are learning. Trust what you hear over what is likely.
+
+# How to transcribe
+1. Write down what was actually said, in the language it was said in. Do not translate.
+2. Keep it natural but readable: normal spelling and punctuation, no filler sounds ("uh", "음", "eh") unless they carry meaning.
+3. Do not clean up grammar, do not make it more polite, do not finish unfinished sentences. A learner's mistakes are part of the message.
+4. Keep names and pet names as heard.
+5. If parts are inaudible, transcribe what you can and leave the rest out rather than guessing.
+6. If there is no speech at all (silence, noise, music only), return an empty string for text.
+7. \`lang\` is the language actually spoken, one of the allowed codes.
+
+# Output
+Reply with JSON only, matching the required schema.`;
+}
+
+export function buildTranscriptionUserPrompt(durationMs?: number): string {
+  const length = durationMs ? ` It is about ${Math.round(durationMs / 1000)} seconds long.` : '';
+  return `Transcribe the attached voice message.${length}`;
 }

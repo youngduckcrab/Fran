@@ -109,6 +109,7 @@ const ko = {
   'home.items': '{count}개',
   'home.photos': '사진 {count}장',
 
+  'composer.more': '더 보내기',
   'composer.photo': '사진 보내기',
   'composer.record': '음성 녹음',
   'composer.recording': '녹음 중 {time}',
@@ -122,6 +123,9 @@ const ko = {
 
   'bubble.photo': '사진',
   'bubble.voice': '음성 메시지',
+  'bubble.transcript': '받아쓴 글',
+  'bubble.transcribing': '무슨 말인지 듣는 중…',
+  'bubble.transcribeFailed': '받아쓰지 못했어요.',
 
   'actions.save': '이 문장 저장',
   'actions.saveHint': '나중에 모아서 볼 수 있어요',
@@ -142,7 +146,8 @@ const ko = {
   'album.setWallpaper': '배경으로',
 
   'settings.wallpaper': '배경화면',
-  'settings.wallpaperHint': '사진첩에 있는 사진도 배경으로 쓸 수 있어요.',
+  'settings.wallpaperHint': '폰에 있는 사진이나 사진첩의 사진도 배경으로 쓸 수 있어요.',
+  'settings.wallpaperPick': '갤러리에서 고르기',
   'settings.notify': '알림',
   'settings.notifyOn': '새 메시지 알림 받기',
   'settings.notifyHint': '앱을 닫아 두었을 때 폰으로 알려줘요.',
@@ -263,6 +268,7 @@ const es: Record<StringKey, string> = {
   'home.items': '{count}',
   'home.photos': '{count} fotos',
 
+  'composer.more': 'Más',
   'composer.photo': 'Enviar foto',
   'composer.record': 'Grabar voz',
   'composer.recording': 'Grabando {time}',
@@ -276,6 +282,9 @@ const es: Record<StringKey, string> = {
 
   'bubble.photo': 'Foto',
   'bubble.voice': 'Mensaje de voz',
+  'bubble.transcript': 'Lo que se dijo',
+  'bubble.transcribing': 'Escuchando…',
+  'bubble.transcribeFailed': 'No se pudo transcribir.',
 
   'actions.save': 'Guardar esta frase',
   'actions.saveHint': 'Para repasarla después',
@@ -296,7 +305,8 @@ const es: Record<StringKey, string> = {
   'album.setWallpaper': 'De fondo',
 
   'settings.wallpaper': 'Fondo',
-  'settings.wallpaperHint': 'También puedes usar una foto del chat.',
+  'settings.wallpaperHint': 'También puedes usar una foto de tu teléfono o del chat.',
+  'settings.wallpaperPick': 'Elegir de la galería',
   'settings.notify': 'Avisos',
   'settings.notifyOn': 'Avisarme de mensajes nuevos',
   'settings.notifyHint': 'Te avisa en el teléfono cuando la app está cerrada.',
@@ -413,6 +423,7 @@ const en: Record<StringKey, string> = {
   'home.items': '{count}',
   'home.photos': '{count} photos',
 
+  'composer.more': 'More',
   'composer.photo': 'Send a photo',
   'composer.record': 'Record voice',
   'composer.recording': 'Recording {time}',
@@ -426,6 +437,9 @@ const en: Record<StringKey, string> = {
 
   'bubble.photo': 'Photo',
   'bubble.voice': 'Voice message',
+  'bubble.transcript': 'What was said',
+  'bubble.transcribing': 'Listening…',
+  'bubble.transcribeFailed': "Couldn't transcribe this.",
 
   'actions.save': 'Save this sentence',
   'actions.saveHint': 'To go over it later',
@@ -446,7 +460,8 @@ const en: Record<StringKey, string> = {
   'album.setWallpaper': 'Use as background',
 
   'settings.wallpaper': 'Background',
-  'settings.wallpaperHint': 'You can also use a photo from the chat.',
+  'settings.wallpaperHint': 'You can also use a photo from your phone or the chat.',
+  'settings.wallpaperPick': 'Choose from gallery',
   'settings.notify': 'Notifications',
   'settings.notifyOn': 'Notify me of new messages',
   'settings.notifyHint': 'Your phone tells you when the app is closed.',

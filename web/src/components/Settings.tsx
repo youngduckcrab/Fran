@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   LANGUAGES,
   LANGUAGE_NAMES,
@@ -9,7 +9,8 @@ import {
 import { saveSettings, saveWallpaper } from '../api';
 import { useT, type StringKey } from '../i18n';
 import { disablePush, enablePush, pushState, type PushState } from '../push';
-import { wallpaperPhotoId } from '../wallpaper';
+import { attachmentUrl, prepareImage, uploadAttachment } from '../media';
+import { photoWallpaper, wallpaperPhotoId } from '../wallpaper';
 
 interface Props {
   profile: UserProfile;
@@ -48,6 +49,25 @@ export default function Settings({
   /* ---- 배경화면 ---- */
   const [wallpaper, setWallpaper] = useState<string>(profile.wallpaper ?? 'default');
   const photoWall = wallpaperPhotoId(profile.wallpaper);
+
+  const photoInput = useRef<HTMLInputElement | null>(null);
+  const [wallBusy, setWallBusy] = useState(false);
+
+  /** 폰 갤러리에서 고른 사진을 배경으로. 올리기 전에 화면에서 줄인다. */
+  const pickWallpaper = async (file: File) => {
+    setWallBusy(true);
+    setError(null);
+    try {
+      const { blob, width, height } = await prepareImage(file);
+      const attachment = await uploadAttachment(blob, 'image', { width, height });
+      await chooseWallpaper(photoWallpaper(attachment.id));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setWallBusy(false);
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  };
 
   const chooseWallpaper = async (value: string) => {
     const previous = wallpaper;
@@ -179,13 +199,33 @@ export default function Settings({
             {photoWall && (
               <button
                 type="button"
-                className={`walls__item ${wallpaper === profile.wallpaper ? 'is-on' : ''}`}
+                className={`walls__item walls__item--photo ${wallpaper === profile.wallpaper ? 'is-on' : ''}`}
+                style={{ backgroundImage: `url("${attachmentUrl(photoWall)}")` }}
                 onClick={() => void chooseWallpaper(profile.wallpaper as string)}
               >
                 <span>{t('wall.photo')}</span>
               </button>
             )}
           </div>
+
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            className="composer__file"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void pickWallpaper(file);
+            }}
+          />
+          <button
+            type="button"
+            className="sheet__pick"
+            onClick={() => photoInput.current?.click()}
+            disabled={wallBusy}
+          >
+            🖼 {wallBusy ? t('composer.uploading') : t('settings.wallpaperPick')}
+          </button>
         </section>
 
         <section className="sheet__section">

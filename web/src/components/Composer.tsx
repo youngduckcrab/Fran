@@ -36,6 +36,13 @@ export default function Composer({ peerName, onSend, onTyping }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [recorder, setRecorder] = useState<Recorder | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  /**
+   * 사진·녹음·번역 지시를 담아 두는 서랍.
+   *
+   * 버튼을 전부 한 줄에 늘어놓으니 작은 폰에서는 입력칸이 손가락 두 개 너비밖에
+   * 남지 않았다. 평소에는 + 하나만 두고, 누를 때만 펼친다.
+   */
+  const [trayOpen, setTrayOpen] = useState(false);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,6 +177,51 @@ export default function Composer({ peerName, onSend, onTyping }: Props) {
           </button>
         </div>
       ) : (
+        <>
+          {trayOpen && (
+            <div className="tray">
+              <button
+                type="button"
+                className="tray__item"
+                onClick={() => {
+                  setTrayOpen(false);
+                  fileRef.current?.click();
+                }}
+                disabled={busy}
+              >
+                <span aria-hidden="true">🖼</span>
+                {t('composer.photo')}
+              </button>
+
+              {canRecord() && (
+                <button
+                  type="button"
+                  className="tray__item"
+                  onClick={() => {
+                    setTrayOpen(false);
+                    void beginRecording();
+                  }}
+                  disabled={busy}
+                >
+                  <span aria-hidden="true">🎤</span>
+                  {t('composer.record')}
+                </button>
+              )}
+
+              <button
+                type="button"
+                className={`tray__item ${noteOpen || note ? 'is-on' : ''}`}
+                onClick={() => {
+                  setTrayOpen(false);
+                  setNoteOpen((open) => !open);
+                }}
+              >
+                <span aria-hidden="true">✎</span>
+                {t('note.button')}
+              </button>
+            </div>
+          )}
+
         <form className="composer" onSubmit={submit}>
           <input
             ref={fileRef}
@@ -183,36 +235,12 @@ export default function Composer({ peerName, onSend, onTyping }: Props) {
           />
           <button
             type="button"
-            className="composer__icon"
-            onClick={() => fileRef.current?.click()}
-            aria-label={t('composer.photo')}
-            title={t('composer.photo')}
-            disabled={busy}
+            className={`composer__icon ${trayOpen ? 'is-on' : ''}`}
+            onClick={() => setTrayOpen((open) => !open)}
+            aria-label={t('composer.more')}
+            title={t('composer.more')}
           >
-            🖼
-          </button>
-
-          {canRecord() && (
-            <button
-              type="button"
-              className="composer__icon"
-              onClick={() => void beginRecording()}
-              aria-label={t('composer.record')}
-              title={t('composer.record')}
-              disabled={busy}
-            >
-              🎤
-            </button>
-          )}
-
-          <button
-            type="button"
-            className={`composer__icon ${noteOpen || note ? 'is-on' : ''}`}
-            onClick={() => setNoteOpen((open) => !open)}
-            aria-label={t('note.button')}
-            title={t('note.button')}
-          >
-            ✎
+            {trayOpen ? '✕' : '+'}
           </button>
 
           <textarea
@@ -228,10 +256,17 @@ export default function Composer({ peerName, onSend, onTyping }: Props) {
               }
             }}
           />
-          <button className="composer__send" type="submit" disabled={!draft.trim() && !pending}>
-            {t('chat.send')}
+          <button
+            className="composer__send"
+            type="submit"
+            disabled={!draft.trim() && !pending}
+            aria-label={t('chat.send')}
+            title={t('chat.send')}
+          >
+            ➤
           </button>
         </form>
+        </>
       )}
     </>
   );

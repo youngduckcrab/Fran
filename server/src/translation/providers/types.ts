@@ -7,6 +7,8 @@ export interface ProviderRequest {
   userPrompt: string;
   /** 이 요청의 출력 형식(JSON Schema). 번역과 설명이 서로 다른 모양을 쓴다. */
   schema: object;
+  /** 같이 들려줄 소리. 음성 메시지를 받아쓸 때만 채운다. */
+  audio?: { mime: string; base64: string };
 }
 
 export interface ProviderUsage {

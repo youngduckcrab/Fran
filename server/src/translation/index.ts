@@ -5,14 +5,19 @@ import {
   buildExplanationSystemPrompt,
   buildExplanationUserPrompt,
   buildSystemPrompt,
+  buildTranscriptionSystemPrompt,
+  buildTranscriptionUserPrompt,
   buildUserPrompt,
 } from './prompt.js';
 import {
   EXPLANATION_SCHEMA,
   OUTPUT_SCHEMA,
+  TRANSCRIPT_SCHEMA,
   explanationSchema,
   resultSchema,
+  transcriptSchema,
   type ExplanationResult,
+  type TranscriptResult,
   type TranslationResult,
 } from './schema.js';
 import { ClaudeProvider } from './providers/claude.js';
@@ -26,7 +31,7 @@ import {
 } from './providers/types.js';
 
 export { TranslationError } from './providers/types.js';
-export type { ExplanationResult, TranslationResult } from './schema.js';
+export type { ExplanationResult, TranscriptResult, TranslationResult } from './schema.js';
 
 /* ------------------------------------------------------------------ */
 /* provider 선택                                                       */
@@ -224,6 +229,54 @@ export async function explainMessage({
   const parsed = explanationSchema.safeParse(raw);
   if (!parsed.success) {
     throw new TranslationError(`설명 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
+  }
+  return { result: parsed.data, model: provider.model };
+}
+
+/* ------------------------------------------------------------------ */
+/* 음성 받아쓰기                                                       */
+/* ------------------------------------------------------------------ */
+
+export interface TranscribeArgs {
+  audio: { bytes: Buffer; mime: string };
+  durationMs?: number;
+  /** 녹음한 사람. 어느 언어일지 짐작하는 데 쓴다. */
+  speaker: UserProfile;
+  participants: UserProfile[];
+}
+
+export interface TranscribeOutcome {
+  result: TranscriptResult;
+  model: string;
+}
+
+export async function transcribeAudio({
+  audio,
+  durationMs,
+  speaker,
+  participants,
+}: TranscribeArgs): Promise<TranscribeOutcome> {
+  const provider = getProvider();
+
+  const startedAt = Date.now();
+  const response = await completeWithRetry(provider, {
+    systemPrompt: buildTranscriptionSystemPrompt(participants, speaker),
+    userPrompt: buildTranscriptionUserPrompt(durationMs),
+    schema: TRANSCRIPT_SCHEMA,
+    audio: { mime: audio.mime, base64: audio.bytes.toString('base64') },
+  });
+  recordUsage(provider, response.usage, Date.now() - startedAt);
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(response.json);
+  } catch {
+    throw new TranslationError(`모델이 JSON 이 아닌 응답을 돌려줬습니다: ${response.json.slice(0, 200)}`);
+  }
+
+  const parsed = transcriptSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new TranslationError(`받아쓰기 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
   }
   return { result: parsed.data, model: provider.model };
 }

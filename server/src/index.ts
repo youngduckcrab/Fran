@@ -9,6 +9,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   cleanTerm,
   isLangCode,
+  messageText,
   isWallpaperId,
   type Attachment,
   type AttachmentKind,
@@ -27,6 +28,7 @@ import {
   deleteSaved,
   deleteVocab,
   getAttachmentBytes,
+  getAudioForTranscription,
   getWallpaper,
   initDatabase,
   insertAttachment,
@@ -38,6 +40,9 @@ import {
   saveVocab,
   saveWallpaper,
   savedKeysOf,
+  retryTranscript,
+  setSourceLang,
+  setTranscript,
   deleteGlossaryEntry,
   getDisplayLangs,
   getExplanation,
@@ -55,7 +60,14 @@ import {
   saveTranslation,
   setTranslationStatus,
 } from './db.js';
-import { TranslationError, explainMessage, getProvider, translateMessage } from './translation/index.js';
+import {
+  TranslationError,
+  explainMessage,
+  getProvider,
+  transcribeAudio,
+  translateMessage,
+} from './translation/index.js';
+import { toModelAudio } from './audio.js';
 import { initPush, kindLabel, notify, publicKey, subscribe, unsubscribe } from './push.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
@@ -170,15 +182,64 @@ function targetLangsFor(sourceLang: LangCode, participants: UserProfile[]): Lang
   return [...wanted];
 }
 
+/**
+ * 음성을 글로 옮긴다. 번역보다 먼저 해야 한다 — 옮긴 글이 곧 번역할 원문이기 때문이다.
+ * 실패해도 메시지 자체는 멀쩡하다(소리는 들을 수 있다). 상태만 남기고 넘어간다.
+ */
+async function runTranscription(message: ChatMessage): Promise<void> {
+  const attachment = message.attachment;
+  if (!attachment || attachment.kind !== 'audio') return;
+  if (attachment.transcript || attachment.transcriptStatus === 'failed') return;
+
+  const file = await getAudioForTranscription(attachment.id);
+  if (!file) return;
+
+  try {
+    const participants = await bothProfiles();
+    const speaker = participants.find((p) => p.id === message.senderId) ?? participants[0];
+    if (!speaker) return;
+
+    // 폰이 만든 형식 그대로는 모델이 받아주지 않는다. 알아듣는 형식으로 맞춰 보낸다.
+    const audio = await toModelAudio(file.bytes, file.mime);
+    const { result } = await transcribeAudio({
+      audio,
+      ...(attachment.durationMs ? { durationMs: attachment.durationMs } : {}),
+      speaker,
+      participants,
+    });
+
+    const text = result.text.trim();
+    await setTranscript(attachment.id, text ? { text, lang: result.lang } : null);
+
+    // 공부 삼아 다른 언어로 말했을 수도 있다. 들린 언어를 원문 언어로 삼는다.
+    if (text && result.lang !== message.sourceLang) {
+      console.log(`[transcribe] ${message.id}: ${message.sourceLang} 로 알고 있었으나 ${result.lang} 로 들림`);
+      await setSourceLang(message.id, result.lang);
+    }
+  } catch (error) {
+    const reason = error instanceof TranslationError ? error.message : String(error);
+    console.error(`[transcribe] ${message.id} 실패: ${reason}`);
+    await setTranscript(attachment.id, null);
+  }
+
+  // 번역을 기다리지 않고 받아쓴 글부터 띄운다.
+  await publishUpdate(message.id);
+}
+
 async function runTranslation(messageId: string): Promise<void> {
-  const message = await getMessage(messageId);
+  let message = await getMessage(messageId);
   if (!message) return;
+
+  if (message.attachment?.kind === 'audio' && message.attachment.transcriptStatus === 'pending') {
+    await runTranscription(message);
+    message = (await getMessage(messageId)) ?? message;
+  }
 
   const participants = await bothProfiles();
   const targetLangs = targetLangsFor(message.sourceLang, participants);
 
-  // 번역할 게 없는 경우: 글이 없는 사진·음성이거나, 둘 다 같은 언어로 읽을 때.
-  if (targetLangs.length === 0 || !message.sourceText.trim()) {
+  // 번역할 게 없는 경우: 글이 없는 사진이거나, 둘 다 같은 언어로 읽을 때.
+  if (targetLangs.length === 0 || !messageText(message)) {
     await setTranslationStatus(messageId, 'done');
     await publishUpdate(messageId);
     await notifyNewMessage(messageId);
@@ -249,8 +310,8 @@ async function notifyNewMessage(messageId: string): Promise<void> {
 
   // 받는 사람이 읽는 언어로 적는다. 아직 번역이 없으면 원문이라도 보낸다.
   const translated = message.translations[readingLang]?.text;
-  const text =
-    message.sourceLang === readingLang ? message.sourceText : (translated ?? message.sourceText);
+  const own = messageText(message);
+  const text = message.sourceLang === readingLang ? own : (translated ?? own);
   const label = message.attachment ? kindLabel(readingLang, message.attachment.kind) : '';
   const body = [label, text].filter(Boolean).join('  ').trim();
 
@@ -537,7 +598,7 @@ app.post('/api/messages/:id/explain', async (c) => {
 
   // 설명 대상 문장 고르기: 원문이거나, 그 언어로 번역된 문장.
   const text =
-    targetLang === message.sourceLang ? message.sourceText : message.translations[targetLang]?.text;
+    targetLang === message.sourceLang ? messageText(message) : message.translations[targetLang]?.text;
   if (!text) {
     return c.json({ error: '그 언어의 문장이 아직 없습니다.' }, 400);
   }
@@ -729,6 +790,10 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
     case 'retranslate': {
       const message = await getMessage(event.messageId);
       if (!message) return;
+      // 받아쓰기가 실패한 음성이면 그것부터 다시 해본다. 원문이 없으면 번역할 것도 없다.
+      if (message.attachment?.kind === 'audio' && message.attachment.transcriptStatus === 'failed') {
+        await retryTranscript(message.attachment.id);
+      }
       // 지시를 바꿔 다시 번역할 수 있다. 자기가 보낸 메시지에 대해서만.
       if (event.translationNote !== undefined && message.senderId === userId) {
         await setTranslationNote(message.id, event.translationNote.trim() || undefined);

@@ -33,6 +33,14 @@ export class ClaudeProvider implements TranslationProvider {
   }
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
+    if (request.audio) {
+      // Claude 는 소리를 듣지 못한다. 받아쓰기를 쓰려면 Gemini 로 두어야 한다.
+      throw new TranslationError(
+        'Claude 는 음성을 받아쓰지 못합니다. TRANSLATION_PROVIDER=gemini 로 두면 됩니다.',
+        false,
+        { code: 'refused' },
+      );
+    }
     const { systemPrompt, userPrompt } = request;
     let response: Anthropic.Message;
     try {

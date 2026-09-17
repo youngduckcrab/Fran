@@ -14,6 +14,12 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
+# 음성 메시지를 받아쓰려면 모델이 알아듣는 형식으로 바꿔야 한다.
+# 폰이 주는 webm/mp4 는 모델이 받지 않고, 그 변환을 ffmpeg 이 한다.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app /app
 
 ENV PORT=8787

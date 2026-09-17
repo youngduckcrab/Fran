@@ -1,27 +1,74 @@
+/*
+ * 둥글둥글한 글꼴. 구글 서버에서 받아오지 않고 앱과 함께 넣어 둔다 —
+ * 밖에 매달리지 않아야 비행기 모드에서도, 나중에 그 주소가 바뀌어도 그대로 쓴다.
+ * 한글은 이 글꼴에 없으므로 글자마다 기기 글꼴로 넘어간다.
+ */
+@font-face {
+  font-family: 'Quicksand';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/quicksand-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Quicksand';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/quicksand-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+/*
+ * 색과 모양.
+ *
+ * 둘이서만 쓰는 앱이라 사무적으로 생길 이유가 없다. 둥근 모서리, 부드러운 그림자,
+ * 분홍-라벤더 사이의 따뜻한 색으로 잡았다. 어두운 데서도 눈이 편하도록 어두운 쪽은
+ * 검정 대신 자줏빛이 도는 색을 쓴다.
+ */
 :root {
-  --bg: #12121a;
-  --surface: #1b1b25;
-  --surface-raised: #23232f;
-  --text: #edecf2;
-  --text-muted: #9a99a8;
-  --accent: #7c6cf0;
-  --accent-soft: #2a2545;
-  --border: #2c2c3a;
-  --danger: #ef6a6a;
-  --radius: 18px;
+  --bg: #17121f;
+  --bg-tint: radial-gradient(120% 80% at 50% 0%, #2a1f3a 0%, #17121f 60%);
+  --surface: #221a2d;
+  --surface-raised: #2c2238;
+  --text: #f3ecf6;
+  --text-muted: #a99cb5;
+  --accent: #ff8fb1;
+  --accent-2: #a98bff;
+  --accent-grad: linear-gradient(135deg, #ff9ec0 0%, #b18bff 100%);
+  --accent-soft: #3a2b4a;
+  --border: #382c47;
+  --danger: #ff7a90;
+  --ok: #7fd1b9;
+  --radius: 22px;
+  --radius-sm: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-soft: 0 4px 14px rgba(0, 0, 0, 0.25);
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f6f5fa;
+    --bg: #fff7fa;
+    --bg-tint: radial-gradient(120% 80% at 50% 0%, #ffe9f1 0%, #fff7fa 55%, #f5f1ff 100%);
     --surface: #ffffff;
-    --surface-raised: #ecebf5;
-    --text: #1a1a22;
-    --text-muted: #6d6c7c;
-    --accent: #5a49d6;
-    --accent-soft: #e6e3fb;
-    --border: #e2e0ee;
+    --surface-raised: #fdeef4;
+    --text: #3a2b3f;
+    --text-muted: #8c7f95;
+    --accent: #ff7fa8;
+    --accent-2: #9b7bff;
+    --accent-grad: linear-gradient(135deg, #ff9ec0 0%, #a98bff 100%);
+    --accent-soft: #ffe6ef;
+    --border: #f3e2ea;
+    --danger: #f2688a;
+    --ok: #3fb99a;
+    --shadow: 0 10px 28px rgba(190, 120, 160, 0.16);
+    --shadow-soft: 0 4px 14px rgba(190, 120, 160, 0.12);
     color-scheme: light;
   }
 }
@@ -39,10 +86,15 @@ body,
 
 body {
   background: var(--bg);
+  /* 한 가지 색으로 두면 밋밋하다. 위쪽만 살짝 물들인다. */
+  background-image: var(--bg-tint);
+  background-attachment: fixed;
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Segoe UI', Roboto, sans-serif;
+  /* Quicksand 는 둥근 라틴 문자체다. 한글은 이 글꼴에 없으므로 기기 글꼴로 넘어간다. */
+  font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Pretendard',
+    'Apple SD Gothic Neo', 'Segoe UI', Roboto, sans-serif;
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -51,6 +103,21 @@ input,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+/* 누르는 맛. 어디를 눌러도 살짝 들어갔다 나온다. */
+button {
+  transition: transform 120ms ease, background 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 /* ---------- 로그인 ---------- */
@@ -68,20 +135,36 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 28px 24px;
+  padding: 30px 24px 26px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+}
+
+/* 문 앞에 붙은 하트. 이 앱을 여는 사람은 둘뿐이다. */
+.login__card::before {
+  content: '💌';
+  align-self: center;
+  font-size: 40px;
+  line-height: 1;
 }
 
 .login__title {
   margin: 0;
+  text-align: center;
   font-size: 30px;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .login__subtitle {
   margin: 0 0 6px;
+  text-align: center;
   color: var(--text-muted);
   font-size: 14px;
 }
@@ -94,7 +177,7 @@ textarea {
 .login__person {
   flex: 1;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: 16px;
   border: 1px solid var(--border);
   background: transparent;
   cursor: pointer;
@@ -108,20 +191,27 @@ textarea {
 .login__input,
 .composer__input {
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 11px 14px;
+  border-radius: 18px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-raised);
+  outline: none;
+}
+
+.login__input:focus,
+.composer__input:focus {
+  border-color: var(--accent);
 }
 
 .login__submit {
-  padding: 13px;
+  padding: 14px;
   border: none;
-  border-radius: 12px;
-  background: var(--accent);
+  border-radius: 18px;
+  background: var(--accent-grad);
   color: #fff;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: var(--shadow-soft);
 }
 
 .login__submit:disabled {
@@ -147,6 +237,7 @@ textarea {
   max-width: 720px;
   margin: 0 auto;
   background: var(--bg);
+  background-image: var(--bg-tint);
 }
 
 .chat__header,
@@ -160,29 +251,38 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  gap: 10px;
+  padding: max(10px, env(safe-area-inset-top)) 14px 10px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .chat__peer {
   margin: 0;
-  font-size: 17px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .chat__status {
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-muted);
 }
 
 .chat__settings {
-  padding: 8px 12px;
-  border-radius: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--surface-raised);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+}
+
+.chat__settings:active {
+  background: var(--accent-soft);
 }
 
 /* 연결이 끊겼을 때 뜨는 한 줄.
@@ -254,15 +354,40 @@ textarea {
 }
 
 .bubble__body {
-  padding: 10px 14px;
+  padding: 11px 15px;
   border-radius: var(--radius);
-  background: var(--surface-raised);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
   cursor: pointer;
+  /* 말풍선 꼬리. 받은 쪽은 왼쪽 아래를 덜 둥글게 해서 그쪽을 보게 한다. */
+  border-bottom-left-radius: 8px;
 }
 
 .bubble--mine .bubble__body {
-  background: var(--accent);
+  background: var(--accent-grad);
+  border-color: transparent;
   color: #fff;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: 8px;
+}
+
+/* 새 말풍선은 아래에서 살짝 떠오른다. */
+.bubble {
+  animation: bubble-in 200ms ease-out;
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble {
+    animation: none;
+  }
 }
 
 .bubble__text {
@@ -349,10 +474,12 @@ textarea {
 
 .composer {
   display: flex;
-  gap: 6px;
+  align-items: flex-end;
+  gap: 5px;
   padding: 10px 12px max(10px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .composer__input {
@@ -363,15 +490,20 @@ textarea {
   max-height: 140px;
 }
 
+/* 글자 대신 화살표 하나. 작은 화면에서 입력칸을 한 글자라도 더 넓게 쓰려고. */
 .composer__send {
   flex: 0 0 auto;
-  padding: 0 14px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border: none;
-  border-radius: 12px;
-  background: var(--accent);
+  border-radius: 50%;
+  background: var(--accent-grad);
   color: #fff;
-  font-weight: 600;
+  font-size: 17px;
+  line-height: 1;
   cursor: pointer;
+  box-shadow: var(--shadow-soft);
 }
 
 .composer__send:disabled {
@@ -395,9 +527,35 @@ textarea {
   max-width: 520px;
   max-height: 88vh;
   overflow-y: auto;
-  padding: 20px 20px max(20px, env(safe-area-inset-bottom));
-  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 10px 20px max(20px, env(safe-area-inset-bottom));
+  border-radius: 28px 28px 0 0;
   background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: sheet-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 위에 붙는 손잡이. 올라온 창이라는 걸 한눈에 알려준다. */
+.sheet__panel::before {
+  content: '';
+  display: block;
+  width: 42px;
+  height: 4px;
+  margin: 6px auto 12px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet__panel {
+    animation: none;
+  }
 }
 
 .sheet__header {
@@ -408,13 +566,17 @@ textarea {
 
 .sheet__header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
+  font-weight: 700;
 }
 
 .sheet__close {
+  width: 34px;
+  height: 34px;
   border: none;
-  background: none;
-  font-size: 18px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  font-size: 16px;
   cursor: pointer;
 }
 
@@ -440,16 +602,18 @@ textarea {
 }
 
 .chip {
-  padding: 8px 14px;
+  padding: 9px 16px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--surface-raised);
+  font-weight: 600;
   cursor: pointer;
 }
 
 .chip.is-on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: transparent;
+  background: var(--accent-grad);
+  color: #fff;
 }
 
 .sheet__order {
@@ -481,8 +645,8 @@ textarea {
 }
 
 .sheet__logout {
-  padding: 12px 16px;
-  border-radius: 12px;
+  padding: 12px 18px;
+  border-radius: 999px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
@@ -491,13 +655,32 @@ textarea {
 
 .sheet__save {
   flex: 1;
-  padding: 12px;
+  padding: 13px;
   border: none;
-  border-radius: 12px;
-  background: var(--accent);
+  border-radius: 999px;
+  background: var(--accent-grad);
   color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+/* 갤러리에서 사진 고르기처럼, 칸 하나를 다 쓰는 부드러운 버튼. */
+.sheet__pick {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--text-muted);
   font-weight: 600;
   cursor: pointer;
+}
+
+.sheet__pick:active {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ---------- 번역 지시 ---------- */
@@ -529,10 +712,12 @@ textarea {
 .composer__icon {
   flex: 0 0 auto;
   width: 38px;
-  border-radius: 12px;
+  height: 38px;
+  border-radius: 50%;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--surface-raised);
   font-size: 17px;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -817,8 +1002,15 @@ textarea {
 
 .home__peer {
   margin: 0;
-  font-size: 26px;
-  letter-spacing: -0.02em;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* 이름 옆의 작은 하트. */
+.home__peer::after {
+  content: ' 💕';
+  font-size: 18px;
 }
 
 .home__status {
@@ -840,15 +1032,30 @@ textarea {
   gap: 6px;
   padding: 16px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 24px;
   background: var(--surface);
+  box-shadow: var(--shadow-soft);
   color: inherit;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
 }
 
-.tile:active {
-  background: var(--surface-raised);
+/* 칸마다 다른 파스텔 색. 아이콘만으로 찾는 것보다 색이 먼저 눈에 들어온다. */
+.home__grid .tile:nth-child(1) {
+  background: linear-gradient(160deg, color-mix(in srgb, #ffd6e7 30%, var(--surface)) 0%, var(--surface) 70%);
+}
+
+.home__grid .tile:nth-child(2) {
+  background: linear-gradient(160deg, color-mix(in srgb, #d9e7ff 32%, var(--surface)) 0%, var(--surface) 70%);
+}
+
+.home__grid .tile:nth-child(3) {
+  background: linear-gradient(160deg, color-mix(in srgb, #d8f5e3 32%, var(--surface)) 0%, var(--surface) 70%);
+}
+
+.tile--chat {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface)) 0%, var(--surface) 65%);
 }
 
 .tile--chat {
@@ -856,6 +1063,10 @@ textarea {
   align-items: center;
   gap: 14px;
   padding: 18px 16px;
+}
+
+.tile__icon {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12));
 }
 
 .tile__icon {
@@ -900,14 +1111,23 @@ textarea {
 }
 
 .tile__badge {
-  min-width: 24px;
-  padding: 2px 8px;
+  min-width: 26px;
+  padding: 3px 9px;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--accent-grad);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
   text-align: center;
+  box-shadow: var(--shadow-soft);
+  animation: badge-pop 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes badge-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
 }
 
 /* ---------- 모아 보기 화면 (저장한 문장·단어장·사진첩) ---------- */
@@ -931,13 +1151,23 @@ textarea {
 
 .page__header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 21px;
+  font-weight: 700;
 }
 
 .page__empty {
-  margin: 24px 4px;
+  margin: 40px 10px;
   color: var(--text-muted);
   text-align: center;
+  line-height: 1.7;
+}
+
+/* 텅 빈 화면에 말풍선 하나. 비어 있는 게 잘못된 게 아니라는 표시. */
+.page__empty::before {
+  content: '🫧';
+  display: block;
+  margin-bottom: 10px;
+  font-size: 40px;
 }
 
 .chat__back {
@@ -972,10 +1202,11 @@ textarea {
 }
 
 .card {
-  padding: 14px;
+  padding: 15px 16px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 20px;
   background: var(--surface);
+  box-shadow: var(--shadow-soft);
 }
 
 .card__main {
@@ -1013,13 +1244,18 @@ textarea {
 }
 
 .card__delete {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
   color: var(--text-muted);
   font-size: 12px;
   cursor: pointer;
+}
+
+.card__delete:active {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* ---------- 사진첩 ---------- */
@@ -1030,14 +1266,19 @@ textarea {
   gap: 4px;
 }
 
+.album {
+  gap: 6px;
+}
+
 .album__cell {
   padding: 0;
   border: none;
   background: var(--surface-raised);
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
   aspect-ratio: 1;
   cursor: pointer;
+  box-shadow: var(--shadow-soft);
 }
 
 .album__cell img {
@@ -1271,6 +1512,11 @@ textarea {
   gap: 8px;
 }
 
+.walls__item--photo {
+  background-size: cover;
+  background-position: center;
+}
+
 .walls__item {
   height: 62px;
   padding: 0;
@@ -1288,4 +1534,54 @@ textarea {
 
 .walls__item.is-on {
   border-color: var(--accent);
+}
+
+/* 입력칸 위로 펼쳐지는 서랍 (사진·녹음·번역 지시) */
+.tray {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 0;
+  animation: tray-in 160ms ease-out;
+}
+
+.tray__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  word-break: keep-all;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+.tray__item span {
+  font-size: 20px;
+}
+
+.tray__item.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@keyframes tray-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray {
+    animation: none;
+  }
 }
