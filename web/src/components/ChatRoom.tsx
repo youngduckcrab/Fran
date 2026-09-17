@@ -4,6 +4,7 @@ import type { Chat } from '../useChat';
 import { useT } from '../i18n';
 import Icon from './Icon';
 import { useBackClose } from '../backstack';
+import { clearDelivered } from '../notifications';
 import { useSpeaker } from '../speech';
 import { wallpaperProps } from '../wallpaper';
 import Explanation from './Explanation';
@@ -77,7 +78,10 @@ export default function ChatRoom({
   useEffect(() => {
     if (!newest) return;
     const mark = () => {
-      if (document.visibilityState === 'visible') markRead(newest);
+      if (document.visibilityState !== 'visible') return;
+      markRead(newest);
+      // 여기까지 읽었으니 폰에 쌓여 있던 알림도 치운다. 채팅을 연 지금이 그 순간이다.
+      void clearDelivered();
     };
     mark();
     document.addEventListener('visibilitychange', mark);
