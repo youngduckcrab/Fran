@@ -66,7 +66,16 @@ export class GeminiProvider implements TranslationProvider {
         );
       }
       if (/429|RESOURCE_EXHAUSTED|quota/i.test(message)) {
-        throw new TranslationError(`Gemini 무료 티어 할당량을 넘었습니다. 잠시 뒤 다시 시도하세요. (${message})`);
+        // 분당 한도면 곧 풀리지만 하루 한도면 재시도가 낭비다. 구분할 수 없으니 자동
+        // 재시도는 하지 않고 사용자에게 알린다.
+        throw new TranslationError('무료 티어 할당량을 넘었습니다. 잠시 뒤 다시 시도해 주세요.');
+      }
+      // 모델 과부하와 서버 오류는 잠시 뒤면 대개 풀린다.
+      if (/\b(500|502|503|504)\b|UNAVAILABLE|INTERNAL|high demand|overloaded/i.test(message)) {
+        throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true);
+      }
+      if (/fetch failed|ECONNRESET|ETIMEDOUT|network/i.test(message)) {
+        throw new TranslationError('네트워크 문제로 모델에 연결하지 못했습니다.', true);
       }
       if (/404|NOT_FOUND|not found/i.test(message)) {
         throw new TranslationError(

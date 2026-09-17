@@ -279,13 +279,29 @@ textarea {
   color: var(--text-muted);
 }
 
+.bubble__failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .bubble__retry {
   padding: 0;
   border: none;
   background: none;
-  color: var(--danger);
+  color: inherit;
+  font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 /* ---------- 입력창 ---------- */

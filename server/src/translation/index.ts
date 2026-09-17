@@ -4,7 +4,13 @@ import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
 import { resultSchema, type TranslationResult } from './schema.js';
 import { ClaudeProvider } from './providers/claude.js';
 import { GeminiProvider, parseSafetyThreshold } from './providers/gemini.js';
-import { TranslationError, type ProviderUsage, type TranslationProvider } from './providers/types.js';
+import {
+  TranslationError,
+  type ProviderRequest,
+  type ProviderResponse,
+  type ProviderUsage,
+  type TranslationProvider,
+} from './providers/types.js';
 
 export { TranslationError } from './providers/types.js';
 export type { TranslationResult } from './schema.js';
@@ -69,6 +75,36 @@ function recordUsage(provider: TranslationProvider, usage: ProviderUsage, elapse
 }
 
 /* ------------------------------------------------------------------ */
+/* 재시도                                                              */
+/* ------------------------------------------------------------------ */
+
+/** 모델 과부하는 흔하고 대개 몇 초면 풀린다. 사용자가 버튼을 누르기 전에 먼저 해본다. */
+const RETRY_DELAYS_MS = [1_000, 3_000, 8_000];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function completeWithRetry(
+  provider: TranslationProvider,
+  request: ProviderRequest,
+): Promise<ProviderResponse> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await provider.complete(request);
+    } catch (error) {
+      const retryable = error instanceof TranslationError && error.retryable;
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (!retryable || delay === undefined) throw error;
+
+      console.warn(
+        `[translate] 일시적 오류, ${delay}ms 뒤 재시도 ` +
+          `(${attempt + 1}/${RETRY_DELAYS_MS.length}): ${(error as Error).message}`,
+      );
+      await sleep(delay);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* 번역                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -95,7 +131,7 @@ export async function translateMessage({
   const nameOf = (userId: string) => participants.find((p) => p.id === userId)?.name ?? userId;
 
   const startedAt = Date.now();
-  const response = await provider.complete({
+  const response = await completeWithRetry(provider, {
     systemPrompt: buildSystemPrompt(participants, config.glossary),
     userPrompt: buildUserPrompt(message, context, nameOf, targetLangs),
   });

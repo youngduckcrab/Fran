@@ -46,6 +46,14 @@ db.exec(`
   );
 `);
 
+// 이미 만들어진 DB 에도 새 컬럼을 더한다. SQLite 는 IF NOT EXISTS 를 지원하지 않는다.
+{
+  const columns = db.prepare(`PRAGMA table_info(messages)`).all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === 'translation_error')) {
+    db.exec(`ALTER TABLE messages ADD COLUMN translation_error TEXT`);
+  }
+}
+
 interface MessageRow {
   id: string;
   sender_id: string;
@@ -53,6 +61,7 @@ interface MessageRow {
   source_lang: string;
   created_at: number;
   translation_status: string;
+  translation_error: string | null;
 }
 
 interface TranslationRow {
@@ -76,7 +85,9 @@ const statements = {
   selectBefore: db.prepare<[number, number], MessageRow>(
     `SELECT * FROM messages WHERE created_at < ? ORDER BY created_at DESC, id DESC LIMIT ?`,
   ),
-  updateStatus: db.prepare(`UPDATE messages SET translation_status = ? WHERE id = ?`),
+  updateStatus: db.prepare(
+    `UPDATE messages SET translation_status = ?, translation_error = ? WHERE id = ?`,
+  ),
   upsertTranslation: db.prepare(
     `INSERT INTO translations (message_id, lang, text, notes, model, created_at)
      VALUES (@message_id, @lang, @text, @notes, @model, @created_at)
@@ -127,6 +138,7 @@ function hydrate(row: MessageRow): ChatMessage {
     sourceLang: isLangCode(row.source_lang) ? row.source_lang : 'ko',
     createdAt: row.created_at,
     translationStatus: row.translation_status as TranslationStatus,
+    ...(row.translation_error ? { translationError: row.translation_error } : {}),
     translations,
   };
 }
@@ -173,8 +185,12 @@ export function saveTranslation(messageId: string, translation: Translation): vo
   });
 }
 
-export function setTranslationStatus(messageId: string, status: TranslationStatus): void {
-  statements.updateStatus.run(status, messageId);
+export function setTranslationStatus(
+  messageId: string,
+  status: TranslationStatus,
+  error?: string,
+): void {
+  statements.updateStatus.run(status, error ?? null, messageId);
 }
 
 export function clearTranslations(messageId: string): void {

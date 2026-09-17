@@ -34,23 +34,36 @@ export class ClaudeProvider implements TranslationProvider {
   }
 
   async complete({ systemPrompt, userPrompt }: ProviderRequest): Promise<ProviderResponse> {
-    const response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 8192,
-      system: [
-        {
-          type: 'text',
-          text: systemPrompt,
-          // 시스템 프롬프트는 요청마다 거의 같다. 캐시가 걸리면 입력 비용이 크게 준다.
-          cache_control: { type: 'ephemeral' },
+    let response: Anthropic.Message;
+    try {
+      response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 8192,
+        system: [
+          {
+            type: 'text',
+            text: systemPrompt,
+            // 시스템 프롬프트는 요청마다 거의 같다. 캐시가 걸리면 입력 비용이 크게 준다.
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        output_config: {
+          ...(this.effort ? { effort: this.effort } : {}),
+          format: { type: 'json_schema', schema: OUTPUT_SCHEMA },
         },
-      ],
-      output_config: {
-        ...(this.effort ? { effort: this.effort } : {}),
-        format: { type: 'json_schema', schema: OUTPUT_SCHEMA },
-      },
-      messages: [{ role: 'user', content: userPrompt }],
-    });
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+    } catch (cause) {
+      const status = (cause as { status?: number }).status;
+      // 529(과부하)와 5xx 는 잠시 뒤면 대개 풀린다.
+      if (status === 529 || (typeof status === 'number' && status >= 500)) {
+        throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true);
+      }
+      if (status === 429) {
+        throw new TranslationError('요청이 너무 잦습니다. 잠시 뒤 다시 시도해 주세요.');
+      }
+      throw new TranslationError(`Claude 호출 실패: ${cause instanceof Error ? cause.message : String(cause)}`);
+    }
 
     if (response.stop_reason === 'refusal') {
       throw new TranslationError(

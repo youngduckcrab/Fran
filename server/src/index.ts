@@ -130,7 +130,7 @@ async function runTranslation(messageId: string): Promise<void> {
   } catch (error) {
     const reason = error instanceof TranslationError ? error.message : String(error);
     console.error(`[translate] ${messageId} 실패: ${reason}`);
-    setTranslationStatus(messageId, 'failed');
+    setTranslationStatus(messageId, 'failed', reason);
   }
 
   publishUpdate(messageId);

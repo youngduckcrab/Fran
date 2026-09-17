@@ -54,6 +54,8 @@ export interface ChatMessage {
   sourceLang: LangCode;
   createdAt: number;
   translationStatus: TranslationStatus;
+  /** 번역이 실패한 이유. 상대는 서버 로그를 볼 수 없으므로 화면에 띄운다. */
+  translationError?: string;
   /** 언어 코드 -> 번역. 원문 언어는 여기 포함되지 않는다. */
   translations: Partial<Record<LangCode, Translation>>;
 }

@@ -29,4 +29,15 @@ export interface TranslationProvider {
 }
 
 /** 번역이 실패한 이유를 사람이 읽을 수 있게 담는다. */
-export class TranslationError extends Error {}
+export class TranslationError extends Error {
+  /**
+   * 잠시 뒤 다시 해보면 될 종류인지. 모델 과부하(503)나 일시적 네트워크 장애가
+   * 여기 해당한다. 키가 틀렸거나 모델 이름이 없는 것은 몇 번을 해도 같다.
+   */
+  readonly retryable: boolean;
+
+  constructor(message: string, retryable = false) {
+    super(message);
+    this.retryable = retryable;
+  }
+}

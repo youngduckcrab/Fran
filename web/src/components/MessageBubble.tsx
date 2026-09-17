@@ -75,17 +75,17 @@ export default function MessageBubble({
         )}
       </div>
 
+      {message.translationStatus === 'failed' && (
+        <p className="bubble__failure">
+          {message.translationError ?? '번역하지 못했습니다.'}
+          <button type="button" className="bubble__retry" onClick={() => onRetranslate(message.id)}>
+            다시 시도
+          </button>
+        </p>
+      )}
+
       <div className="bubble__meta">
         <time dateTime={new Date(message.createdAt).toISOString()}>{formatTime(message.createdAt)}</time>
-        {message.translationStatus === 'failed' && (
-          <button
-            type="button"
-            className="bubble__retry"
-            onClick={() => onRetranslate(message.id)}
-          >
-            번역 실패 · 다시 시도
-          </button>
-        )}
       </div>
     </li>
   );
