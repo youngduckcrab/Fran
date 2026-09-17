@@ -16,6 +16,20 @@ export interface ChatState {
 
 const RECONNECT_DELAY_MS = 2000;
 
+/**
+ * 내가 보낸 메시지를 서버 응답과 맞춰보기 위한 임시 식별자.
+ *
+ * crypto.randomUUID 는 보안 컨텍스트(https 또는 localhost)에서만 존재한다.
+ * 폰에서 http://<컴퓨터IP>:5173 으로 열면 없어서 전송 자체가 터진다.
+ * 보안 용도가 아니라 화면에서 짝만 맞추면 되는 값이라 대체 경로로 충분하다.
+ */
+function newClientId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function useChat(token: string | null, onUnauthorized: () => void) {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,7 +117,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
 
   const sendMessage = useCallback(
     (text: string, sourceLang?: LangCode) => {
-      emit({ type: 'send', clientId: crypto.randomUUID(), text, sourceLang });
+      emit({ type: 'send', clientId: newClientId(), text, sourceLang });
     },
     [emit],
   );
