@@ -11,7 +11,7 @@
    │                          │                               │
    │                          │ 번역 큐에 넣음                  │
    │                          │   └ 직전 12개 + 이 메시지        │
-   │                          │     → Claude 한 번 호출          │
+   │                          │     → LLM 한 번 호출             │
    │                          │     → translations 테이블 저장   │
    │                          │                               │
    │ ◀ message_updated ────── │ ─ message_updated ──────────▶ │   ← 1~3초 뒤
@@ -22,6 +22,11 @@
 말풍선에 "다시 시도" 버튼이 붙는다.
 
 ## 왜 이렇게 했나
+
+**번역 provider는 갈아끼울 수 있다.**
+프롬프트와 출력 스키마는 하나로 두고, 모델 호출만 `TranslationProvider` 인터페이스 뒤로
+숨겼다. 무료(Gemini)로 쓰다가 품질이 아쉬우면 env 한 줄로 유료(Claude)로 옮길 수 있고,
+그때 프롬프트를 다시 쓸 필요가 없다.
 
 **번역은 한 메시지당 API 호출 한 번.**
 필요한 언어가 두 개든 네 개든 한 번의 호출에서 전부 받는다. 같은 맥락을 여러 번 보내지 않으니
@@ -75,7 +80,7 @@ user_settings (
 | `server/src/config.ts` | `.env` 파싱, 두 사용자 정의, 용어집 로드 |
 | `server/src/auth.ts` | 패스코드 확인, HMAC 토큰 발급/검증 |
 | `server/src/db.ts` | SQLite 스키마와 질의 |
-| `server/src/translate.ts` | 프롬프트 조립과 Claude 호출 |
+| `server/src/translation/` | 프롬프트 조립, provider 어댑터(Gemini/Claude), 사용량 기록 |
 | `server/src/index.ts` | HTTP 라우트, WebSocket 허브, 번역 큐 |
 | `server/glossary.json` | 애칭·고유명사·둘만 아는 표현 |
 | `web/src/useChat.ts` | WebSocket 연결과 재연결, 클라이언트 상태 |

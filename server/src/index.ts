@@ -27,7 +27,7 @@ import {
   saveTranslation,
   setTranslationStatus,
 } from './db.js';
-import { TranslationError, translateMessage, translationModel } from './translate.js';
+import { TranslationError, getProvider, translateMessage } from './translation/index.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
 
@@ -110,10 +110,10 @@ async function runTranslation(messageId: string): Promise<void> {
   }
 
   // 자기 자신은 빼고, 직전 대화를 맥락으로 넘긴다.
-  const context = getRecentMessages(config.anthropic.contextSize + 1).filter((m) => m.id !== messageId);
+  const context = getRecentMessages(config.translation.contextSize + 1).filter((m) => m.id !== messageId);
 
   try {
-    const result = await translateMessage({ message, context, participants, targetLangs });
+    const { result, model } = await translateMessage({ message, context, participants, targetLangs });
     const now = Date.now();
 
     for (const item of result.translations) {
@@ -122,7 +122,7 @@ async function runTranslation(messageId: string): Promise<void> {
         lang: item.lang,
         text: item.text,
         notes: item.notes,
-        model: translationModel,
+        model,
         createdAt: now,
       });
     }
@@ -260,8 +260,14 @@ function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Fran 서버가 http://localhost:${info.port} 에서 실행 중입니다.`);
-  if (!config.anthropic.apiKey && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    console.warn('⚠️  ANTHROPIC_API_KEY 가 없습니다. 메시지는 오가지만 번역은 실패합니다.');
+  // 번역 설정 문제는 첫 메시지가 아니라 지금 알려준다.
+  try {
+    const provider = getProvider();
+    console.log(`번역: ${provider.name} / ${provider.model}`);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠️  번역을 쓸 수 없습니다: ${reason}`);
+    console.warn('   메시지는 정상적으로 오가지만 번역만 실패합니다.');
   }
 });
 

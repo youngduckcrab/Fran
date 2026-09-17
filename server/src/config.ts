@@ -69,17 +69,47 @@ function loadGlossary(): GlossaryEntry[] {
   return [];
 }
 
+function provider(): 'gemini' | 'claude' {
+  const value = (process.env.TRANSLATION_PROVIDER ?? 'gemini').toLowerCase();
+  if (value !== 'gemini' && value !== 'claude') {
+    throw new Error(`TRANSLATION_PROVIDER 는 gemini 또는 claude 여야 합니다 (받은 값: ${value}).`);
+  }
+  return value;
+}
+
+const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'off'] as const;
+type ClaudeEffort = (typeof CLAUDE_EFFORTS)[number];
+
+function claudeEffort(): ClaudeEffort {
+  const value = (process.env.CLAUDE_EFFORT ?? 'low').toLowerCase();
+  if (!(CLAUDE_EFFORTS as readonly string[]).includes(value)) {
+    throw new Error(`CLAUDE_EFFORT 는 ${CLAUDE_EFFORTS.join(' | ')} 중 하나여야 합니다.`);
+  }
+  return value as ClaudeEffort;
+}
+
 export const config = {
   port: int('PORT', 8787),
   databasePath: process.env.DATABASE_PATH ?? './data/fran.sqlite',
   authSecret: required('AUTH_SECRET'),
   /** 로그인 토큰 유효기간. 둘만 쓰는 앱이라 길게 잡는다. */
   tokenTtlMs: 1000 * 60 * 60 * 24 * 90,
-  anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    model: process.env.TRANSLATION_MODEL ?? 'claude-opus-5',
-    effort: process.env.TRANSLATION_EFFORT ?? 'low',
+  translation: {
+    provider: provider(),
+    /** 번역할 때 참고할 직전 메시지 수. */
     contextSize: int('TRANSLATION_CONTEXT_SIZE', 12),
+    gemini: {
+      apiKey: process.env.GEMINI_API_KEY,
+      model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      /** 0 = 사고 끄기. -1 = 자동. 무료 티어에서는 꺼두는 편이 빠르고 할당량도 아낀다. */
+      thinkingBudget: int('GEMINI_THINKING_BUDGET', 0),
+      safetyThreshold: process.env.GEMINI_SAFETY_THRESHOLD,
+    },
+    claude: {
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: process.env.CLAUDE_MODEL ?? 'claude-haiku-4-5',
+      effort: claudeEffort(),
+    },
   },
   users: [buildUser('A', 'ko'), buildUser('B', 'es')] as const,
   glossary: loadGlossary(),

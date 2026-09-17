@@ -5,6 +5,8 @@
 한국어로 보낸 `"오늘 좀 그랬어… ㅠㅠ"` 가 스페인어 쪽에 `"Hoy fue un día raro… buaa"` 로 도착하는 것이 목표다.
 사전적으로 맞는 번역이 아니라, **그 사람이 그 언어로 말했다면 했을 법한 문장**을 만드는 데 초점을 둔다.
 
+기본 설정은 **Gemini 무료 티어**라 돈을 내지 않고 시작할 수 있다.
+
 - 한국어 ↔ 스페인어가 기본, 공부 중인 **영어·중국어**도 함께 받아볼 수 있다
 - 원문은 절대 덮어쓰지 않는다. 말풍선을 누르면 원문과 다른 언어 번역이 함께 펼쳐진다
 - 번역에 **학습용 메모**(관용구·슬랭·놓친 뉘앙스)가 0~2개 붙는다
@@ -27,12 +29,35 @@ npm run dev                 # 서버 :8787 + 웹 :5173
 
 | 항목 | 설명 |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) 에서 발급. 없으면 메시지는 오가지만 번역만 실패한다 |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) 에서 발급. **무료 티어로 시작한다** |
 | `AUTH_SECRET` | 로그인 토큰 서명용. `openssl rand -hex 32` 로 만들면 된다 |
 | `USER_A_*`, `USER_B_*` | 두 사람의 이름·기본 언어·패스코드. 패스코드는 서로 다르게 |
-| `TRANSLATION_MODEL` | 기본 `claude-opus-5` |
-| `TRANSLATION_EFFORT` | `low`(기본) → `max`. 올릴수록 번역이 꼼꼼해지고 느려지고 비싸진다 |
+| `GEMINI_MODEL` | 기본 `gemini-2.5-flash` |
 | `TRANSLATION_CONTEXT_SIZE` | 번역할 때 참고할 직전 메시지 수. 기본 12 |
+
+키가 없어도 서버는 뜬다. 메시지는 정상적으로 오가고 번역만 실패한다.
+
+**모델 이름이 맞는지 확인하려면:**
+
+```bash
+npm run models --workspace=server     # 내 키로 쓸 수 있는 모델 목록
+```
+
+무료 티어에서 쓸 수 있는 모델과 한도는 수시로 바뀌므로, `GEMINI_MODEL` 을 정하기 전에
+한 번 돌려보는 편이 확실하다. 현재 한도는 [AI Studio](https://aistudio.google.com) 에서 확인할 것.
+
+### 번역 provider 바꾸기
+
+번역기는 provider 어댑터로 분리돼 있다. `.env` 의 `TRANSLATION_PROVIDER` 한 줄로 갈아끼운다.
+
+| provider | 비용 | 비고 |
+| --- | --- | --- |
+| `gemini` (기본) | 무료 티어 | 한도가 있고, 무료 티어는 보통 입력 데이터가 모델 개선에 쓰인다 |
+| `claude` | 유료 (API 크레딧) | Claude 구독(Pro/Max)과는 **별개로 과금된다** |
+
+> ⚠️ **사적인 대화라는 점을 한 번 생각해볼 것.** 무료 티어는 대개 입력 데이터를 서비스 개선에
+> 활용할 수 있다는 조건이 붙는다. 가입할 때 데이터 정책을 직접 확인하고, 마음에 걸리면
+> 유료 티어나 `claude` provider로 바꾸면 된다.
 
 ### 배포
 
@@ -51,7 +76,7 @@ HTTPS 뒤에 두면 폰에서 브라우저 메뉴의 "홈 화면에 추가"로 �
 
 ```
 shared/   두 쪽이 공유하는 타입과 WebSocket 프로토콜
-server/   Hono + ws + SQLite + Claude 번역 파이프라인
+server/   Hono + ws + SQLite + 번역 파이프라인 (Gemini / Claude)
 web/      React + Vite PWA
 ```
 
@@ -70,6 +95,7 @@ web/      React + Vite PWA
 | `npm run typecheck` | 전 워크스페이스 타입 검사 |
 | `npm run build` | 전체 빌드 |
 | `npm start` | 빌드 결과로 실행 |
+| `npm run models --workspace=server` | 내 Gemini 키로 쓸 수 있는 모델 목록 |
 
 `shared/` 를 고쳤다면 `npm run build --workspace=shared` 를 한 번 돌려야 서버·웹에 반영된다.
 
