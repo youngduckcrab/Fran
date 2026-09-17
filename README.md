@@ -134,6 +134,19 @@ npm run models --workspace=server     # 내 키로 쓸 수 있는 모델 목록
 무료 티어에서 쓸 수 있는 모델과 한도는 수시로 바뀌므로, `GEMINI_MODEL` 을 정하기 전에
 한 번 돌려보는 편이 확실하다. 현재 한도는 [AI Studio](https://aistudio.google.com) 에서 확인할 것.
 
+**키를 넣은 직후에는 이것부터:**
+
+```bash
+npm run try-translate --workspace=server
+```
+
+채팅을 띄우지 않고 번역 한 건만 돌려본다. 맥락이 있어야만 풀리는 문장("걔"가 누구인지
+앞 대화에만 있다)을 넣어두었으므로, 결과가 제대로 나오면 맥락 번역이 동작하는 것이다.
+실패하면 무엇을 해야 하는지까지 화면에 찍힌다.
+
+> 실패했을 때 마지막에 붙는 `npm error ...` 블록은 npm 이 덧붙이는 것이니 무시하고,
+> 그 위의 `✗` 로 시작하는 줄을 보면 된다.
+
 ### 번역 provider 바꾸기
 
 번역기는 provider 어댑터로 분리돼 있다. `.env` 의 `TRANSLATION_PROVIDER` 한 줄로 갈아끼운다.
@@ -184,6 +197,7 @@ web/      React + Vite PWA
 | `npm run build` | 전체 빌드 |
 | `npm start` | 빌드 결과로 실행 |
 | `npm run models --workspace=server` | 내 Gemini 키로 쓸 수 있는 모델 목록 |
+| `npm run try-translate --workspace=server` | 채팅을 띄우지 않고 번역만 한 번 시험 |
 
 `shared/` 를 고쳤다면 `npm run build --workspace=shared` 를 한 번 돌려야 서버·웹에 반영된다.
 

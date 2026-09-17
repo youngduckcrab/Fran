@@ -58,7 +58,13 @@ export class GeminiProvider implements TranslationProvider {
       });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
-      // 무료 티어에서 가장 자주 만나는 두 가지에 친절한 안내를 붙인다.
+      // 자주 만나는 실패에는 무엇을 해야 하는지까지 적어 준다.
+      if (/API_KEY_INVALID|API key not valid/i.test(message)) {
+        throw new TranslationError(
+          'GEMINI_API_KEY 가 올바르지 않습니다. https://aistudio.google.com/apikey 에서 키를 다시 확인하고 ' +
+            '.env 에 붙여 넣은 뒤 서버를 재시작하세요(.env 는 시작할 때 한 번만 읽습니다).',
+        );
+      }
       if (/429|RESOURCE_EXHAUSTED|quota/i.test(message)) {
         throw new TranslationError(`Gemini 무료 티어 할당량을 넘었습니다. 잠시 뒤 다시 시도하세요. (${message})`);
       }

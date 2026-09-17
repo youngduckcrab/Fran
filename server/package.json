@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "models": "tsx src/scripts/list-models.ts"
+    "models": "tsx src/scripts/list-models.ts",
+    "try-translate": "tsx src/scripts/try-translate.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
