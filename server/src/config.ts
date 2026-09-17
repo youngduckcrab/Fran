@@ -1,10 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import { isLangCode, type GlossaryEntry, type LangCode, type UserProfile } from '@fran/shared';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+/** 개발(server/src)이든 빌드(server/dist)든 두 단계 위가 저장소 루트다. */
+export const repoRoot = path.resolve(here, '../..');
+
+// npm run dev / npm start 는 cwd 를 server/ 로 잡는다. .env 와 web/dist 는 저장소 루트에
+// 있으므로 cwd 에 기대지 않고 루트를 기준으로 찾는다.
+dotenv.config({ path: path.join(repoRoot, '.env') });
+
+/** 상대 경로는 cwd 가 아니라 저장소 루트를 기준으로 푼다. */
+function fromRoot(target: string): string {
+  return path.isAbsolute(target) ? target : path.resolve(repoRoot, target);
+}
 
 function required(name: string): string {
   const value = process.env[name];
@@ -90,7 +102,9 @@ function claudeEffort(): ClaudeEffort {
 
 export const config = {
   port: int('PORT', 8787),
-  databasePath: process.env.DATABASE_PATH ?? './data/fran.sqlite',
+  databasePath: fromRoot(process.env.DATABASE_PATH ?? './data/fran.sqlite'),
+  /** 빌드된 웹. 있으면 서버가 같이 서빙한다. */
+  webDist: fromRoot(process.env.WEB_DIST ?? './web/dist'),
   authSecret: required('AUTH_SECRET'),
   /** 로그인 토큰 유효기간. 둘만 쓰는 앱이라 길게 잡는다. */
   tokenTtlMs: 1000 * 60 * 60 * 24 * 90,

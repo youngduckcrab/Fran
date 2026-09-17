@@ -203,10 +203,9 @@ app.put('/api/settings', async (c) => {
 });
 
 // 빌드된 웹을 같은 프로세스에서 서빙한다(배포를 단순하게 유지).
-const webDist = process.env.WEB_DIST ?? './web/dist';
-if (fs.existsSync(webDist)) {
-  app.use('/*', serveStatic({ root: webDist }));
-  app.get('*', serveStatic({ path: path.join(webDist, 'index.html') }));
+if (fs.existsSync(config.webDist)) {
+  app.use('/*', serveStatic({ root: config.webDist }));
+  app.get('*', serveStatic({ path: path.join(config.webDist, 'index.html') }));
 }
 
 /* ------------------------------------------------------------------ */
