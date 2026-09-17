@@ -48,7 +48,25 @@ export const TRANSCRIPT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** 단어장 예문. */
+export const EXAMPLE_SCHEMA = {
+  type: 'object',
+  properties: {
+    sentence: { type: 'string' },
+    translation: { type: 'string' },
+  },
+  required: ['sentence', 'translation'],
+  additionalProperties: false,
+} as const;
+
 const langEnum = z.enum(LANGUAGES);
+
+export const exampleSchema = z.object({
+  sentence: z.string().min(1),
+  translation: z.string().min(1),
+});
+
+export type ExampleResult = z.infer<typeof exampleSchema>;
 
 export const transcriptSchema = z.object({
   text: z.string(),

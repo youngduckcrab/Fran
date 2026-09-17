@@ -1,7 +1,12 @@
 import { useState } from 'react';
-import { useLongPress } from '../useLongPress';
+import { useBubbleGestures } from '../useBubbleGestures';
 import { useT, type StringKey } from '../i18n';
-import { LANGUAGE_NAMES, messageText, type ChatMessage, type LangCode } from '@fran/shared';
+import {
+  LANGUAGE_NAMES,
+  messageText,
+  type ChatMessage,
+  type LangCode,
+} from '@fran/shared';
 import { attachmentUrl, formatDuration } from '../media';
 
 interface Props {
@@ -24,6 +29,12 @@ interface Props {
   onRetranslate: (messageId: string, translationNote?: string) => void;
   /** 길게 눌렀을 때. 메뉴는 부모가 띄운다. */
   onLongPress: (message: ChatMessage) => void;
+  /** 오른쪽으로 밀었을 때. 이 메시지에 답장한다. */
+  onReply: (message: ChatMessage) => void;
+  /** 이 메시지가 답하고 있는 원래 메시지. 없으면 인용 줄을 그리지 않는다. */
+  repliedTo?: ChatMessage;
+  /** 나 자신의 id. 내 반응인지 구분한다. */
+  myId: string;
 }
 
 function formatTime(timestamp: number): string {
@@ -43,11 +54,17 @@ export default function MessageBubble({
   failedSpeechKey,
   onSpeak,
   onLongPress,
+  onReply,
+  repliedTo,
+  myId,
   onRetranslate,
 }: Props) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
-  const { handlers, consumeClick } = useLongPress(() => onLongPress(message));
+  const { handlers, consumeClick, offset, armed } = useBubbleGestures(
+    () => onLongPress(message),
+    () => onReply(message),
+  );
 
   // 음성 메시지에는 사람이 타이핑한 글이 없다. 받아쓴 글이 원문 노릇을 한다.
   const own = messageText(message);
@@ -95,8 +112,20 @@ export default function MessageBubble({
 
   return (
     <li className={`bubble ${mine ? 'bubble--mine' : 'bubble--theirs'}`}>
+      {repliedTo && (
+        <p className="bubble__reply">
+          <span className="bubble__replyBar" aria-hidden="true" />
+          <span className="bubble__replyText">
+            {messageText(repliedTo) ||
+              (repliedTo.attachment?.kind === 'image' ? t('reply.photo') : t('reply.voice'))}
+          </span>
+        </p>
+      )}
+
       <div
         className="bubble__body"
+        style={offset ? { transform: `translateX(${offset}px)` } : undefined}
+        data-armed={armed ? 'yes' : undefined}
         {...handlers}
         onClick={() => {
           // 길게 눌러 메뉴를 연 뒤 따라오는 click 은 무시한다.
@@ -235,6 +264,16 @@ export default function MessageBubble({
         <p className="bubble__noVoice">
           {t('bubble.noVoice', { lang: LANGUAGE_NAMES[message.sourceLang] })}
         </p>
+      )}
+
+      {message.reactions && Object.keys(message.reactions).length > 0 && (
+        <div className="bubble__reactions">
+          {Object.entries(message.reactions).map(([userId, emoji]) => (
+            <span key={userId} className={`reaction ${userId === myId ? 'reaction--mine' : ''}`}>
+              {emoji}
+            </span>
+          ))}
+        </div>
       )}
 
       <div className="bubble__meta">

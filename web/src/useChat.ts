@@ -179,7 +179,12 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   const sendMessage = useCallback(
     (
       text: string,
-      options: { translationNote?: string; sourceLang?: LangCode; attachmentId?: string } = {},
+      options: {
+        translationNote?: string;
+        sourceLang?: LangCode;
+        attachmentId?: string;
+        replyTo?: string;
+      } = {},
     ) => {
       emit({
         type: 'send',
@@ -188,8 +193,15 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
         sourceLang: options.sourceLang,
         translationNote: options.translationNote,
         attachmentId: options.attachmentId,
+        replyTo: options.replyTo,
       });
     },
+    [emit],
+  );
+
+  /** 말풍선에 이모지 하나. 같은 걸 다시 누르면 지워진다. */
+  const react = useCallback(
+    (messageId: string, emoji: string | null) => emit({ type: 'react', messageId, emoji }),
     [emit],
   );
 
@@ -210,7 +222,16 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   );
   const dismissError = useCallback(() => setState((previous) => ({ ...previous, error: null })), []);
 
-  return { ...state, sendMessage, retranslate, setTyping, setProfile, setGlossary, dismissError };
+  return {
+    ...state,
+    sendMessage,
+    react,
+    retranslate,
+    setTyping,
+    setProfile,
+    setGlossary,
+    dismissError,
+  };
 }
 
 /** 화면들이 주고받는 대화 상태. Shell 이 한 번 만들어 아래로 내려준다. */

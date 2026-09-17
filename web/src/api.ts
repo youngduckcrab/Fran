@@ -235,3 +235,25 @@ export async function saveWallpaper(wallpaper: string): Promise<UserProfile> {
   if (!response.ok) await parseError(response);
   return ((await response.json()) as { profile: UserProfile }).profile;
 }
+
+/** 외웠다 / 아직이다. */
+export async function setVocabLearned(id: string, learned: boolean): Promise<VocabEntry> {
+  const response = await fetch(`/api/vocab/${id}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ learned }),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { entry: VocabEntry }).entry;
+}
+
+/** 이 단어가 쓰인 예문. 이미 있으면 그대로 돌려주고, refresh 를 주면 새로 만든다. */
+export async function makeVocabExample(id: string, refresh = false): Promise<VocabEntry> {
+  const response = await fetch(`/api/vocab/${id}/example`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ refresh }),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { entry: VocabEntry }).entry;
+}

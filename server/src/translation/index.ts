@@ -2,6 +2,8 @@ import type { ChatMessage, LangCode, UserProfile } from '@fran/shared';
 import { config } from '../config.js';
 import { listGlossary } from '../db.js';
 import {
+  buildExampleSystemPrompt,
+  buildExampleUserPrompt,
   buildExplanationSystemPrompt,
   buildExplanationUserPrompt,
   buildSystemPrompt,
@@ -10,12 +12,15 @@ import {
   buildUserPrompt,
 } from './prompt.js';
 import {
+  EXAMPLE_SCHEMA,
   EXPLANATION_SCHEMA,
   OUTPUT_SCHEMA,
   TRANSCRIPT_SCHEMA,
+  exampleSchema,
   explanationSchema,
   resultSchema,
   transcriptSchema,
+  type ExampleResult,
   type ExplanationResult,
   type TranscriptResult,
   type TranslationResult,
@@ -31,7 +36,12 @@ import {
 } from './providers/types.js';
 
 export { TranslationError } from './providers/types.js';
-export type { ExplanationResult, TranscriptResult, TranslationResult } from './schema.js';
+export type {
+  ExampleResult,
+  ExplanationResult,
+  TranscriptResult,
+  TranslationResult,
+} from './schema.js';
 
 /* ------------------------------------------------------------------ */
 /* provider 선택                                                       */
@@ -277,6 +287,48 @@ export async function transcribeAudio({
   const parsed = transcriptSchema.safeParse(raw);
   if (!parsed.success) {
     throw new TranslationError(`받아쓰기 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
+  }
+  return { result: parsed.data, model: provider.model };
+}
+
+/* ------------------------------------------------------------------ */
+/* 단어장 예문                                                         */
+/* ------------------------------------------------------------------ */
+
+export interface ExampleArgs {
+  term: string;
+  meaning: string;
+  note?: string;
+  lang: LangCode;
+  learner: UserProfile;
+}
+
+export async function makeExample({
+  term,
+  meaning,
+  note,
+  lang,
+  learner,
+}: ExampleArgs): Promise<{ result: ExampleResult; model: string }> {
+  const provider = getProvider();
+
+  const startedAt = Date.now();
+  const response = await completeWithRetry(provider, {
+    systemPrompt: buildExampleSystemPrompt(learner, lang),
+    userPrompt: buildExampleUserPrompt(term, meaning, note),
+    schema: EXAMPLE_SCHEMA,
+  });
+  recordUsage(provider, response.usage, Date.now() - startedAt);
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(response.json);
+  } catch {
+    throw new TranslationError(`모델이 JSON 이 아닌 응답을 돌려줬습니다: ${response.json.slice(0, 200)}`);
+  }
+  const parsed = exampleSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new TranslationError(`예문 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
   }
   return { result: parsed.data, model: provider.model };
 }

@@ -1585,3 +1585,193 @@ button:active:not(:disabled) {
     animation: none;
   }
 }
+
+/* ---------- 이모지 반응 ---------- */
+
+.reactions {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin: 4px 0 14px;
+}
+
+.reactions__item {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--surface-raised);
+  font-size: 22px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.reactions__item.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bubble__reactions {
+  display: flex;
+  gap: 4px;
+  margin: -6px 4px 0;
+}
+
+.reaction {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.6;
+  box-shadow: var(--shadow-soft);
+  animation: badge-pop 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.reaction--mine {
+  border-color: var(--accent);
+}
+
+/* ---------- 밀어서 답장 ---------- */
+
+.bubble__body {
+  /* 세로 스크롤은 브라우저에 맡기고 가로 방향만 우리가 쓴다. */
+  touch-action: pan-y;
+  transition: transform 160ms ease-out;
+}
+
+/* 손가락을 떼면 답장이 걸릴 만큼 밀린 상태 */
+.bubble__body[data-armed] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* 이 말풍선이 답하고 있는 원래 메시지 */
+.bubble__reply {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  max-width: 100%;
+  margin: 0 0 4px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: var(--surface-raised);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.bubble__replyBar {
+  flex: 0 0 3px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.bubble__replyText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 입력칸 위에 뜨는 "답장 중" 줄 */
+.replyBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.replyBar__bar {
+  flex: 0 0 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.replyBar__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.replyBar__text {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 단어장 (외움 표시·예문) ---------- */
+
+.shelves {
+  display: flex;
+  gap: 8px;
+}
+
+.shelf {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shelf.is-on {
+  border-color: transparent;
+  background: var(--accent-grad);
+  color: #fff;
+}
+
+.shelf__count {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-size: 13px;
+}
+
+.card--learned .card__main b {
+  opacity: 0.75;
+}
+
+.card__example {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-raised);
+}
+
+.card__example .card__main {
+  font-size: 15px;
+}
+
+.card__tools {
+  display: flex;
+  gap: 8px;
+}
+
+.card__learn {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card__learn.is-on {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ok) 22%, transparent);
+  color: var(--ok);
+}

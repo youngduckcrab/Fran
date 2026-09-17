@@ -29,6 +29,7 @@ import {
   deleteVocab,
   getAttachmentBytes,
   getAudioForTranscription,
+  getVocab,
   getWallpaper,
   initDatabase,
   insertAttachment,
@@ -40,6 +41,9 @@ import {
   saveVocab,
   saveWallpaper,
   savedKeysOf,
+  setVocabExample,
+  setVocabLearned,
+  toggleReaction,
   retryTranscript,
   setSourceLang,
   setTranscript,
@@ -64,6 +68,7 @@ import {
   TranslationError,
   explainMessage,
   getProvider,
+  makeExample,
   transcribeAudio,
   translateMessage,
 } from './translation/index.js';
@@ -554,6 +559,47 @@ app.post('/api/vocab', async (c) => {
   return c.json({ entry });
 });
 
+/** 외웠다 / 아직이다. */
+app.patch('/api/vocab/:id', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { learned?: unknown } | null;
+  const entry = await setVocabLearned(userId, c.req.param('id'), body?.learned === true);
+  return entry ? c.json({ entry }) : c.json({ error: '단어를 찾을 수 없습니다.' }, 404);
+});
+
+/**
+ * 이 단어가 쓰인 예문 한 줄. 한 번 만들면 저장해 두고 다시 만들지 않는다 —
+ * 무료 한도를 아끼기도 하고, 볼 때마다 문장이 바뀌면 외울 수가 없다.
+ */
+app.post('/api/vocab/:id/example', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const entry = await getVocab(userId, c.req.param('id'));
+  if (!entry) return c.json({ error: '단어를 찾을 수 없습니다.' }, 404);
+
+  const body = (await c.req.json().catch(() => null)) as { refresh?: unknown } | null;
+  if (entry.example && body?.refresh !== true) return c.json({ entry });
+
+  try {
+    const { result } = await makeExample({
+      term: entry.term,
+      meaning: entry.meaning,
+      ...(entry.note ? { note: entry.note } : {}),
+      lang: entry.lang,
+      learner: await profileOf(userId),
+    });
+    const updated = await setVocabExample(userId, entry.id, result);
+    return c.json({ entry: updated ?? entry });
+  } catch (error) {
+    const reason = error instanceof TranslationError ? error.message : String(error);
+    console.error(`[example] ${entry.term} 실패: ${reason}`);
+    return c.json({ error: reason }, 502);
+  }
+});
+
 app.delete('/api/vocab/:id', async (c) => {
   const userId = authenticate(c);
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
@@ -770,6 +816,9 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         }
       }
 
+      // 없는 메시지에 답하는 것처럼 보이지 않도록 실제로 있는지 확인한다.
+      const replyTo = event.replyTo && (await getMessage(event.replyTo)) ? event.replyTo : undefined;
+
       const message = await insertMessage({
         id: messageId,
         senderId: userId,
@@ -778,6 +827,7 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         createdAt: Date.now(),
         ...(event.translationNote?.trim() ? { translationNote: event.translationNote.trim() } : {}),
         ...(attachment ? { attachment } : {}),
+        ...(replyTo ? { replyTo } : {}),
       });
 
       // 번역을 기다리지 않고 원문을 먼저 띄운다. 번역은 곧 update 로 따라붙는다.
@@ -802,6 +852,15 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
       await setTranslationStatus(message.id, 'pending');
       await publishUpdate(message.id);
       enqueueTranslation(message.id);
+      return;
+    }
+
+    case 'react': {
+      const emoji = typeof event.emoji === 'string' ? event.emoji.slice(0, 8) : null;
+      const target = await getMessage(event.messageId);
+      if (!target) return;
+      await toggleReaction(target.id, userId, emoji);
+      await publishUpdate(target.id);
       return;
     }
 

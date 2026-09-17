@@ -44,7 +44,17 @@ const SCHEMA = `
     translation_status TEXT   NOT NULL DEFAULT 'pending',
     translation_error  TEXT,
     translation_error_code TEXT,
-    translation_note   TEXT
+    translation_note   TEXT,
+    reply_to           TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS reactions (
+    message_id TEXT   NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    user_id    TEXT   NOT NULL,
+    emoji      TEXT   NOT NULL,
+    created_at BIGINT NOT NULL,
+    -- 한 사람이 한 메시지에 남기는 반응은 하나다. 새로 누르면 바뀐다.
+    PRIMARY KEY (message_id, user_id)
   );
 
   CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages (created_at);
@@ -155,6 +165,10 @@ const SCHEMA = `
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript        TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_lang   TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_status TEXT;
+  ALTER TABLE messages      ADD COLUMN IF NOT EXISTS reply_to TEXT;
+  ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS learned BOOLEAN NOT NULL DEFAULT FALSE;
+  ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS example TEXT;
+  ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS example_translation TEXT;
 `;
 
 /** 서버가 요청을 받기 전에 한 번 부른다. 스키마가 없으면 만든다. */
@@ -176,6 +190,7 @@ interface MessageRow {
   translation_error: string | null;
   translation_error_code: string | null;
   translation_note: string | null;
+  reply_to: string | null;
 }
 
 interface TranslationRow {
@@ -252,6 +267,17 @@ async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
     if (row.message_id) attachments.set(row.message_id, toAttachment(row));
   }
 
+  const { rows: reactionRows } = await pool.query<{ message_id: string; user_id: string; emoji: string }>(
+    `SELECT message_id, user_id, emoji FROM reactions WHERE message_id = ANY($1::text[])`,
+    [rows.map((row) => row.id)],
+  );
+  const reactions = new Map<string, Record<string, string>>();
+  for (const row of reactionRows) {
+    const bucket = reactions.get(row.message_id) ?? {};
+    bucket[row.user_id] = row.emoji;
+    reactions.set(row.message_id, bucket);
+  }
+
   const byMessage = new Map<string, Partial<Record<LangCode, Translation>>>();
   for (const row of translationRows) {
     if (!isLangCode(row.lang)) continue;
@@ -280,6 +306,8 @@ async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
     ...(row.translation_note ? { translationNote: row.translation_note } : {}),
     translations: byMessage.get(row.id) ?? {},
     ...(attachments.has(row.id) ? { attachment: attachments.get(row.id) as Attachment } : {}),
+    ...(row.reply_to ? { replyTo: row.reply_to } : {}),
+    ...(reactions.has(row.id) ? { reactions: reactions.get(row.id) } : {}),
   }));
 }
 
@@ -291,10 +319,12 @@ export async function insertMessage(message: {
   createdAt: number;
   translationNote?: string;
   attachment?: Attachment;
+  replyTo?: string;
 }): Promise<ChatMessage> {
   await pool.query(
-    `INSERT INTO messages (id, sender_id, source_text, source_lang, created_at, translation_status, translation_note)
-     VALUES ($1, $2, $3, $4, $5, 'pending', $6)`,
+    `INSERT INTO messages
+       (id, sender_id, source_text, source_lang, created_at, translation_status, translation_note, reply_to)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6, $7)`,
     [
       message.id,
       message.senderId,
@@ -302,6 +332,7 @@ export async function insertMessage(message: {
       message.sourceLang,
       message.createdAt,
       message.translationNote ?? null,
+      message.replyTo ?? null,
     ],
   );
   return { ...message, translationStatus: 'pending', translations: {} };
@@ -714,6 +745,9 @@ interface VocabRow {
   reading: string | null;
   meaning: string;
   note: string | null;
+  learned: boolean;
+  example: string | null;
+  example_translation: string | null;
   message_id: string | null;
   created_at: number;
 }
@@ -727,6 +761,9 @@ function toVocab(row: VocabRow): VocabEntry {
     ...(row.reading ? { reading: row.reading } : {}),
     meaning: row.meaning,
     ...(row.note ? { note: row.note } : {}),
+    learned: row.learned,
+    ...(row.example ? { example: row.example } : {}),
+    ...(row.example_translation ? { exampleTranslation: row.example_translation } : {}),
     ...(row.message_id ? { messageId: row.message_id } : {}),
     createdAt: row.created_at,
   };
@@ -748,6 +785,7 @@ export async function saveVocab(userId: string, draft: VocabDraft): Promise<Voca
   const { rows } = await pool.query<VocabRow>(
     `INSERT INTO vocab (id, user_id, term, lang, reading, meaning, note, message_id, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     -- 같은 단어를 다시 담아도 외운 표시와 예문은 건드리지 않는다.
      ON CONFLICT (user_id, lang, LOWER(term)) DO UPDATE SET
        reading = EXCLUDED.reading, meaning = EXCLUDED.meaning,
        note = EXCLUDED.note, message_id = EXCLUDED.message_id
@@ -877,4 +915,67 @@ export async function retryTranscript(attachmentId: string): Promise<void> {
     `UPDATE attachments SET transcript_status = 'pending' WHERE id = $1 AND kind = 'audio'`,
     [attachmentId],
   );
+}
+
+/* --------------------------- 이모지 반응 --------------------------- */
+
+/** 같은 이모지를 다시 누르면 지운다. 다른 이모지면 바꾼다. */
+export async function toggleReaction(
+  messageId: string,
+  userId: string,
+  emoji: string | null,
+): Promise<void> {
+  if (emoji === null) {
+    await pool.query(`DELETE FROM reactions WHERE message_id = $1 AND user_id = $2`, [messageId, userId]);
+    return;
+  }
+  const { rows } = await pool.query<{ emoji: string }>(
+    `SELECT emoji FROM reactions WHERE message_id = $1 AND user_id = $2`,
+    [messageId, userId],
+  );
+  if (rows[0]?.emoji === emoji) {
+    await pool.query(`DELETE FROM reactions WHERE message_id = $1 AND user_id = $2`, [messageId, userId]);
+    return;
+  }
+  await pool.query(
+    `INSERT INTO reactions (message_id, user_id, emoji, created_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = EXCLUDED.created_at`,
+    [messageId, userId, emoji, Date.now()],
+  );
+}
+
+/* --------------------------- 단어장 (더) --------------------------- */
+
+export async function setVocabLearned(
+  userId: string,
+  id: string,
+  learned: boolean,
+): Promise<VocabEntry | null> {
+  const { rows } = await pool.query<VocabRow>(
+    `UPDATE vocab SET learned = $1 WHERE id = $2 AND user_id = $3 RETURNING *`,
+    [learned, id, userId],
+  );
+  return rows[0] ? toVocab(rows[0]) : null;
+}
+
+export async function getVocab(userId: string, id: string): Promise<VocabEntry | null> {
+  const { rows } = await pool.query<VocabRow>(`SELECT * FROM vocab WHERE id = $1 AND user_id = $2`, [
+    id,
+    userId,
+  ]);
+  return rows[0] ? toVocab(rows[0]) : null;
+}
+
+export async function setVocabExample(
+  userId: string,
+  id: string,
+  example: { sentence: string; translation: string },
+): Promise<VocabEntry | null> {
+  const { rows } = await pool.query<VocabRow>(
+    `UPDATE vocab SET example = $1, example_translation = $2
+      WHERE id = $3 AND user_id = $4 RETURNING *`,
+    [example.sentence, example.translation, id, userId],
+  );
+  return rows[0] ? toVocab(rows[0]) : null;
 }

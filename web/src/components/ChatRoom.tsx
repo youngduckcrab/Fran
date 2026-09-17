@@ -41,6 +41,8 @@ export default function ChatRoom({
   const [picked, setPicked] = useState<ChatMessage | null>(null);
   const [explaining, setExplaining] = useState<ChatMessage | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /** 지금 답하고 있는 메시지. 밀거나 메뉴에서 고른다. */
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const speaker = useSpeaker();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -79,6 +81,7 @@ export default function ChatRoom({
     }
   };
 
+  const byId = new Map(chat.messages.map((message) => [message.id, message]));
   const wall = wallpaperProps(chat.me?.wallpaper);
 
   return (
@@ -126,6 +129,11 @@ export default function ChatRoom({
             onSpeak={speaker.toggle}
             onRetranslate={chat.retranslate}
             onLongPress={setPicked}
+            onReply={setReplyTo}
+            {...(message.replyTo && byId.has(message.replyTo)
+              ? { repliedTo: byId.get(message.replyTo) as ChatMessage }
+              : {})}
+            myId={chat.me?.id ?? ''}
           />
         ))}
         <div ref={bottomRef} />
@@ -144,13 +152,33 @@ export default function ChatRoom({
 
       <Composer
         peerName={chat.peer?.name ?? ''}
-        onSend={(text, options) => chat.sendMessage(text, options)}
+        onSend={(text, options) => {
+          chat.sendMessage(text, {
+            ...options,
+            ...(replyTo ? { replyTo: replyTo.id } : {}),
+          });
+          setReplyTo(null);
+        }}
         onTyping={chat.setTyping}
+        replyTo={replyTo}
+        replyName={
+          replyTo ? (replyTo.senderId === chat.me?.id ? (chat.me?.name ?? '') : (chat.peer?.name ?? '')) : ''
+        }
+        onCancelReply={() => setReplyTo(null)}
       />
 
       {picked && (
         <MessageActions
           canRetranslate={picked.senderId === chat.me?.id || picked.translationStatus === 'failed'}
+          myReaction={picked.reactions?.[chat.me?.id ?? ''] ?? null}
+          onReact={(emoji) => {
+            chat.react(picked.id, emoji);
+            setPicked(null);
+          }}
+          onReply={() => {
+            setReplyTo(picked);
+            setPicked(null);
+          }}
           alreadySaved={savedKeys.has(
             `${picked.id}:${picked.senderId === chat.me?.id ? picked.sourceLang : primaryLang}`,
           )}

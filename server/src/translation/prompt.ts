@@ -213,3 +213,38 @@ export function buildTranscriptionUserPrompt(durationMs?: number): string {
   const length = durationMs ? ` It is about ${Math.round(durationMs / 1000)} seconds long.` : '';
   return `Transcribe the attached voice message.${length}`;
 }
+
+/* ----------------------------- 예문 만들기 ----------------------------- */
+
+/**
+ * 단어장에 담은 단어의 예문.
+ *
+ * 교과서 문장이 아니라 이 둘이 실제로 주고받을 법한 문장이어야 한다. 단어는 외워도
+ * 어디에 쓰는지 모르면 못 쓰기 때문이다.
+ */
+export function buildExampleSystemPrompt(learner: UserProfile, targetLang: LangCode): string {
+  const explainIn = LANGUAGE_NAMES[learner.displayLangs[0] ?? learner.nativeLang];
+  return `You write one example sentence for a word someone saved while chatting with their partner in another language.
+
+# Who it is for
+${learner.name}, whose first language is ${LANGUAGE_NAMES[learner.nativeLang]}. The word is in ${LANGUAGE_NAMES[targetLang]}.
+
+# The sentence
+- One short sentence in ${LANGUAGE_NAMES[targetLang]} that actually uses the word, in the meaning given.
+- Everyday spoken language — something you would text your partner, not a textbook line.
+- Keep it simple enough that a learner can reuse it today. No rare vocabulary around the word.
+- Keep the word in the form that fits the sentence; it does not have to be the dictionary form.
+
+# The translation
+- What the sentence means, in ${explainIn}, written naturally.
+
+# Output
+Reply with JSON only, matching the required schema.`;
+}
+
+export function buildExampleUserPrompt(term: string, meaning: string, note?: string): string {
+  return `Word: ${term}
+Meaning the learner saved: ${meaning}${note ? `\nNote: ${note}` : ''}
+
+Write one example sentence using this word.`;
+}

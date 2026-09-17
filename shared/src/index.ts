@@ -109,7 +109,15 @@ export interface ChatMessage {
   translations: Partial<Record<LangCode, Translation>>;
   /** 사진이나 음성. 글 없이 첨부만 보낼 수도 있다. */
   attachment?: Attachment;
+  /** 이 메시지가 답하고 있는 메시지의 id. */
+  replyTo?: string;
+  /** 사람 id -> 이모지. 한 사람당 하나만 남는다. */
+  reactions?: Record<string, string>;
 }
+
+/** 말풍선에 달 수 있는 반응. 고르는 게 빨라야 해서 몇 개로 줄여 둔다. */
+export const REACTIONS = ['❤️', '😂', '👍', '😮', '🥺', '🔥'] as const;
+export type Reaction = (typeof REACTIONS)[number];
 
 /**
  * 이 메시지의 "글". 직접 쓴 문장이 있으면 그것이고, 없으면 음성을 받아쓴 글이다.
@@ -207,12 +215,21 @@ export interface VocabEntry {
   reading?: string;
   meaning: string;
   note?: string;
+  /** 외웠다고 표시했는지. 외운 것과 아직인 것을 갈라 보기 위해. */
+  learned: boolean;
+  /** 이 단어가 실제로 쓰인 예문. 눌러서 만들면 그대로 저장된다. */
+  example?: string;
+  /** 위 예문의 뜻(내 언어로). */
+  exampleTranslation?: string;
   /** 어느 메시지에서 담았는지. 되짚어 보기 위해. */
   messageId?: string;
   createdAt: number;
 }
 
-export type VocabDraft = Omit<VocabEntry, 'id' | 'userId' | 'createdAt'>;
+export type VocabDraft = Omit<
+  VocabEntry,
+  'id' | 'userId' | 'createdAt' | 'learned' | 'example' | 'exampleTranslation'
+>;
 
 /**
  * 표제어에서 문장부호를 떼어낸다. "¿Dormiste" → "Dormiste"
@@ -251,11 +268,15 @@ export type ClientEvent =
       attachmentId?: string;
       /** 이 메시지에만 적용할 번역 지시. 상대에게는 보이지 않는다. */
       translationNote?: string;
+      /** 답하고 있는 메시지의 id. */
+      replyTo?: string;
     }
   | { type: 'typing'; isTyping: boolean }
   /** 지시를 바꿔서 다시 번역할 수 있다. 생략하면 기존 지시를 그대로 쓴다. */
   | { type: 'retranslate'; messageId: string; translationNote?: string }
-  | { type: 'read'; messageId: string };
+  | { type: 'read'; messageId: string }
+  /** 이모지 반응. 같은 이모지를 다시 누르거나 null 을 보내면 지운다. */
+  | { type: 'react'; messageId: string; emoji: string | null };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */

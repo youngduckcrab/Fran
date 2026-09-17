@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Attachment } from '@fran/shared';
+import { messageText, type Attachment, type ChatMessage } from '@fran/shared';
 import { useT } from '../i18n';
 import {
   attachmentUrl,
@@ -15,6 +15,11 @@ interface Props {
   peerName: string;
   onSend: (text: string, options: { translationNote?: string; attachmentId?: string }) => void;
   onTyping: (isTyping: boolean) => void;
+  /** 지금 답하고 있는 메시지. 없으면 평소처럼 보낸다. */
+  replyTo: ChatMessage | null;
+  /** 그 메시지를 쓴 사람의 이름. */
+  replyName: string;
+  onCancelReply: () => void;
 }
 
 const TYPING_IDLE_MS = 1500;
@@ -25,7 +30,14 @@ const TYPING_IDLE_MS = 1500;
  * 사진과 음성은 보내기 전에 따로 올려 두고, 보낼 때는 그 id 만 실어 보낸다.
  * 파일을 WebSocket 으로 흘려보내면 그 사이 다른 메시지가 전부 밀린다.
  */
-export default function Composer({ peerName, onSend, onTyping }: Props) {
+export default function Composer({
+  peerName,
+  onSend,
+  onTyping,
+  replyTo,
+  replyName,
+  onCancelReply,
+}: Props) {
   const t = useT();
   const [draft, setDraft] = useState('');
   /** 이번 메시지에만 붙일 번역 지시. 보낸 뒤 비워진다. */
@@ -126,6 +138,27 @@ export default function Composer({ peerName, onSend, onTyping }: Props) {
 
   return (
     <>
+      {replyTo && (
+        <div className="replyBar">
+          <span className="replyBar__bar" aria-hidden="true" />
+          <span className="replyBar__body">
+            <b>{t('reply.to', { name: replyName })}</b>
+            <span className="replyBar__text">
+              {messageText(replyTo) ||
+                (replyTo.attachment?.kind === 'image' ? t('reply.photo') : t('reply.voice'))}
+            </span>
+          </span>
+          <button
+            type="button"
+            className="attachBar__remove"
+            onClick={onCancelReply}
+            aria-label={t('reply.cancel')}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {noteOpen && (
         <div className="note">
           <input
