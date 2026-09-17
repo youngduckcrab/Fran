@@ -230,12 +230,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
       {view === 'saved' && <SavedList onBack={backHome} />}
       {view === 'vocab' && <VocabList onBack={backHome} />}
       {view === 'album' && (
-        <Album
-          onBack={backHome}
-          me={chat.me}
-          peer={chat.peer}
-          onWallpaper={chat.setProfile}
-        />
+        <Album onBack={backHome} me={chat.me} peer={chat.peer} />
       )}
 
       {glossaryOpen && (

@@ -186,7 +186,7 @@ const ko = {
 
   'album.title': '사진첩',
   'album.empty': '아직 주고받은 사진이 없어요.',
-  'album.setWallpaper': '배경으로',
+  'photo.save': '저장',
 
   'settings.theme': '앱 색',
   'settings.themeHint': '누르면 앱 전체 색이 바뀌어요. 밝기는 폰 설정을 따라갑니다.',
@@ -396,7 +396,7 @@ const es: Record<StringKey, string> = {
 
   'album.title': 'Fotos',
   'album.empty': 'Todavía no hay fotos.',
-  'album.setWallpaper': 'De fondo',
+  'photo.save': 'Guardar',
 
   'settings.theme': 'Color de la app',
   'settings.themeHint': 'Cambia el color de toda la app. El brillo sigue al teléfono.',
@@ -602,7 +602,7 @@ const en: Record<StringKey, string> = {
 
   'album.title': 'Photos',
   'album.empty': 'No photos yet.',
-  'album.setWallpaper': 'Use as background',
+  'photo.save': 'Save',
 
   'settings.theme': 'App color',
   'settings.themeHint': 'Changes the colour of the whole app. Brightness follows your phone.',

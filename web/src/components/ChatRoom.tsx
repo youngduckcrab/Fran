@@ -223,11 +223,7 @@ export default function ChatRoom({
       )}
 
       {photo && (
-        <PhotoViewer
-          attachmentId={photo}
-          onWallpaper={chat.setProfile}
-          onClose={() => setPhoto(null)}
-        />
+        <PhotoViewer attachmentId={photo} onClose={() => setPhoto(null)} />
       )}
 
       {saving && (

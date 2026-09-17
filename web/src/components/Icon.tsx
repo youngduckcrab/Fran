@@ -21,7 +21,8 @@ export type IconName =
   | 'heart'
   | 'sparkle'
   | 'check'
-  | 'checks';
+  | 'checks'
+  | 'download';
 
 interface Props {
   name: IconName;
@@ -76,6 +77,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="M5.5 12.5 10 17l8.5-9" />,
+  download: (
+    <>
+      <path d="M12 3.5v11m0 0 4-4m-4 4-4-4" />
+      <path d="M4.5 16.5v1.5a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-1.5" />
+    </>
+  ),
   // 두 번 겹친 체크 = 상대가 읽었다.
   checks: (
     <>

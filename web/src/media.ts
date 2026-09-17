@@ -144,3 +144,48 @@ export function formatDuration(ms: number): string {
   const total = Math.round(ms / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
+
+/**
+ * 사진을 폰에 저장한다.
+ *
+ * 폰에서는 "다운로드 폴더"보다 공유 시트(사진 앱에 저장)가 자연스럽고, 아이폰은 사실상
+ * 그 길밖에 없다. 공유가 안 되는 곳(데스크톱 브라우저 등)에서는 그냥 내려받는다.
+ *
+ * 파일은 미리 받아 둔 것을 넘긴다 — 누른 뒤에 받아오면 그 사이에 "사용자가 누른 순간"이
+ * 풀려서 아이폰이 공유 시트를 거부한다.
+ */
+export function savePhoto(file: File): void {
+  const sharer = navigator as Navigator & {
+    canShare?: (data: { files: File[] }) => boolean;
+    share?: (data: { files: File[] }) => Promise<void>;
+  };
+
+  if (sharer.canShare?.({ files: [file] }) && sharer.share) {
+    void sharer.share({ files: [file] }).catch(() => download(file));
+    return;
+  }
+  download(file);
+}
+
+function download(file: File): void {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // 바로 지우면 내려받기가 시작되기 전에 주소가 사라지는 브라우저가 있다.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** 크게 보기에서 미리 받아 두는 사진 파일. 저장 버튼이 기다림 없이 동작하도록. */
+export async function fetchPhotoFile(attachmentId: string): Promise<File> {
+  const response = await fetch(attachmentUrl(attachmentId));
+  if (!response.ok) throw new Error('사진을 받아오지 못했습니다.');
+  const blob = await response.blob();
+  const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+  return new File([blob], `fran-${attachmentId.slice(0, 8)}.${extension}`, {
+    type: blob.type || 'image/jpeg',
+  });
+}

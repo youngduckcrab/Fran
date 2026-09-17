@@ -10,12 +10,11 @@ import { attachmentUrl } from '../media';
 interface Props {
   me: UserProfile | null;
   peer: UserProfile | null;
-  onWallpaper: (profile: UserProfile) => void;
   onBack: () => void;
 }
 
 /** 대화방에서 주고받은 사진들. 배경화면으로도 쓸 수 있다. */
-export default function Album({ me, peer, onWallpaper, onBack }: Props) {
+export default function Album({ me, peer, onBack }: Props) {
   const t = useT();
   const [photos, setPhotos] = useState<Photo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,15 +54,7 @@ export default function Album({ me, peer, onWallpaper, onBack }: Props) {
       </div>
 
       {open && (
-        <PhotoViewer
-          attachmentId={open.id}
-          who={who(open)}
-          onWallpaper={(profile) => {
-            onWallpaper(profile);
-            setOpen(null);
-          }}
-          onClose={() => setOpen(null)}
-        />
+        <PhotoViewer attachmentId={open.id} who={who(open)} onClose={() => setOpen(null)} />
       )}
 
     </div>

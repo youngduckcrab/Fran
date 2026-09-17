@@ -1,10 +1,7 @@
-import { useState } from 'react';
-import type { UserProfile } from '@fran/shared';
-import { saveWallpaper } from '../api';
+import { useEffect, useState } from 'react';
 import { useBackClose } from '../backstack';
 import { useT } from '../i18n';
-import { attachmentUrl } from '../media';
-import { photoWallpaper } from '../wallpaper';
+import { attachmentUrl, fetchPhotoFile, savePhoto } from '../media';
 import Icon from './Icon';
 
 interface Props {
@@ -12,8 +9,6 @@ interface Props {
   attachmentId: string;
   /** 누가 보낸 사진인지. 있으면 아래에 적는다. */
   who?: string;
-  /** 배경으로 지정하면 새 프로필이 온다. 없으면 배경 버튼을 띄우지 않는다. */
-  onWallpaper?: (profile: UserProfile) => void;
   onClose: () => void;
 }
 
@@ -24,20 +19,24 @@ interface Props {
  * 제대로 열리지 않아서, 사진을 누르면 앱이 처음 화면으로 돌아가 버렸다.
  * 앱을 떠나지 않고 이 창에서 연다.
  */
-export default function PhotoViewer({ attachmentId, who, onWallpaper, onClose }: Props) {
+export default function PhotoViewer({ attachmentId, who, onClose }: Props) {
   const t = useT();
+  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   useBackClose(true, onClose);
 
-  const useAsWallpaper = async () => {
-    if (!onWallpaper) return;
-    try {
-      onWallpaper(await saveWallpaper(photoWallpaper(attachmentId)));
-      onClose();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  };
+  // 저장 버튼이 기다림 없이 눌리도록 미리 받아 둔다(폰이 공유 시트를 거부하지 않게).
+  useEffect(() => {
+    let cancelled = false;
+    fetchPhotoFile(attachmentId)
+      .then((loaded) => {
+        if (!cancelled) setFile(loaded);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [attachmentId]);
 
   return (
     <div className="sheet" role="dialog" aria-label={t('bubble.photo')} onClick={onClose}>
@@ -46,11 +45,22 @@ export default function PhotoViewer({ attachmentId, who, onWallpaper, onClose }:
         {error && <p className="sheet__error">{error}</p>}
         <div className="viewer__foot">
           {who && <span className="viewer__who">{who}</span>}
-          {onWallpaper && (
-            <button type="button" className="sheet__save" onClick={() => void useAsWallpaper()}>
-              {t('album.setWallpaper')}
-            </button>
-          )}
+          <button
+            type="button"
+            className="sheet__save"
+            disabled={!file}
+            onClick={() => {
+              if (!file) return;
+              try {
+                savePhoto(file);
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : String(cause));
+              }
+            }}
+          >
+            <Icon name="download" size={16} />
+            {t('photo.save')}
+          </button>
           <button type="button" className="sheet__logout" onClick={onClose}>
             <Icon name="close" size={16} />
             {t('actions.close')}
