@@ -37,9 +37,22 @@ export class TranslationError extends Error {
    * 여기 해당한다. 키가 틀렸거나 모델 이름이 없는 것은 몇 번을 해도 같다.
    */
   readonly retryable: boolean;
+  /** 서버가 "N초 뒤에 다시 오라"고 알려준 경우 그 값. 백오프보다 이걸 따른다. */
+  readonly retryAfterMs?: number;
+  /**
+   * 이 오류에 한해 재시도 횟수를 줄인다. 할당량 초과처럼 재시도 자체가 한도를
+   * 더 깎는 경우에 쓴다. 생략하면 기본 횟수를 그대로 쓴다.
+   */
+  readonly retryLimit?: number;
 
-  constructor(message: string, retryable = false) {
+  constructor(
+    message: string,
+    retryable = false,
+    options: { retryAfterMs?: number; retryLimit?: number } = {},
+  ) {
     super(message);
     this.retryable = retryable;
+    this.retryAfterMs = options.retryAfterMs;
+    this.retryLimit = options.retryLimit;
   }
 }

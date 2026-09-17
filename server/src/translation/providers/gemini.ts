@@ -65,11 +65,7 @@ export class GeminiProvider implements TranslationProvider {
             '.env 에 붙여 넣은 뒤 서버를 재시작하세요(.env 는 시작할 때 한 번만 읽습니다).',
         );
       }
-      if (/429|RESOURCE_EXHAUSTED|quota/i.test(message)) {
-        // 분당 한도면 곧 풀리지만 하루 한도면 재시도가 낭비다. 구분할 수 없으니 자동
-        // 재시도는 하지 않고 사용자에게 알린다.
-        throw new TranslationError('무료 티어 할당량을 넘었습니다. 잠시 뒤 다시 시도해 주세요.');
-      }
+      if (/429|RESOURCE_EXHAUSTED|quota/i.test(message)) throw quotaError(message);
       // 모델 과부하와 서버 오류는 잠시 뒤면 대개 풀린다.
       if (/\b(500|502|503|504)\b|UNAVAILABLE|INTERNAL|high demand|overloaded/i.test(message)) {
         throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true);
@@ -114,6 +110,34 @@ export class GeminiProvider implements TranslationProvider {
       },
     };
   }
+}
+
+/** 분당 한도를 넘었을 때 최대 이만큼까지는 기다렸다 다시 해본다. */
+const MAX_QUOTA_WAIT_MS = 60_000;
+
+/**
+ * 429 는 두 종류다. 분당 한도는 1분이면 풀리지만 하루 한도는 날이 바뀌어야 한다.
+ * Google 이 응답에 어느 쪽인지와 몇 초 뒤에 오라는지를 같이 주므로 그대로 쓴다.
+ */
+function quotaError(raw: string): TranslationError {
+  const perDay = /PerDay|per day|daily/i.test(raw);
+  const seconds = Number(/retryDelay[^0-9]*([0-9]+(?:\.[0-9]+)?)s/i.exec(raw)?.[1] ?? NaN);
+  const waitMs = Number.isFinite(seconds) ? seconds * 1000 : undefined;
+
+  if (perDay) {
+    return new TranslationError(
+      '오늘 쓸 수 있는 무료 요청을 다 썼습니다. 하루 한도는 태평양 시간 자정' +
+        '(한국 시간 오후 4~5시쯤)에 초기화됩니다.',
+    );
+  }
+
+  const hint = waitMs ? `${Math.ceil(waitMs / 1000)}초` : '잠시';
+  const retryable = waitMs !== undefined && waitMs <= MAX_QUOTA_WAIT_MS;
+  // 한도를 넘은 상태에서 여러 번 두드리면 한도만 더 깎는다. 한 번만 기다렸다 해본다.
+  return new TranslationError(`분당 요청 한도를 넘었습니다. ${hint} 뒤 다시 시도해 주세요.`, retryable, {
+    retryAfterMs: waitMs,
+    retryLimit: 1,
+  });
 }
 
 export function parseSafetyThreshold(value: string | undefined): HarmBlockThreshold {

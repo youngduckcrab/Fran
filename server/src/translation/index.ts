@@ -104,13 +104,17 @@ async function completeWithRetry(
     try {
       return await provider.complete(request);
     } catch (error) {
-      const retryable = error instanceof TranslationError && error.retryable;
-      const delay = RETRY_DELAYS_MS[attempt];
-      if (!retryable || delay === undefined) throw error;
+      if (!(error instanceof TranslationError) || !error.retryable) throw error;
+
+      const limit = Math.min(error.retryLimit ?? RETRY_DELAYS_MS.length, RETRY_DELAYS_MS.length);
+      const backoff = RETRY_DELAYS_MS[attempt];
+      if (attempt >= limit || backoff === undefined) throw error;
+
+      // 서버가 "N초 뒤에 오라"고 했으면 그 말을 따른다. 그게 더 정확하다.
+      const delay = Math.max(backoff, error.retryAfterMs ?? 0);
 
       console.warn(
-        `[translate] 일시적 오류, ${delay}ms 뒤 재시도 ` +
-          `(${attempt + 1}/${RETRY_DELAYS_MS.length}): ${(error as Error).message}`,
+        `[translate] 일시적 오류, ${delay}ms 뒤 재시도 (${attempt + 1}/${limit}): ${error.message}`,
       );
       await sleep(delay);
     }
