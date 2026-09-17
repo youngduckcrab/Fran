@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { UserProfile } from '@fran/shared';
-import { fetchPhotos, saveWallpaper, type Photo } from '../api';
+import { fetchPhotos, type Photo } from '../api';
 import { useT } from '../i18n';
 import Icon from './Icon';
+import PhotoViewer from './PhotoViewer';
 import { useBackClose } from '../backstack';
 import { attachmentUrl } from '../media';
-import { photoWallpaper } from '../wallpaper';
 
 interface Props {
   me: UserProfile | null;
@@ -26,15 +26,6 @@ export default function Album({ me, peer, onWallpaper, onBack }: Props) {
       .then(setPhotos)
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
   }, []);
-
-  const useAsWallpaper = async (photo: Photo) => {
-    try {
-      onWallpaper(await saveWallpaper(photoWallpaper(photo.id)));
-      setOpen(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  };
 
   useBackClose(Boolean(open), () => setOpen(null));
 
@@ -64,21 +55,17 @@ export default function Album({ me, peer, onWallpaper, onBack }: Props) {
       </div>
 
       {open && (
-        <div className="sheet" role="dialog" onClick={() => setOpen(null)}>
-          <div className="viewer" onClick={(event) => event.stopPropagation()}>
-            <img src={attachmentUrl(open.id)} alt="" />
-            <div className="viewer__foot">
-              <span>{who(open)}</span>
-              <button type="button" className="sheet__save" onClick={() => void useAsWallpaper(open)}>
-                {t('album.setWallpaper')}
-              </button>
-              <button type="button" className="sheet__logout" onClick={() => setOpen(null)}>
-                {t('actions.close')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PhotoViewer
+          attachmentId={open.id}
+          who={who(open)}
+          onWallpaper={(profile) => {
+            onWallpaper(profile);
+            setOpen(null);
+          }}
+          onClose={() => setOpen(null)}
+        />
       )}
+
     </div>
   );
 }

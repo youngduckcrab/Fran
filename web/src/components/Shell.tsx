@@ -42,14 +42,17 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
 
   /** 모아 보기 화면들의 개수. 홈에 숫자를 띄우고, 저장할 때마다 다시 센다. */
   const [counts, setCounts] = useState({ saved: 0, vocab: 0, photos: 0 });
-  /** 이미 저장해 둔 문장. `<메시지 id>:<언어>` 형태. */
-  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
+  /**
+   * 이미 저장해 둔 문장. `<메시지 id>:<언어>` → 저장 항목 id.
+   * 취소하려면 항목 id 가 있어야 해서 키만 들고 있지 않는다.
+   */
+  const [savedIds, setSavedIds] = useState<Map<string, string>>(new Map());
 
   const refreshCounts = useCallback(async () => {
     try {
       const [saved, vocab, photos] = await Promise.all([fetchSaved(), fetchVocab(), fetchPhotos()]);
       setCounts({ saved: saved.items.length, vocab: vocab.length, photos: photos.length });
-      setSavedKeys(new Set(saved.keys));
+      setSavedIds(new Map(saved.items.map((item) => [`${item.messageId}:${item.lang}`, item.id])));
     } catch {
       // 숫자는 있으면 좋은 것일 뿐이다. 실패해도 대화에는 영향이 없다.
     }
@@ -140,9 +143,18 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const lastMessage = chat.messages[chat.messages.length - 1];
   const extraLangs = useMemo(() => chat.me?.displayLangs.slice(1) ?? [], [chat.me]);
 
-  const markSaved = useCallback((key: string) => {
-    setSavedKeys((previous) => new Set(previous).add(key));
+  const markSaved = useCallback((key: string, id: string) => {
+    setSavedIds((previous) => new Map(previous).set(key, id));
     setCounts((previous) => ({ ...previous, saved: previous.saved + 1 }));
+  }, []);
+
+  const unmarkSaved = useCallback((key: string) => {
+    setSavedIds((previous) => {
+      const next = new Map(previous);
+      next.delete(key);
+      return next;
+    });
+    setCounts((previous) => ({ ...previous, saved: Math.max(0, previous.saved - 1) }));
   }, []);
 
   const backHome = useCallback(() => {
@@ -192,8 +204,9 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           primaryLang={primaryLang}
           extraLangs={extraLangs}
           alwaysShowSource={alwaysShowSource}
-          savedKeys={savedKeys}
+          savedIds={savedIds}
           onSaved={markSaved}
+          onUnsaved={unmarkSaved}
           onVocabAdded={() => setCounts((p) => ({ ...p, vocab: p.vocab + 1 }))}
           onBack={backHome}
           onGlossary={() => setGlossaryOpen(true)}

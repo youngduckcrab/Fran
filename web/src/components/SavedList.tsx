@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { LANGUAGE_NAMES, type SavedSentence } from '@fran/shared';
+import { useEffect, useMemo, useState } from 'react';
+import { LANGUAGE_NAMES, type LangCode, type SavedSentence } from '@fran/shared';
 import { deleteSaved, fetchSaved } from '../api';
 import { useT } from '../i18n';
 import Icon from './Icon';
@@ -14,6 +14,7 @@ export default function SavedList({ onBack }: Props) {
   const t = useT();
   const [items, setItems] = useState<SavedSentence[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lang, setLang] = useState<LangCode | null>(null);
   const speaker = useSpeaker();
 
   useEffect(() => {
@@ -21,6 +22,18 @@ export default function SavedList({ onBack }: Props) {
       .then((result) => setItems(result.items))
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
   }, []);
+
+  /**
+   * 담은 언어들. 많이 담은 언어를 앞에 둔다 — 열자마자 보고 싶은 건 대개 그쪽이다.
+   * 언어가 하나뿐이면 고르는 줄을 띄우지 않는다.
+   */
+  const langs = useMemo(() => {
+    const counts = new Map<LangCode, number>();
+    for (const item of items ?? []) counts.set(item.lang, (counts.get(item.lang) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([code]) => code);
+  }, [items]);
+  const current = lang && langs.includes(lang) ? lang : langs[0];
+  const shown = (items ?? []).filter((item) => item.lang === current);
 
   const remove = async (id: string) => {
     setItems((current) => current?.filter((item) => item.id !== id) ?? null);
@@ -36,6 +49,21 @@ export default function SavedList({ onBack }: Props) {
         <h1>{t('saved.title')}</h1>
       </header>
 
+      {langs.length > 1 && (
+        <div className="chips">
+          {langs.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={`chip ${current === item ? 'is-on' : ''}`}
+              onClick={() => setLang(item)}
+            >
+              {LANGUAGE_NAMES[item]}
+            </button>
+          ))}
+        </div>
+      )}
+
       {error && <p className="sheet__error">{error}</p>}
       {items && items.length === 0 && <p className="page__empty">
           <Icon name="sparkle" size={34} className="page__emptyIcon" />
@@ -43,7 +71,7 @@ export default function SavedList({ onBack }: Props) {
         </p>}
 
       <ul className="cards">
-        {(items ?? []).map((item) => (
+        {shown.map((item) => (
           <li key={item.id} className="card">
             <p className="card__main">
               {item.text}
@@ -60,7 +88,7 @@ export default function SavedList({ onBack }: Props) {
             </p>
             {item.pairText && <p className="card__sub">{item.pairText}</p>}
             <div className="card__foot">
-              <span className="card__tag">{LANGUAGE_NAMES[item.lang]}</span>
+              <span className="card__tag">{new Date(item.createdAt).toLocaleDateString()}</span>
               <button type="button" className="card__delete" onClick={() => void remove(item.id)}>
                 {t('saved.delete')}
               </button>

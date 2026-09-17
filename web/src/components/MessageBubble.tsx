@@ -38,6 +38,8 @@ interface Props {
   myId: string;
   /** 상대가 이 메시지를 읽었는지. 내가 보낸 것에만 쓴다. */
   readByPeer: boolean;
+  /** 사진을 눌렀을 때. 크게 보는 창은 부모가 띄운다. */
+  onOpenPhoto: (attachmentId: string) => void;
 }
 
 function formatTime(timestamp: number): string {
@@ -61,6 +63,7 @@ export default function MessageBubble({
   repliedTo,
   myId,
   readByPeer,
+  onOpenPhoto,
   onRetranslate,
 }: Props) {
   const t = useT();
@@ -140,12 +143,15 @@ export default function MessageBubble({
         }}
       >
         {message.attachment?.kind === 'image' && (
-          <a
+          <button
+            type="button"
             className="bubble__photo"
-            href={attachmentUrl(message.attachment.id)}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(event) => event.stopPropagation()}
+            // 새 창을 여는 링크였는데, 홈 화면에 설치한 앱에서는 그게 열리지 않고
+            // 앱이 처음 화면으로 돌아가 버렸다. 앱을 떠나지 않고 크게 보여준다.
+            onClick={(event) => {
+              event.stopPropagation();
+              if (message.attachment) onOpenPhoto(message.attachment.id);
+            }}
           >
             <img
               src={attachmentUrl(message.attachment.id)}
@@ -154,7 +160,7 @@ export default function MessageBubble({
               width={message.attachment.width}
               height={message.attachment.height}
             />
-          </a>
+          </button>
         )}
 
         {message.attachment?.kind === 'audio' && (

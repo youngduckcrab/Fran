@@ -9,6 +9,7 @@ import { wallpaperProps } from '../wallpaper';
 import Explanation from './Explanation';
 import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
+import PhotoViewer from './PhotoViewer';
 import SaveSheet from './SaveSheet';
 import Composer from './Composer';
 
@@ -17,9 +18,10 @@ interface Props {
   primaryLang: LangCode;
   extraLangs: LangCode[];
   alwaysShowSource: boolean;
-  /** 이미 저장한 문장들. `<메시지 id>:<언어>` */
-  savedKeys: Set<string>;
-  onSaved: (key: string) => void;
+  /** 이미 저장한 문장들. `<메시지 id>:<언어>` → 저장 항목 id. */
+  savedIds: Map<string, string>;
+  onSaved: (key: string, id: string) => void;
+  onUnsaved: (key: string) => void;
   onVocabAdded: () => void;
   onBack: () => void;
   onGlossary: () => void;
@@ -31,8 +33,9 @@ export default function ChatRoom({
   primaryLang,
   extraLangs,
   alwaysShowSource,
-  savedKeys,
+  savedIds,
   onSaved,
+  onUnsaved,
   onVocabAdded,
   onBack,
   onGlossary,
@@ -42,11 +45,18 @@ export default function ChatRoom({
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
   const [picked, setPicked] = useState<ChatMessage | null>(null);
   const [explaining, setExplaining] = useState<ChatMessage | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  /**
+   * 잠깐 떴다 사라지는 한 줄. 값과 함께 시각을 들고 있어야 같은 문구가 연달아 떠도
+   * 다시 보이고, 앞의 것이 남긴 타이머가 뒤의 것을 지우지 않는다.
+   */
+  const [toast, setToast] = useState<{ text: string; at: number } | null>(null);
+  const say = (text: string) => setToast({ text, at: Date.now() });
   /** 지금 답하고 있는 메시지. 밀거나 메뉴에서 고른다. */
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   /** 저장할 문장을 고르는 창. 어떤 메시지를 놓고 고르는 중인지. */
   const [saving, setSaving] = useState<ChatMessage | null>(null);
+  /** 크게 보고 있는 사진. */
+  const [photo, setPhoto] = useState<string | null>(null);
   const speaker = useSpeaker();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -78,6 +88,12 @@ export default function ChatRoom({
   const peerLang: LangCode = chat.peer?.displayLangs[0] ?? chat.peer?.nativeLang ?? 'es';
 
   const byId = new Map(chat.messages.map((message) => [message.id, message]));
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 1800);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   useBackClose(Boolean(picked), () => setPicked(null));
   useBackClose(Boolean(saving), () => setSaving(null));
   useBackClose(Boolean(explaining), () => setExplaining(null));
@@ -136,6 +152,7 @@ export default function ChatRoom({
               : {})}
             myId={chat.me?.id ?? ''}
             readByPeer={(chat.readAt[chat.peer?.id ?? ''] ?? 0) >= message.createdAt}
+            onOpenPhoto={setPhoto}
           />
         ))}
         <div ref={bottomRef} />
@@ -150,7 +167,7 @@ export default function ChatRoom({
           {chat.error}
         </p>
       )}
-      {toast && <p className="chat__toast chat__toast--ok">{toast}</p>}
+      {toast && <p className="chat__toast chat__toast--ok">{toast.text}</p>}
 
       <Composer
         peerName={chat.peer?.name ?? ''}
@@ -201,15 +218,26 @@ export default function ChatRoom({
         />
       )}
 
+      {photo && (
+        <PhotoViewer
+          attachmentId={photo}
+          onWallpaper={chat.setProfile}
+          onClose={() => setPhoto(null)}
+        />
+      )}
+
       {saving && (
         <SaveSheet
           message={saving}
           primaryLang={primaryLang}
-          savedKeys={savedKeys}
-          onSaved={(key) => {
-            onSaved(key);
-            setToast(t('actions.saved'));
-            setTimeout(() => setToast(null), 1600);
+          savedIds={savedIds}
+          onSaved={(key, id) => {
+            onSaved(key, id);
+            say(t('actions.saved'));
+          }}
+          onUnsaved={(key) => {
+            onUnsaved(key);
+            say(t('save.removed'));
           }}
           onClose={() => setSaving(null)}
         />

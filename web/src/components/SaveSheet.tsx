@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LANGUAGE_NAMES, messageText, type ChatMessage, type LangCode } from '@fran/shared';
-import { saveSentence } from '../api';
+import { deleteSaved, saveSentence } from '../api';
 import { useBackClose } from '../backstack';
 import { useT } from '../i18n';
 import Icon from './Icon';
@@ -9,9 +9,10 @@ interface Props {
   message: ChatMessage;
   /** 내가 읽는 언어. 저장할 때 뜻으로 함께 붙인다. */
   primaryLang: LangCode;
-  /** 이미 저장한 것들. `<메시지 id>:<언어>` */
-  savedKeys: Set<string>;
-  onSaved: (key: string) => void;
+  /** 이미 저장한 것들. `<메시지 id>:<언어>` → 저장 항목 id. */
+  savedIds: Map<string, string>;
+  onSaved: (key: string, id: string) => void;
+  onUnsaved: (key: string) => void;
   onClose: () => void;
 }
 
@@ -21,7 +22,14 @@ interface Props {
  * 한 메시지에는 원문과 번역문이 함께 있다. 스페인어를 공부하는 사람은 스페인어 쪽을,
  * 뜻만 남기고 싶은 사람은 한국어 쪽을 담고 싶다. 앱이 대신 골라 줄 일이 아니라 물어본다.
  */
-export default function SaveSheet({ message, primaryLang, savedKeys, onSaved, onClose }: Props) {
+export default function SaveSheet({
+  message,
+  primaryLang,
+  savedIds,
+  onSaved,
+  onUnsaved,
+  onClose,
+}: Props) {
   const t = useT();
   const [busy, setBusy] = useState<LangCode | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,21 +43,30 @@ export default function SaveSheet({ message, primaryLang, savedKeys, onSaved, on
       .map((translation) => ({ lang: translation.lang, text: translation.text })),
   ];
 
-  const save = async (lang: LangCode, text: string) => {
+  /** 누르면 저장하고, 이미 저장한 것을 다시 누르면 취소한다. */
+  const toggle = async (lang: LangCode, text: string) => {
+    const key = `${message.id}:${lang}`;
     setBusy(lang);
     setError(null);
     try {
+      const existing = savedIds.get(key);
+      if (existing) {
+        await deleteSaved(existing);
+        onUnsaved(key);
+        return;
+      }
+
       // 뜻을 함께 남긴다. 고른 문장이 내 언어면 원문을, 아니면 내 언어 번역을 짝으로.
       const pairLang = lang === primaryLang ? message.sourceLang : primaryLang;
       const pairText = pairLang === message.sourceLang ? own : message.translations[pairLang]?.text;
 
-      await saveSentence({
+      const item = await saveSentence({
         messageId: message.id,
         lang,
         text,
         ...(pairText && pairLang !== lang ? { pairLang, pairText } : {}),
       });
-      onSaved(`${message.id}:${lang}`);
+      onSaved(key, item.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -72,14 +89,15 @@ export default function SaveSheet({ message, primaryLang, savedKeys, onSaved, on
 
         <ul className="saveList">
           {options.map((option) => {
-            const saved = savedKeys.has(`${message.id}:${option.lang}`);
+            const saved = savedIds.has(`${message.id}:${option.lang}`);
             return (
               <li key={option.lang}>
                 <button
                   type="button"
                   className={`saveList__item ${saved ? 'is-on' : ''}`}
-                  disabled={saved || busy !== null}
-                  onClick={() => void save(option.lang, option.text)}
+                  disabled={busy !== null}
+                  title={saved ? t('save.remove') : t('actions.save')}
+                  onClick={() => void toggle(option.lang, option.text)}
                 >
                   <span className="saveList__lang">{LANGUAGE_NAMES[option.lang]}</span>
                   <span className="saveList__text">{option.text}</span>

@@ -150,7 +150,9 @@ const ko = {
   'actions.saveHint': '나중에 모아서 볼 수 있어요',
   'actions.saved': '저장했어요',
   'save.title': '어떤 문장을 저장할까요?',
-  'save.hint': '고른 문장이 그대로 보관돼요. 여러 개 골라도 됩니다.',
+  'save.hint': '고른 문장이 그대로 보관돼요. 여러 개 골라도 되고, 다시 누르면 취소됩니다.',
+  'save.remove': '저장 취소',
+  'save.removed': '저장을 취소했어요',
   'actions.reply': '답장하기',
   'actions.react': '반응',
 
@@ -354,7 +356,9 @@ const es: Record<StringKey, string> = {
   'actions.saveHint': 'Para repasarla después',
   'actions.saved': 'Guardada',
   'save.title': '¿Qué frase quieres guardar?',
-  'save.hint': 'Se guarda tal cual. Puedes elegir varias.',
+  'save.hint': 'Se guarda tal cual. Puedes elegir varias, y pulsar otra vez para quitarla.',
+  'save.remove': 'Quitar de guardadas',
+  'save.removed': 'Quitada de guardadas',
   'actions.reply': 'Responder',
   'actions.react': 'Reaccionar',
 
@@ -554,7 +558,9 @@ const en: Record<StringKey, string> = {
   'actions.saveHint': 'To go over it later',
   'actions.saved': 'Saved',
   'save.title': 'Which sentence do you want to keep?',
-  'save.hint': 'It is kept exactly as it is now. You can pick more than one.',
+  'save.hint': 'It is kept exactly as it is now. Pick more than one, or tap again to remove.',
+  'save.remove': 'Remove from saved',
+  'save.removed': 'Removed from saved',
   'actions.reply': 'Reply',
   'actions.react': 'React',
 
