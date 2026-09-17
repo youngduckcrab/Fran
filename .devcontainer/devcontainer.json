@@ -1,6 +1,10 @@
 {
   "name": "Fran",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+  "features": {
+    // 이 이미지에는 gh 가 없다. 포트를 공개로 바꾸는 데 필요하다.
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
   "postCreateCommand": "npm install",
   "forwardPorts": [5173, 8787],
   "portsAttributes": {
