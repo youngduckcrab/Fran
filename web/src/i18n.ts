@@ -44,6 +44,9 @@ const ko = {
   'bubble.failed': '번역하지 못했습니다.',
   'bubble.onlyYou': '나에게만 보입니다',
   'bubble.sentAs': '{name} 에게는 이렇게 갔어요',
+  'bubble.listen': '소리로 듣기',
+  'bubble.stop': '그만 듣기',
+  'bubble.noVoice': '이 기기에 {lang} 목소리가 없어요.',
 
   'actions.title': '메시지 메뉴',
   'actions.explain': '설명',
@@ -131,6 +134,9 @@ const es: Record<StringKey, string> = {
   'bubble.failed': 'No se pudo traducir.',
   'bubble.onlyYou': 'Solo tú lo ves',
   'bubble.sentAs': 'Así lo recibió {name}',
+  'bubble.listen': 'Escuchar',
+  'bubble.stop': 'Detener',
+  'bubble.noVoice': 'Este equipo no tiene una voz en {lang}.',
 
   'actions.title': 'Opciones del mensaje',
   'actions.explain': 'Explicar',
@@ -216,6 +222,9 @@ const en: Record<StringKey, string> = {
   'bubble.failed': "Couldn't translate this.",
   'bubble.onlyYou': 'Only you can see this',
   'bubble.sentAs': 'How {name} received it',
+  'bubble.listen': 'Listen',
+  'bubble.stop': 'Stop',
+  'bubble.noVoice': 'This device has no {lang} voice.',
 
   'actions.title': 'Message options',
   'actions.explain': 'Explain',

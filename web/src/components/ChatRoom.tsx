@@ -7,6 +7,7 @@ import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
 import Settings from './Settings';
 import { toUiLang, useT, type UiLang } from '../i18n';
+import { useSpeaker } from '../speech';
 
 interface Props {
   token: string;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
+const SENT_AS_PREF_KEY = 'fran.showSentAs';
 const TYPING_IDLE_MS = 1500;
 
 export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
@@ -33,6 +35,9 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
   const [alwaysShowSource, setAlwaysShowSource] = useState(
     () => localStorage.getItem(SOURCE_PREF_KEY) === '1',
   );
+  // 내 말이 상대에게 어떻게 갔는지를 펼쳐 둘지. 한 번 접으면 계속 접힌 채로 둔다.
+  const [showSentAs, setShowSentAs] = useState(() => localStorage.getItem(SENT_AS_PREF_KEY) !== '0');
+  const speaker = useSpeaker();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,6 +49,10 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
   useEffect(() => {
     localStorage.setItem(SOURCE_PREF_KEY, alwaysShowSource ? '1' : '0');
   }, [alwaysShowSource]);
+
+  useEffect(() => {
+    localStorage.setItem(SENT_AS_PREF_KEY, showSentAs ? '1' : '0');
+  }, [showSentAs]);
 
   const handleDraftChange = (value: string) => {
     setDraft(value);
@@ -118,7 +127,13 @@ export default function ChatRoom({ token, onLogout, onUiLang }: Props) {
             extraLangs={extraLangs}
             peerLang={peerLang}
             peerName={chat.peer?.name ?? ''}
+            showSentAs={showSentAs}
+            onToggleSentAs={() => setShowSentAs((open) => !open)}
             alwaysShowSource={alwaysShowSource}
+            speechSupported={speaker.supported}
+            speakingKey={speaker.speakingKey}
+            failedSpeechKey={speaker.failedKey}
+            onSpeak={speaker.toggle}
             onRetranslate={chat.retranslate}
             onLongPress={setPicked}
           />

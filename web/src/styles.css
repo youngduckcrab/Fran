@@ -717,10 +717,54 @@ textarea {
   word-break: break-word;
 }
 
-/* 이 줄에는 사람 이름이 들어간다. 대문자로 바꾸면 "FRAN" 이 되어 버린다. */
+/* 사람 이름이 들어가는 줄이라 대문자로 바꾸지 않는다. "FRAN" 이 되어 버린다. */
 .bubble__sentAsLabel {
   display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: 11px;
   letter-spacing: 0.04em;
   opacity: 0.65;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bubble__sentAsText {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 원문·번역문을 소리로 들려주는 버튼 */
+.bubble__speak {
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.18);
+  color: inherit;
+  font-size: 10px;
+  line-height: 18px;
+  opacity: 0.7;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.bubble__speak.is-on {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.38);
+}
+
+.bubble__meta .bubble__speak {
+  margin: 0 6px 0 0;
+}
+
+.bubble__noVoice {
+  margin: 4px 0 0;
+  font-size: 11px;
+  opacity: 0.7;
 }
