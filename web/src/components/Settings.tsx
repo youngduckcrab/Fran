@@ -107,11 +107,20 @@ export default function Settings({
   /* ---- 비밀번호 ---- */
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
+  /** 새 비밀번호를 한 번 더. 오타가 그대로 잠금이 되면 둘 다 못 들어온다. */
+  const [again, setAgain] = useState('');
   const [passBusy, setPassBusy] = useState(false);
   const [passDone, setPassDone] = useState(false);
   const [passError, setPassError] = useState<string | null>(null);
 
+  /** 두 번 적은 새 비밀번호가 서로 다른지. 다 적기 전에는 잔소리하지 않는다. */
+  const mismatch = again.length > 0 && next !== again;
+
   const submitPasscode = async () => {
+    if (next !== again) {
+      setPassError(t('settings.passcodeMismatch'));
+      return;
+    }
     setPassBusy(true);
     setPassError(null);
     setPassDone(false);
@@ -119,6 +128,7 @@ export default function Settings({
       onToken(await changePasscode(current, next));
       setCurrent('');
       setNext('');
+      setAgain('');
       setPassDone(true);
     } catch (cause) {
       // 사유는 코드로 온다. 문구는 읽는 사람의 언어로 여기서 붙인다.
@@ -328,16 +338,25 @@ export default function Settings({
               value={next}
               onChange={(event) => setNext(event.target.value)}
             />
+            <input
+              className={`login__input ${mismatch ? 'is-wrong' : ''}`}
+              type="password"
+              autoComplete="new-password"
+              placeholder={t('settings.passcodeConfirm')}
+              value={again}
+              onChange={(event) => setAgain(event.target.value)}
+            />
             <button
               type="button"
               className="sheet__save"
               onClick={() => void submitPasscode()}
-              disabled={passBusy || !current || !next}
+              disabled={passBusy || !current || !next || !again || mismatch}
             >
               {passBusy ? t('settings.saving') : t('settings.passcodeChange')}
             </button>
           </div>
-          {passError && <p className="sheet__error">{passError}</p>}
+          {mismatch && <p className="sheet__error">{t('settings.passcodeMismatch')}</p>}
+          {passError && !mismatch && <p className="sheet__error">{passError}</p>}
           {passDone && <p className="sheet__done">{t('settings.passcodeChanged')}</p>}
         </section>
 

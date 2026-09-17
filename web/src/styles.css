@@ -2149,3 +2149,8 @@ button:active:not(:disabled) {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* 두 번 적은 값이 서로 다를 때 */
+.login__input.is-wrong {
+  border-color: var(--danger);
+}
