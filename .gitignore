@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.local
+.env.*.local
+
+# data
+data/
+*.sqlite
+*.sqlite-journal
+*.db
+
+# logs
+npm-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

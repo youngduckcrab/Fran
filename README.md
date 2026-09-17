@@ -1,0 +1,78 @@
+# Fran
+
+둘만 쓰는 메신저. 각자 자기 언어로 쓰면, Claude가 **앞뒤 대화를 읽고** 상대의 언어로 옮겨 준다.
+
+한국어로 보낸 `"오늘 좀 그랬어… ㅠㅠ"` 가 스페인어 쪽에 `"Hoy fue un día raro… buaa"` 로 도착하는 것이 목표다.
+사전적으로 맞는 번역이 아니라, **그 사람이 그 언어로 말했다면 했을 법한 문장**을 만드는 데 초점을 둔다.
+
+- 한국어 ↔ 스페인어가 기본, 공부 중인 **영어·중국어**도 함께 받아볼 수 있다
+- 원문은 절대 덮어쓰지 않는다. 말풍선을 누르면 원문과 다른 언어 번역이 함께 펼쳐진다
+- 번역에 **학습용 메모**(관용구·슬랭·놓친 뉘앙스)가 0~2개 붙는다
+- 계정은 두 개뿐. 회원가입도 친구 추가도 없다
+
+## 빠르게 실행하기
+
+```bash
+git clone https://github.com/youngduckcrab/Fran.git
+cd Fran
+npm install                 # shared 패키지까지 자동으로 빌드된다
+
+cp .env.example .env        # 아래 설명대로 채운다
+npm run dev                 # 서버 :8787 + 웹 :5173
+```
+
+브라우저에서 <http://localhost:5173> 를 열고, `.env` 에 적어둔 패스코드로 로그인한다.
+
+### .env 채우기
+
+| 항목 | 설명 |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) 에서 발급. 없으면 메시지는 오가지만 번역만 실패한다 |
+| `AUTH_SECRET` | 로그인 토큰 서명용. `openssl rand -hex 32` 로 만들면 된다 |
+| `USER_A_*`, `USER_B_*` | 두 사람의 이름·기본 언어·패스코드. 패스코드는 서로 다르게 |
+| `TRANSLATION_MODEL` | 기본 `claude-opus-5` |
+| `TRANSLATION_EFFORT` | `low`(기본) → `max`. 올릴수록 번역이 꼼꼼해지고 느려지고 비싸진다 |
+| `TRANSLATION_CONTEXT_SIZE` | 번역할 때 참고할 직전 메시지 수. 기본 12 |
+
+### 배포
+
+```bash
+npm run build     # shared → server → web 순서로 빌드
+npm start         # :8787 하나로 API + WebSocket + 웹까지 전부 서빙
+```
+
+`server/dist/index.js` 는 `web/dist` 가 있으면 그것도 같이 정적 서빙한다. 즉 배포는 **프로세스 하나**면 된다.
+HTTPS 뒤에 두면 폰에서 브라우저 메뉴의 "홈 화면에 추가"로 앱처럼 설치된다(PWA).
+
+> 둘만 쓰는 앱이라 인증은 사람당 패스코드 하나 + 서명 토큰으로 끝낸다.
+> 공개 인터넷에 올린다면 HTTPS는 필수이고, 패스코드는 길고 추측하기 어려운 것으로 잡을 것.
+
+## 구조
+
+```
+shared/   두 쪽이 공유하는 타입과 WebSocket 프로토콜
+server/   Hono + ws + SQLite + Claude 번역 파이프라인
+web/      React + Vite PWA
+```
+
+| 문서 | 내용 |
+| --- | --- |
+| [docs/architecture.md](docs/architecture.md) | 메시지가 오가는 경로, 데이터 모델, 설계할 때 정한 것들 |
+| [docs/translation.md](docs/translation.md) | 번역 프롬프트 설계, 비용, 품질을 손보는 방법 |
+| [docs/roadmap.md](docs/roadmap.md) | 다음에 붙이면 좋을 것들 |
+
+## 명령어
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `npm run dev` | 서버와 웹을 동시에 개발 모드로 |
+| `npm run dev:server` / `npm run dev:web` | 하나씩 따로 |
+| `npm run typecheck` | 전 워크스페이스 타입 검사 |
+| `npm run build` | 전체 빌드 |
+| `npm start` | 빌드 결과로 실행 |
+
+`shared/` 를 고쳤다면 `npm run build --workspace=shared` 를 한 번 돌려야 서버·웹에 반영된다.
+
+## 라이선스
+
+MIT
