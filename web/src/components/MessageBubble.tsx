@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useBubbleGestures } from '../useBubbleGestures';
+import Icon from './Icon';
 import { useT, type StringKey } from '../i18n';
 import {
   LANGUAGE_NAMES,
@@ -106,7 +107,7 @@ export default function MessageBubble({
         onSpeak(key, text, lang);
       }}
     >
-      {speakingKey === key ? '■' : '▶'}
+      <Icon name={speakingKey === key ? 'stop' : 'play'} size={13} />
     </button>
   );
 
@@ -245,7 +246,7 @@ export default function MessageBubble({
 
       {mine && message.translationNote && (
         <p className="bubble__note" title={t('bubble.onlyYou')}>
-          ✎ {message.translationNote}
+          <Icon name="pencil" size={13} /> {message.translationNote}
         </p>
       )}
 

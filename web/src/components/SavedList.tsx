@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LANGUAGE_NAMES, type SavedSentence } from '@fran/shared';
 import { deleteSaved, fetchSaved } from '../api';
 import { useT } from '../i18n';
+import Icon from './Icon';
 import { useSpeaker } from '../speech';
 
 interface Props {
@@ -30,13 +31,16 @@ export default function SavedList({ onBack }: Props) {
     <div className="page">
       <header className="page__header">
         <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
-          ‹
+          <Icon name="back" size={22} />
         </button>
         <h1>{t('saved.title')}</h1>
       </header>
 
       {error && <p className="sheet__error">{error}</p>}
-      {items && items.length === 0 && <p className="page__empty">{t('saved.empty')}</p>}
+      {items && items.length === 0 && <p className="page__empty">
+          <Icon name="sparkle" size={34} className="page__emptyIcon" />
+          {t('saved.empty')}
+        </p>}
 
       <ul className="cards">
         {(items ?? []).map((item) => (
@@ -50,7 +54,7 @@ export default function SavedList({ onBack }: Props) {
                   aria-label={speaker.speakingKey === item.id ? t('bubble.stop') : t('bubble.listen')}
                   onClick={() => speaker.toggle(item.id, item.text, item.lang)}
                 >
-                  {speaker.speakingKey === item.id ? '■' : '▶'}
+                  <Icon name={speaker.speakingKey === item.id ? 'stop' : 'play'} size={13} />
                 </button>
               )}
             </p>

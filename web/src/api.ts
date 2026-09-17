@@ -6,6 +6,7 @@ import type {
   MessageExplanation,
   SavedSentence,
   SavedSentenceDraft,
+  ThemeId,
   UserProfile,
   VocabDraft,
   VocabEntry,
@@ -256,4 +257,14 @@ export async function makeVocabExample(id: string, refresh = false): Promise<Voc
   });
   if (!response.ok) await parseError(response);
   return ((await response.json()) as { entry: VocabEntry }).entry;
+}
+
+export async function saveTheme(theme: ThemeId): Promise<UserProfile> {
+  const response = await fetch('/api/theme', {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ theme }),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { profile: UserProfile }).profile;
 }

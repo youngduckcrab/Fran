@@ -9,6 +9,7 @@ import {
 } from '@fran/shared';
 import { explainMessage, saveVocab } from '../api';
 import { useT } from '../i18n';
+import Icon from './Icon';
 
 interface Props {
   message: ChatMessage;
@@ -83,7 +84,7 @@ export default function Explanation({ message, initialLang, onAdded, onClose }: 
         <header className="sheet__header">
           <h2>{t('explain.title')}</h2>
           <button type="button" className="sheet__close" onClick={onClose} aria-label={t('actions.close')}>
-            ✕
+            <Icon name="close" size={16} />
           </button>
         </header>
 

@@ -1,13 +1,15 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { messageText, type ChatMessage, type LangCode } from '@fran/shared';
+import type { ChatMessage, LangCode } from '@fran/shared';
 import type { Chat } from '../useChat';
-import { saveSentence } from '../api';
 import { useT } from '../i18n';
+import Icon from './Icon';
+import { useBackClose } from '../backstack';
 import { useSpeaker } from '../speech';
 import { wallpaperProps } from '../wallpaper';
 import Explanation from './Explanation';
 import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
+import SaveSheet from './SaveSheet';
 import Composer from './Composer';
 
 interface Props {
@@ -43,6 +45,8 @@ export default function ChatRoom({
   const [toast, setToast] = useState<string | null>(null);
   /** 지금 답하고 있는 메시지. 밀거나 메뉴에서 고른다. */
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /** 저장할 문장을 고르는 창. 어떤 메시지를 놓고 고르는 중인지. */
+  const [saving, setSaving] = useState<ChatMessage | null>(null);
   const speaker = useSpeaker();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -54,41 +58,19 @@ export default function ChatRoom({
   /** 상대가 실제로 읽는 언어. 내 메시지가 어떻게 갔는지 보여줄 때 쓴다. */
   const peerLang: LangCode = chat.peer?.displayLangs[0] ?? chat.peer?.nativeLang ?? 'es';
 
-  /** 지금 화면에 보이는 문장을 저장한다. 번역을 다시 돌려도 저장본은 그대로 남는다. */
-  const save = async (message: ChatMessage) => {
-    const mine = message.senderId === chat.me?.id;
-    const lang = mine ? message.sourceLang : primaryLang;
-    const own = messageText(message);
-    const text = lang === message.sourceLang ? own : message.translations[lang]?.text;
-    if (!text) return;
-
-    const pairLang = lang === message.sourceLang ? peerLang : message.sourceLang;
-    const pairText = pairLang === message.sourceLang ? own : message.translations[pairLang]?.text;
-
-    try {
-      await saveSentence({
-        messageId: message.id,
-        lang,
-        text,
-        ...(pairText ? { pairLang, pairText } : {}),
-      });
-      onSaved(`${message.id}:${lang}`);
-      setToast(t('actions.saved'));
-      setTimeout(() => setToast(null), 1800);
-    } catch (cause) {
-      setToast(cause instanceof Error ? cause.message : String(cause));
-      setTimeout(() => setToast(null), 2500);
-    }
-  };
-
   const byId = new Map(chat.messages.map((message) => [message.id, message]));
+  useBackClose(Boolean(picked), () => setPicked(null));
+  useBackClose(Boolean(saving), () => setSaving(null));
+  useBackClose(Boolean(explaining), () => setExplaining(null));
+  useBackClose(Boolean(replyTo), () => setReplyTo(null));
+
   const wall = wallpaperProps(chat.me?.wallpaper);
 
   return (
     <div className={`chat ${wall.className}`} style={wall.style}>
       <header className="chat__header">
         <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
-          ‹
+          <Icon name="back" size={22} />
         </button>
         <div className="chat__who">
           <h1 className="chat__peer">{chat.peer?.name ?? t('chat.connecting')}</h1>
@@ -179,15 +161,12 @@ export default function ChatRoom({
             setReplyTo(picked);
             setPicked(null);
           }}
-          alreadySaved={savedKeys.has(
-            `${picked.id}:${picked.senderId === chat.me?.id ? picked.sourceLang : primaryLang}`,
-          )}
           onExplain={() => {
             setExplaining(picked);
             setPicked(null);
           }}
           onSave={() => {
-            void save(picked);
+            setSaving(picked);
             setPicked(null);
           }}
           onCopy={() => {
@@ -199,6 +178,20 @@ export default function ChatRoom({
             setPicked(null);
           }}
           onClose={() => setPicked(null)}
+        />
+      )}
+
+      {saving && (
+        <SaveSheet
+          message={saving}
+          primaryLang={primaryLang}
+          savedKeys={savedKeys}
+          onSaved={(key) => {
+            onSaved(key);
+            setToast(t('actions.saved'));
+            setTimeout(() => setToast(null), 1600);
+          }}
+          onClose={() => setSaving(null)}
         />
       )}
 

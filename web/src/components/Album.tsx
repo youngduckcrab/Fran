@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { UserProfile } from '@fran/shared';
 import { fetchPhotos, saveWallpaper, type Photo } from '../api';
 import { useT } from '../i18n';
+import Icon from './Icon';
+import { useBackClose } from '../backstack';
 import { attachmentUrl } from '../media';
 import { photoWallpaper } from '../wallpaper';
 
@@ -34,19 +36,24 @@ export default function Album({ me, peer, onWallpaper, onBack }: Props) {
     }
   };
 
+  useBackClose(Boolean(open), () => setOpen(null));
+
   const who = (photo: Photo) => (photo.senderId === me?.id ? me?.name : peer?.name) ?? '';
 
   return (
     <div className="page">
       <header className="page__header">
         <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
-          ‹
+          <Icon name="back" size={22} />
         </button>
         <h1>{t('album.title')}</h1>
       </header>
 
       {error && <p className="sheet__error">{error}</p>}
-      {photos && photos.length === 0 && <p className="page__empty">{t('album.empty')}</p>}
+      {photos && photos.length === 0 && <p className="page__empty">
+          <Icon name="sparkle" size={34} className="page__emptyIcon" />
+          {t('album.empty')}
+        </p>}
 
       <div className="album">
         {(photos ?? []).map((photo) => (

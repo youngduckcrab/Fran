@@ -4,8 +4,6 @@ import { useT } from '../i18n';
 interface Props {
   /** 실패한 메시지에만 재번역을 띄운다. */
   canRetranslate: boolean;
-  /** 이미 저장한 문장이면 다시 저장하지 않는다. */
-  alreadySaved: boolean;
   /** 내가 이미 단 반응. 다시 누르면 지운다. */
   myReaction: string | null;
   onReact: (emoji: string | null) => void;
@@ -20,7 +18,6 @@ interface Props {
 /** 말풍선을 길게 눌렀을 때 뜨는 메뉴. */
 export default function MessageActions({
   canRetranslate,
-  alreadySaved,
   myReaction,
   onReact,
   onReply,
@@ -56,8 +53,8 @@ export default function MessageActions({
           <b>{t('actions.explain')}</b>
           <span>{t('actions.explainHint')}</span>
         </button>
-        <button type="button" className="actions__item" onClick={onSave} disabled={alreadySaved}>
-          <b>{alreadySaved ? t('actions.saved') : t('actions.save')}</b>
+        <button type="button" className="actions__item" onClick={onSave}>
+          <b>{t('actions.save')}</b>
           <span>{t('actions.saveHint')}</span>
         </button>
         <button type="button" className="actions__item" onClick={onCopy}>

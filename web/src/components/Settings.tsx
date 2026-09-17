@@ -2,13 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import {
   LANGUAGES,
   LANGUAGE_NAMES,
+  THEMES,
   WALLPAPERS,
   type LangCode,
+  type ThemeId,
   type UserProfile,
 } from '@fran/shared';
-import { saveSettings, saveWallpaper } from '../api';
+import { saveSettings, saveTheme, saveWallpaper } from '../api';
 import { useT, type StringKey } from '../i18n';
 import { disablePush, enablePush, pushState, type PushState } from '../push';
+import { applyTheme } from '../theme';
+import Icon from './Icon';
 import { attachmentUrl, prepareImage, uploadAttachment } from '../media';
 import { photoWallpaper, wallpaperPhotoId } from '../wallpaper';
 
@@ -44,6 +48,23 @@ export default function Settings({
   /** 목록의 첫 번째가 주 언어. 순서를 바꿔 어떤 번역을 크게 볼지 정한다. */
   const promote = (lang: LangCode) => {
     setDisplayLangs((current) => [lang, ...current.filter((item) => item !== lang)]);
+  };
+
+  /* ---- 앱 색 ---- */
+  const [theme, setTheme] = useState<ThemeId>(profile.theme ?? 'rose');
+
+  const chooseTheme = async (value: ThemeId) => {
+    const previous = theme;
+    // 누르자마자 앱 전체가 그 색으로 바뀌는 게 보여야 고르는 맛이 있다.
+    setTheme(value);
+    applyTheme(value);
+    try {
+      onSaved(await saveTheme(value));
+    } catch (cause) {
+      setTheme(previous);
+      applyTheme(previous);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
   };
 
   /* ---- 배경화면 ---- */
@@ -119,7 +140,7 @@ export default function Settings({
         <header className="sheet__header">
           <h2>{t('settings.title')}</h2>
           <button type="button" className="sheet__close" onClick={onClose} aria-label={t('actions.close')}>
-            ✕
+            <Icon name="close" size={16} />
           </button>
         </header>
 
@@ -183,6 +204,26 @@ export default function Settings({
         </section>
 
         <section className="sheet__section">
+          <h3>{t('settings.theme')}</h3>
+          <p className="sheet__hint">{t('settings.themeHint')}</p>
+          <div className="themes">
+            {THEMES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                className={`themes__item ${theme === id ? 'is-on' : ''}`}
+                data-theme={id}
+                onClick={() => void chooseTheme(id)}
+                aria-label={t(`theme.${id}` as StringKey)}
+                title={t(`theme.${id}` as StringKey)}
+              >
+                <span className="themes__dot" />
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="sheet__section">
           <h3>{t('settings.wallpaper')}</h3>
           <p className="sheet__hint">{t('settings.wallpaperHint')}</p>
           <div className="walls">
@@ -224,7 +265,8 @@ export default function Settings({
             onClick={() => photoInput.current?.click()}
             disabled={wallBusy}
           >
-            🖼 {wallBusy ? t('composer.uploading') : t('settings.wallpaperPick')}
+            <Icon name="image" size={18} />
+            {wallBusy ? t('composer.uploading') : t('settings.wallpaperPick')}
           </button>
         </section>
 

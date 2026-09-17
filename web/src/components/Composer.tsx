@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { messageText, type Attachment, type ChatMessage } from '@fran/shared';
 import { useT } from '../i18n';
+import Icon from './Icon';
 import {
   attachmentUrl,
   canRecord,
@@ -154,7 +155,7 @@ export default function Composer({
             onClick={onCancelReply}
             aria-label={t('reply.cancel')}
           >
-            ✕
+            <Icon name="close" size={16} />
           </button>
         </div>
       )}
@@ -186,7 +187,8 @@ export default function Composer({
             <img className="attachBar__thumb" src={attachmentUrl(pending.id)} alt={t('bubble.photo')} />
           ) : (
             <span className="attachBar__voice">
-              🎤 {t('composer.voiceReady', { time: formatDuration(pending.durationMs ?? 0) })}
+              <Icon name="mic" size={16} />
+              {t('composer.voiceReady', { time: formatDuration(pending.durationMs ?? 0) })}
             </span>
           )}
           {pending.kind === 'image' && <span>{t('composer.photoReady')}</span>}
@@ -222,7 +224,7 @@ export default function Composer({
                 }}
                 disabled={busy}
               >
-                <span aria-hidden="true">🖼</span>
+                <Icon name="image" size={22} />
                 {t('composer.photo')}
               </button>
 
@@ -236,7 +238,7 @@ export default function Composer({
                   }}
                   disabled={busy}
                 >
-                  <span aria-hidden="true">🎤</span>
+                  <Icon name="mic" size={22} />
                   {t('composer.record')}
                 </button>
               )}
@@ -249,7 +251,7 @@ export default function Composer({
                   setNoteOpen((open) => !open);
                 }}
               >
-                <span aria-hidden="true">✎</span>
+                <Icon name="pencil" size={22} />
                 {t('note.button')}
               </button>
             </div>
@@ -273,7 +275,7 @@ export default function Composer({
             aria-label={t('composer.more')}
             title={t('composer.more')}
           >
-            {trayOpen ? '✕' : '+'}
+            <Icon name={trayOpen ? 'close' : 'plus'} />
           </button>
 
           <textarea
@@ -296,7 +298,7 @@ export default function Composer({
             aria-label={t('chat.send')}
             title={t('chat.send')}
           >
-            ➤
+            <Icon name="send" />
           </button>
         </form>
         </>

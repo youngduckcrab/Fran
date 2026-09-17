@@ -18,12 +18,13 @@ export default defineConfig({
         lang: 'ko',
         start_url: '/',
         display: 'standalone',
-        background_color: '#12121a',
-        theme_color: '#12121a',
+        background_color: '#17121f',
+        theme_color: '#17121f',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // 안드로이드는 아이콘을 동그랗게 잘라낸다. 잘려도 되는 여백을 둔 것을 따로 준다.
+          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),

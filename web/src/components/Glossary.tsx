@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LANGUAGES, LANGUAGE_NAMES, type GlossaryEntry, type LangCode } from '@fran/shared';
 import { deleteGlossaryEntry, saveGlossaryEntry } from '../api';
 import { useT } from '../i18n';
+import Icon from './Icon';
 
 interface Props {
   entries: GlossaryEntry[];
@@ -71,7 +72,7 @@ export default function Glossary({ entries, onChanged, onClose }: Props) {
         <header className="sheet__header">
           <h2>{t('glossary.title')}</h2>
           <button type="button" className="sheet__close" onClick={onClose} aria-label={t('actions.close')}>
-            ✕
+            <Icon name="close" size={16} />
           </button>
         </header>
         <p className="sheet__hint">

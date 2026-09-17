@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchUsers, login, type LoginOption } from '../api';
 import { createTranslate, toUiLang, type UiLang } from '../i18n';
+import Icon from './Icon';
 
 interface Props {
   onLogin: (token: string, userId: string) => void;
@@ -57,6 +58,7 @@ export default function Login({ onLogin, presetUserId, uiLang, onUiLang }: Props
   return (
     <main className="login">
       <form className="login__card" onSubmit={submit}>
+        <Icon name="heart" size={38} className="login__heart" />
         <h1 className="login__title">Fran</h1>
         <p className="login__subtitle">{t('login.subtitle')}</p>
 

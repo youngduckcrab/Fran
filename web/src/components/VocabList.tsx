@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LANGUAGE_NAMES, type LangCode, type VocabEntry } from '@fran/shared';
 import { deleteVocab, fetchVocab, makeVocabExample, setVocabLearned } from '../api';
 import { useT } from '../i18n';
+import Icon from './Icon';
 import { useSpeaker, type Speaker } from '../speech';
 
 interface Props {
@@ -50,7 +51,7 @@ export default function VocabList({ onBack }: Props) {
     <div className="page">
       <header className="page__header">
         <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
-          ‹
+          <Icon name="back" size={22} />
         </button>
         <h1>{t('vocab.title')}</h1>
       </header>
@@ -89,9 +90,15 @@ export default function VocabList({ onBack }: Props) {
       )}
 
       {error && <p className="sheet__error">{error}</p>}
-      {entries && entries.length === 0 && <p className="page__empty">{t('vocab.empty')}</p>}
+      {entries && entries.length === 0 && <p className="page__empty">
+          <Icon name="sparkle" size={34} className="page__emptyIcon" />
+          {t('vocab.empty')}
+        </p>}
       {entries && entries.length > 0 && shown.length === 0 && (
-        <p className="page__empty">{shelf === 'learned' ? t('vocab.emptyLearned') : t('vocab.empty')}</p>
+        <p className="page__empty">
+          <Icon name="sparkle" size={34} className="page__emptyIcon" />
+          {shelf === 'learned' ? t('vocab.emptyLearned') : t('vocab.empty')}
+        </p>
       )}
 
       <ul className="cards">
@@ -132,7 +139,7 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
         aria-label={speaker.speakingKey === key ? t('bubble.stop') : t('bubble.listen')}
         onClick={() => speaker.toggle(key, text, entry.lang)}
       >
-        {speaker.speakingKey === key ? '■' : '▶'}
+        <Icon name={speaker.speakingKey === key ? 'stop' : 'play'} size={13} />
       </button>
     );
 
@@ -197,7 +204,7 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
           onClick={() => void toggleLearned()}
           title={entry.learned ? t('vocab.markLearning') : t('vocab.markLearned')}
         >
-          {entry.learned ? '✓ ' : '○ '}
+          {entry.learned && <Icon name="check" size={14} />}
           {entry.learned ? t('vocab.learned') : t('vocab.markLearned')}
         </button>
 

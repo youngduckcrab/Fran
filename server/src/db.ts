@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import pg from 'pg';
 import {
   isLangCode,
+  isThemeId,
   type Attachment,
   type AttachmentKind,
   type ChatMessage,
@@ -14,6 +15,7 @@ import {
   type Translation,
   type TranslationErrorCode,
   type TranslationNote,
+  type ThemeId,
   type TranslationStatus,
   type VocabDraft,
   type VocabEntry,
@@ -162,6 +164,7 @@ const SCHEMA = `
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_error_code TEXT;
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_note       TEXT;
   ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS wallpaper TEXT;
+  ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS theme     TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript        TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_lang   TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_status TEXT;
@@ -525,6 +528,7 @@ interface SettingsRow {
   native_lang: string;
   display_langs: string;
   wallpaper: string | null;
+  theme: string | null;
 }
 
 async function settingsOf(userId: string): Promise<SettingsRow | null> {
@@ -814,6 +818,24 @@ export async function deleteVocab(userId: string, id: string): Promise<void> {
 export async function getWallpaper(userId: string): Promise<string | undefined> {
   const row = await settingsOf(userId);
   return row?.wallpaper ?? undefined;
+}
+
+export async function getTheme(userId: string): Promise<ThemeId | undefined> {
+  const row = await settingsOf(userId);
+  return row?.theme && isThemeId(row.theme) ? row.theme : undefined;
+}
+
+export async function saveTheme(
+  userId: string,
+  theme: ThemeId,
+  fallback: { nativeLang: LangCode; displayLangs: LangCode[] },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO user_settings (user_id, native_lang, display_langs, theme)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id) DO UPDATE SET theme = EXCLUDED.theme`,
+    [userId, fallback.nativeLang, fallback.displayLangs.join(','), theme],
+  );
 }
 
 export async function saveWallpaper(userId: string, wallpaper: string, fallback: {

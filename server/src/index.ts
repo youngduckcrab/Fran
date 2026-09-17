@@ -9,8 +9,9 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   cleanTerm,
   isLangCode,
-  messageText,
+  isThemeId,
   isWallpaperId,
+  messageText,
   type Attachment,
   type AttachmentKind,
   type ChatMessage,
@@ -29,6 +30,7 @@ import {
   deleteVocab,
   getAttachmentBytes,
   getAudioForTranscription,
+  getTheme,
   getVocab,
   getWallpaper,
   initDatabase,
@@ -39,6 +41,7 @@ import {
   purgeOrphanAttachments,
   saveSentence,
   saveVocab,
+  saveTheme,
   saveWallpaper,
   savedKeysOf,
   setVocabExample,
@@ -99,12 +102,19 @@ for (const user of config.users) {
 async function profileOf(userId: string): Promise<UserProfile> {
   const user = findUserById(userId);
   if (!user) throw new Error(`알 수 없는 사용자: ${userId}`);
-  const [nativeLang, displayLangs, wallpaper] = await Promise.all([
+  const [nativeLang, displayLangs, wallpaper, theme] = await Promise.all([
     getNativeLang(userId, user.profile.nativeLang),
     getDisplayLangs(userId, user.profile.displayLangs),
     getWallpaper(userId),
+    getTheme(userId),
   ]);
-  return { ...user.profile, nativeLang, displayLangs, ...(wallpaper ? { wallpaper } : {}) };
+  return {
+    ...user.profile,
+    nativeLang,
+    displayLangs,
+    ...(wallpaper ? { wallpaper } : {}),
+    ...(theme ? { theme } : {}),
+  };
 }
 
 function bothProfiles(): Promise<UserProfile[]> {
@@ -421,6 +431,23 @@ app.put('/api/wallpaper', async (c) => {
 
   const current = await profileOf(userId);
   await saveWallpaper(userId, value, {
+    nativeLang: current.nativeLang,
+    displayLangs: current.displayLangs,
+  });
+  return c.json({ profile: await profileOf(userId) });
+});
+
+/** 앱 색. 사람마다 따로 고른다. */
+app.put('/api/theme', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as { theme?: unknown } | null;
+  const theme = body?.theme;
+  if (!isThemeId(theme)) return c.json({ error: '알 수 없는 색입니다.' }, 400);
+
+  const current = await profileOf(userId);
+  await saveTheme(userId, theme, {
     nativeLang: current.nativeLang,
     displayLangs: current.displayLangs,
   });
@@ -765,12 +792,13 @@ app.get('/manifest.webmanifest', async (c) => {
       start_url: startUrl,
       scope: '/',
       display: 'standalone',
-      background_color: '#12121a',
-      theme_color: '#12121a',
+      background_color: '#17121f',
+      theme_color: '#17121f',
       icons: [
         { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
         { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        // 안드로이드는 아이콘을 동그랗게 잘라낸다. 잘려도 되는 여백을 둔 것을 따로 준다.
+        { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
     },
     200,

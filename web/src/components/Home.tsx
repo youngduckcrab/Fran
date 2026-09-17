@@ -1,5 +1,6 @@
 import { messageText, type ChatMessage, type LangCode, type UserProfile } from '@fran/shared';
 import { useT, type Translate } from '../i18n';
+import Icon from './Icon';
 
 export type View = 'home' | 'chat' | 'saved' | 'vocab' | 'album';
 
@@ -56,7 +57,10 @@ export default function Home({
     <div className="home">
       <header className="home__header">
         <div>
-          <h1 className="home__peer">{peer?.name ?? t('chat.connecting')}</h1>
+          <h1 className="home__peer">
+            {peer?.name ?? t('chat.connecting')}
+            <Icon name="heart" size={18} className="home__heart" />
+          </h1>
           <p className="home__status">
             {connecting ? t('chat.reconnectingShort') : peerOnline ? t('chat.online') : t('chat.offline')}
           </p>
@@ -67,7 +71,7 @@ export default function Home({
       </header>
 
       <button type="button" className="tile tile--chat" onClick={() => onOpen('chat')}>
-        <span className="tile__icon" aria-hidden="true">💬</span>
+        <span className="tile__icon"><Icon name="chat" size={26} /></span>
         <span className="tile__body">
           <span className="tile__title">{t('home.chat')}</span>
           <span className="tile__line">{last ?? t('home.chatEmpty')}</span>
@@ -81,19 +85,19 @@ export default function Home({
 
       <div className="home__grid">
         <button type="button" className="tile" onClick={() => onOpen('saved')}>
-          <span className="tile__icon" aria-hidden="true">⭐</span>
+          <span className="tile__icon"><Icon name="bookmark" size={24} /></span>
           <span className="tile__title">{t('home.saved')}</span>
           <span className="tile__count">{t('home.items', { count: String(counts.saved) })}</span>
         </button>
 
         <button type="button" className="tile" onClick={() => onOpen('vocab')}>
-          <span className="tile__icon" aria-hidden="true">📓</span>
+          <span className="tile__icon"><Icon name="book" size={24} /></span>
           <span className="tile__title">{t('home.vocab')}</span>
           <span className="tile__count">{t('home.items', { count: String(counts.vocab) })}</span>
         </button>
 
         <button type="button" className="tile" onClick={() => onOpen('album')}>
-          <span className="tile__icon" aria-hidden="true">🖼</span>
+          <span className="tile__icon"><Icon name="image" size={24} /></span>
           <span className="tile__title">{t('home.album')}</span>
           <span className="tile__count">{t('home.items', { count: String(counts.photos) })}</span>
         </button>

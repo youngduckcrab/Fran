@@ -28,6 +28,8 @@ export interface UserProfile {
   displayLangs: LangCode[];
   /** 대화방 배경. 기본 배경 id 이거나 `photo:<첨부 id>`. */
   wallpaper?: string;
+  /** 앱 색. 고르지 않았으면 기본(rose). */
+  theme?: ThemeId;
 }
 
 /** 번역문에 딸려오는 짧은 표현 설명. 학습용. */
@@ -241,6 +243,16 @@ export function cleanTerm(raw: string): string {
     .replace(/[¿?¡!.,;:…"“”'‘’()\[\]{}<>«»。、！？「」『』・]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/* ---------- 앱 색 ---------- */
+
+/** 고를 수 있는 색 테마. 두 색만 바꾸면 앱 전체가 따라온다. */
+export const THEMES = ['rose', 'ocean', 'forest', 'sunset', 'lilac', 'mono'] as const;
+export type ThemeId = (typeof THEMES)[number];
+
+export function isThemeId(value: unknown): value is ThemeId {
+  return typeof value === 'string' && (THEMES as readonly string[]).includes(value);
 }
 
 /* ---------- 배경화면 ---------- */

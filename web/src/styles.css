@@ -31,22 +31,35 @@
  * 분홍-라벤더 사이의 따뜻한 색으로 잡았다. 어두운 데서도 눈이 편하도록 어두운 쪽은
  * 검정 대신 자줏빛이 도는 색을 쓴다.
  */
+/*
+ * 테마는 색 두 개로 정해진다. 나머지(배경·면·테두리·부드러운 강조색)는 그 둘에서
+ * 섞어서 만든다. 테마마다 스무 줄씩 늘어놓으면 하나만 고쳐도 다른 테마가 어긋난다.
+ */
 :root {
-  --bg: #17121f;
-  --bg-tint: radial-gradient(120% 80% at 50% 0%, #2a1f3a 0%, #17121f 60%);
-  --surface: #221a2d;
-  --surface-raised: #2c2238;
-  --text: #f3ecf6;
-  --text-muted: #a99cb5;
-  --accent: #ff8fb1;
-  --accent-2: #a98bff;
-  --accent-grad: linear-gradient(135deg, #ff9ec0 0%, #b18bff 100%);
-  --accent-soft: #3a2b4a;
-  --border: #382c47;
+  --c1: #ff9ec0;
+  --c2: #b18bff;
+
   --danger: #ff7a90;
   --ok: #7fd1b9;
   --radius: 22px;
   --radius-sm: 14px;
+
+  /* 어두운 쪽이 기본. 밝기는 폰 설정을 따라간다. */
+  --bg: color-mix(in srgb, var(--c2) 10%, #14111a);
+  --surface: color-mix(in srgb, var(--c2) 9%, #1e1a26);
+  --surface-raised: color-mix(in srgb, var(--c1) 12%, var(--surface));
+  --text: color-mix(in srgb, var(--c1) 8%, #f4eff7);
+  --text-muted: color-mix(in srgb, var(--text) 62%, transparent);
+  --border: color-mix(in srgb, var(--c2) 22%, var(--surface));
+  --accent: var(--c1);
+  --accent-2: var(--c2);
+  --accent-grad: linear-gradient(135deg, var(--c1) 0%, var(--c2) 100%);
+  --accent-soft: color-mix(in srgb, var(--c1) 22%, var(--surface));
+  --bg-tint: radial-gradient(
+    120% 80% at 50% 0%,
+    color-mix(in srgb, var(--c2) 22%, var(--bg)) 0%,
+    var(--bg) 62%
+  );
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --shadow-soft: 0 4px 14px rgba(0, 0, 0, 0.25);
   color-scheme: dark;
@@ -54,23 +67,63 @@
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #fff7fa;
-    --bg-tint: radial-gradient(120% 80% at 50% 0%, #ffe9f1 0%, #fff7fa 55%, #f5f1ff 100%);
+    --bg: color-mix(in srgb, var(--c1) 7%, #ffffff);
     --surface: #ffffff;
-    --surface-raised: #fdeef4;
-    --text: #3a2b3f;
-    --text-muted: #8c7f95;
-    --accent: #ff7fa8;
-    --accent-2: #9b7bff;
-    --accent-grad: linear-gradient(135deg, #ff9ec0 0%, #a98bff 100%);
-    --accent-soft: #ffe6ef;
-    --border: #f3e2ea;
-    --danger: #f2688a;
-    --ok: #3fb99a;
-    --shadow: 0 10px 28px rgba(190, 120, 160, 0.16);
-    --shadow-soft: 0 4px 14px rgba(190, 120, 160, 0.12);
+    --surface-raised: color-mix(in srgb, var(--c1) 12%, #ffffff);
+    --text: color-mix(in srgb, var(--c2) 20%, #2f2a35);
+    --text-muted: color-mix(in srgb, var(--text) 55%, transparent);
+    --border: color-mix(in srgb, var(--c1) 22%, #ffffff);
+    --accent-soft: color-mix(in srgb, var(--c1) 20%, #ffffff);
+    --bg-tint: radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--c1) 18%, #ffffff) 0%,
+      var(--bg) 55%,
+      color-mix(in srgb, var(--c2) 10%, #ffffff) 100%
+    );
+    --shadow: 0 10px 28px color-mix(in srgb, var(--c2) 18%, transparent);
+    --shadow-soft: 0 4px 14px color-mix(in srgb, var(--c2) 14%, transparent);
     color-scheme: light;
   }
+}
+
+/*
+ * 고를 수 있는 색. 두 색만 바꾸면 앱 전체가 따라온다.
+ * 설정의 동그라미(.themes__item)에도 같은 값을 걸어 두어, 고르기 전에 무슨 색인지 보인다.
+ */
+:root[data-theme='rose'],
+.themes__item[data-theme='rose'] {
+  --c1: #ff9ec0;
+  --c2: #b18bff;
+}
+
+:root[data-theme='ocean'],
+.themes__item[data-theme='ocean'] {
+  --c1: #6fc9ff;
+  --c2: #7b83ff;
+}
+
+:root[data-theme='forest'],
+.themes__item[data-theme='forest'] {
+  --c1: #74d8ac;
+  --c2: #4bb4c8;
+}
+
+:root[data-theme='sunset'],
+.themes__item[data-theme='sunset'] {
+  --c1: #ffb473;
+  --c2: #ff7f92;
+}
+
+:root[data-theme='lilac'],
+.themes__item[data-theme='lilac'] {
+  --c1: #c9a0ff;
+  --c2: #8a92ff;
+}
+
+:root[data-theme='mono'],
+.themes__item[data-theme='mono'] {
+  --c1: #a8adbe;
+  --c2: #858ba1;
 }
 
 * {
@@ -82,6 +135,11 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  /*
+   * 위에서 아래로 당기면 브라우저가 새로고침해 버린다. 대화 중에 손가락이 조금
+   * 미끄러진 것만으로 앱이 통째로 다시 뜨면 곤란하다. 당김 동작을 우리 쪽에서 막는다.
+   */
+  overscroll-behavior: none;
 }
 
 body {
@@ -143,11 +201,9 @@ button:active:not(:disabled) {
 }
 
 /* 문 앞에 붙은 하트. 이 앱을 여는 사람은 둘뿐이다. */
-.login__card::before {
-  content: '💌';
+.login__heart {
   align-self: center;
-  font-size: 40px;
-  line-height: 1;
+  color: var(--accent);
 }
 
 .login__title {
@@ -527,6 +583,7 @@ button:active:not(:disabled) {
   max-width: 520px;
   max-height: 88vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 10px 20px max(20px, env(safe-area-inset-bottom));
   border-radius: 28px 28px 0 0;
   background: var(--surface);
@@ -987,6 +1044,7 @@ button:active:not(:disabled) {
   flex-direction: column;
   gap: 14px;
   height: 100%;
+  overscroll-behavior: contain;
   max-width: 720px;
   margin: 0 auto;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
@@ -1007,10 +1065,15 @@ button:active:not(:disabled) {
   letter-spacing: -0.01em;
 }
 
+.home__peer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* 이름 옆의 작은 하트. */
-.home__peer::after {
-  content: ' 💕';
-  font-size: 18px;
+.home__heart {
+  color: var(--accent);
 }
 
 .home__status {
@@ -1137,6 +1200,7 @@ button:active:not(:disabled) {
   flex-direction: column;
   gap: 12px;
   height: 100%;
+  overscroll-behavior: contain;
   max-width: 720px;
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
@@ -1162,12 +1226,12 @@ button:active:not(:disabled) {
   line-height: 1.7;
 }
 
-/* 텅 빈 화면에 말풍선 하나. 비어 있는 게 잘못된 게 아니라는 표시. */
-.page__empty::before {
-  content: '🫧';
+/* 텅 빈 화면에도 뭔가 하나. 비어 있는 게 잘못된 게 아니라는 표시. */
+.page__emptyIcon {
   display: block;
-  margin-bottom: 10px;
-  font-size: 40px;
+  margin: 0 auto 8px;
+  color: var(--accent);
+  opacity: 0.8;
 }
 
 .chat__back {
@@ -1774,4 +1838,133 @@ button:active:not(:disabled) {
   border-color: transparent;
   background: color-mix(in srgb, var(--ok) 22%, transparent);
   color: var(--ok);
+}
+
+/* ---------- 앱 색 고르기 ---------- */
+
+.themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.themes__item {
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.themes__item.is-on {
+  border-color: var(--accent);
+}
+
+/* 동그라미 하나로 그 테마의 두 색을 함께 보여준다. */
+.themes__dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--c1) 0%, var(--c2) 100%);
+  box-shadow: var(--shadow-soft);
+}
+
+/* ---------- 선 그림 맞춤 ---------- */
+
+/*
+ * 아이콘이 들어간 버튼들. 글자와 나란히 서고, 눌러도 아이콘이 찌그러지지 않게.
+ */
+.composer__icon,
+.composer__send,
+.chat__back,
+.sheet__close,
+.bubble__speak,
+.sheet__pick,
+.card__learn,
+.attachBar__voice,
+.tile__icon,
+.tray__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tray__item {
+  flex-direction: column;
+}
+
+.bubble__speak {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+}
+
+.tile__icon {
+  color: var(--accent);
+}
+
+.home__grid .tile:nth-child(2) .tile__icon {
+  color: var(--accent-2);
+}
+
+.bubble__note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- 저장할 문장 고르기 ---------- */
+
+.saveList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saveList__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-raised);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saveList__item.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.saveList__lang {
+  flex: 0 0 auto;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.saveList__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saveList__mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--accent);
 }

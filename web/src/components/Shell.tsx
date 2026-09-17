@@ -3,6 +3,8 @@ import type { LangCode } from '@fran/shared';
 import { useChat } from '../useChat';
 import { fetchPhotos, fetchSaved, fetchVocab } from '../api';
 import { toUiLang, type UiLang } from '../i18n';
+import { useBackClose } from '../backstack';
+import { applyTheme } from '../theme';
 import Album from './Album';
 import ChatRoom from './ChatRoom';
 import Glossary from './Glossary';
@@ -63,6 +65,11 @@ export default function Shell({ token, onLogout, onUiLang }: Props) {
     if (chat.me) onUiLang(toUiLang(primaryLang));
   }, [chat.me, primaryLang, onUiLang]);
 
+  // 고른 색을 화면에 입힌다. 서버에서 오기 전까지는 마지막으로 쓰던 색이 이미 입혀져 있다.
+  useEffect(() => {
+    applyTheme(chat.me?.theme);
+  }, [chat.me?.theme]);
+
   // iOS 는 홈 화면에 추가할 때 문서 제목을 쓴다. 상대 이름으로 두면 아이콘이 그 사람이 된다.
   useEffect(() => {
     if (chat.peer) document.title = chat.peer.name;
@@ -104,6 +111,11 @@ export default function Shell({ token, onLogout, onUiLang }: Props) {
     setView('home');
     void refreshCounts();
   }, [refreshCounts]);
+
+  // 폰의 뒤로가기로 홈에 돌아오고, 열린 창을 닫는다. 앱이 그대로 꺼지지 않도록.
+  useBackClose(view !== 'home', backHome);
+  useBackClose(settingsOpen, () => setSettingsOpen(false));
+  useBackClose(glossaryOpen, () => setGlossaryOpen(false));
 
   return (
     <>
