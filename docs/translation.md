@@ -123,7 +123,7 @@ Gemini는 `responseJsonSchema` + `responseMimeType: 'application/json'`, Claude�
 
 | 환경변수 | 기본값 | 뜻 |
 | --- | --- | --- |
-| `GEMINI_MODEL` | `gemini-flash-latest` | 항상 최신 flash 를 따라간다. 버전을 고정하려면 `npm run models --workspace=server` 로 이름 확인 |
+| `GEMINI_MODEL` | `gemini-flash-lite-latest` | 무료 한도가 가장 넉넉한 쪽. 품질을 올리려면 `gemini-flash-latest` (한도는 줄어든다) |
 | `GEMINI_THINKING_BUDGET` | `0` | 0은 사고 끄기. 번역은 오래 생각해서 크게 나아지는 작업이 아니고, 끄면 빠르고 무료 할당량도 아낀다. `-1` 은 자동 |
 | `GEMINI_SAFETY_THRESHOLD` | `BLOCK_NONE` | 아래 참고 |
 
@@ -177,8 +177,17 @@ Gemini는 `responseJsonSchema` + `responseMimeType: 'application/json'`, Claude�
 (같은 문장·같은 언어는 저장해 두고 다시 부르지 않는다). 테스트하며 메시지를 연달아 보내면
 분당 한도에 쉽게 닿는다. 터미널의 `[usage] ... 누적 N회` 로 지금까지 몇 번 썼는지 볼 수 있다.
 
-한도가 계속 걸리면 `npm run models --workspace=server` 로 더 가벼운 모델(flash-lite 계열)이
-있는지 보고 `GEMINI_MODEL` 을 바꿔 보는 방법이 있다. 모델마다 한도가 따로 잡힌다.
+**모델을 바꾸면 한도도 바뀐다.** 대체로 `lite` < `flash` < `pro` 순으로 한도가 줄고 품질이
+오른다. 기본값을 `gemini-flash-lite-latest` 로 둔 것은 둘이 쓰는 앱에서 한도에 걸려 번역이
+멈추는 쪽이 번역이 조금 밋밋한 쪽보다 나쁘기 때문이다. 대화가 자리를 잡고 한도에 여유가
+생기면 `gemini-flash-latest` 로 올리면 된다.
+
+```bash
+npm run models --workspace=server
+```
+
+지금 쓰는 모델에 `→` 가 붙고, 한도가 넉넉한 쪽이 위에 온다. 정확한 한도 숫자는 API 가
+알려주지 않으므로 [AI Studio](https://aistudio.google.com) 에서 확인해야 한다.
 
 ## 비용과 속도
 
