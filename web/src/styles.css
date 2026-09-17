@@ -455,3 +455,102 @@ textarea {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---------- 번역 지시 ---------- */
+
+.chat__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.note {
+  padding: 10px 16px 0;
+  background: var(--surface);
+}
+
+.note__input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+}
+
+.note__hint {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.composer__note {
+  flex: 0 0 auto;
+  width: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.composer__note.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bubble__note {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- 용어집 ---------- */
+
+.glossary {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.glossary__empty {
+  padding: 16px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.glossary__edit {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.glossary__to {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.glossary__avoid {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.glossary__field {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 14px;
+}

@@ -1,5 +1,6 @@
 import type { ChatMessage, LangCode, UserProfile } from '@fran/shared';
 import { config } from '../config.js';
+import { listGlossary } from '../db.js';
 import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
 import { resultSchema, type TranslationResult } from './schema.js';
 import { ClaudeProvider } from './providers/claude.js';
@@ -132,7 +133,7 @@ export async function translateMessage({
 
   const startedAt = Date.now();
   const response = await completeWithRetry(provider, {
-    systemPrompt: buildSystemPrompt(participants, config.glossary),
+    systemPrompt: buildSystemPrompt(participants, listGlossary()),
     userPrompt: buildUserPrompt(message, context, nameOf, targetLangs),
   });
   recordUsage(provider, response.usage, Date.now() - startedAt);

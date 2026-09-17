@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChatMessage, ClientEvent, LangCode, ServerEvent, UserProfile } from '@fran/shared';
+import type {
+  ChatMessage,
+  ClientEvent,
+  GlossaryEntry,
+  LangCode,
+  ServerEvent,
+  UserProfile,
+} from '@fran/shared';
 import { isTokenValid, websocketUrl } from './api';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
@@ -12,6 +19,7 @@ export interface ChatState {
   peerOnline: boolean;
   peerTyping: boolean;
   error: string | null;
+  glossary: GlossaryEntry[];
 }
 
 const RECONNECT_BASE_MS = 1000;
@@ -48,6 +56,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     peerOnline: false,
     peerTyping: false,
     error: null,
+    glossary: [],
   });
 
   const applyEvent = useCallback((event: ServerEvent) => {
@@ -71,6 +80,8 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
           return previous.peer && event.userId === previous.peer.id
             ? { ...previous, peerTyping: event.isTyping }
             : previous;
+        case 'glossary':
+          return { ...previous, glossary: event.entries };
         case 'error':
           return { ...previous, error: event.message };
       }
@@ -157,13 +168,22 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   }, []);
 
   const sendMessage = useCallback(
-    (text: string, sourceLang?: LangCode) => {
-      emit({ type: 'send', clientId: newClientId(), text, sourceLang });
+    (text: string, translationNote?: string, sourceLang?: LangCode) => {
+      emit({ type: 'send', clientId: newClientId(), text, sourceLang, translationNote });
     },
     [emit],
   );
 
-  const retranslate = useCallback((messageId: string) => emit({ type: 'retranslate', messageId }), [emit]);
+  const retranslate = useCallback(
+    (messageId: string, translationNote?: string) =>
+      emit({ type: 'retranslate', messageId, translationNote }),
+    [emit],
+  );
+
+  const setGlossary = useCallback(
+    (entries: GlossaryEntry[]) => setState((previous) => ({ ...previous, glossary: entries })),
+    [],
+  );
   const setTyping = useCallback((isTyping: boolean) => emit({ type: 'typing', isTyping }), [emit]);
   const setProfile = useCallback(
     (profile: UserProfile) => setState((previous) => ({ ...previous, me: profile })),
@@ -171,5 +191,5 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   );
   const dismissError = useCallback(() => setState((previous) => ({ ...previous, error: null })), []);
 
-  return { ...state, sendMessage, retranslate, setTyping, setProfile, dismissError };
+  return { ...state, sendMessage, retranslate, setTyping, setProfile, setGlossary, dismissError };
 }

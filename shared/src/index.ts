@@ -56,24 +56,45 @@ export interface ChatMessage {
   translationStatus: TranslationStatus;
   /** 번역이 실패한 이유. 상대는 서버 로그를 볼 수 없으므로 화면에 띄운다. */
   translationError?: string;
+  /**
+   * 보낸 사람이 이 메시지에만 붙인 번역 지시. 예: "이번엔 amor 로 해줘"
+   * 받는 사람에게는 전달하지 않는다. 서버가 보낸 사람에게만 실어 보낸다.
+   */
+  translationNote?: string;
   /** 언어 코드 -> 번역. 원문 언어는 여기 포함되지 않는다. */
   translations: Partial<Record<LangCode, Translation>>;
 }
 
 /** 애칭·고유명사·둘만 아는 표현. 번역할 때 그대로 두거나 지정한 대로 옮긴다. */
 export interface GlossaryEntry {
+  id: string;
+  /** 원문에 등장하는 표현. 예: "애기" */
   term: string;
-  /** 비워두면 "번역하지 말고 그대로" 라는 뜻. */
+  /** 이렇게 옮겨 달라는 것. 비워두면 "번역하지 말고 그대로" 라는 뜻. */
   translations?: Partial<Record<LangCode, string>>;
+  /** 이렇게는 옮기지 말아 달라는 것. 예: ["amor", "cariño"] */
+  avoid?: string[];
   note?: string;
+  updatedAt: number;
 }
+
+/** 저장할 때 쓰는 형태. id 와 updatedAt 은 서버가 매긴다. */
+export type GlossaryDraft = Omit<GlossaryEntry, 'id' | 'updatedAt'>;
 
 /* ---------- WebSocket 프로토콜 ---------- */
 
 export type ClientEvent =
-  | { type: 'send'; clientId: string; text: string; sourceLang?: LangCode }
+  | {
+      type: 'send';
+      clientId: string;
+      text: string;
+      sourceLang?: LangCode;
+      /** 이 메시지에만 적용할 번역 지시. 상대에게는 보이지 않는다. */
+      translationNote?: string;
+    }
   | { type: 'typing'; isTyping: boolean }
-  | { type: 'retranslate'; messageId: string }
+  /** 지시를 바꿔서 다시 번역할 수 있다. 생략하면 기존 지시를 그대로 쓴다. */
+  | { type: 'retranslate'; messageId: string; translationNote?: string }
   | { type: 'read'; messageId: string };
 
 export type ServerEvent =
@@ -84,4 +105,6 @@ export type ServerEvent =
   | { type: 'message_updated'; message: ChatMessage }
   | { type: 'typing'; userId: string; isTyping: boolean }
   | { type: 'presence'; userId: string; online: boolean }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** 용어집이 바뀌었다. 양쪽 화면을 맞춘다. */
+  | { type: 'glossary'; entries: GlossaryEntry[] };

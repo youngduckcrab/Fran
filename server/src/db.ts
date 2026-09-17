@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import crypto from 'node:crypto';
 import {
   isLangCode,
   type ChatMessage,
+  type GlossaryDraft,
+  type GlossaryEntry,
   type LangCode,
   type Translation,
   type TranslationNote,
@@ -39,6 +42,15 @@ db.exec(`
     PRIMARY KEY (message_id, lang)
   );
 
+  CREATE TABLE IF NOT EXISTS glossary (
+    id           TEXT PRIMARY KEY,
+    term         TEXT NOT NULL,
+    translations TEXT NOT NULL DEFAULT '{}',
+    avoid        TEXT NOT NULL DEFAULT '[]',
+    note         TEXT,
+    updated_at   INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS user_settings (
     user_id       TEXT PRIMARY KEY,
     native_lang   TEXT NOT NULL,
@@ -52,6 +64,9 @@ db.exec(`
   if (!columns.some((column) => column.name === 'translation_error')) {
     db.exec(`ALTER TABLE messages ADD COLUMN translation_error TEXT`);
   }
+  if (!columns.some((column) => column.name === 'translation_note')) {
+    db.exec(`ALTER TABLE messages ADD COLUMN translation_note TEXT`);
+  }
 }
 
 interface MessageRow {
@@ -62,6 +77,7 @@ interface MessageRow {
   created_at: number;
   translation_status: string;
   translation_error: string | null;
+  translation_note: string | null;
 }
 
 interface TranslationRow {
@@ -75,9 +91,10 @@ interface TranslationRow {
 
 const statements = {
   insertMessage: db.prepare(
-    `INSERT INTO messages (id, sender_id, source_text, source_lang, created_at, translation_status)
-     VALUES (@id, @sender_id, @source_text, @source_lang, @created_at, @translation_status)`,
+    `INSERT INTO messages (id, sender_id, source_text, source_lang, created_at, translation_status, translation_note)
+     VALUES (@id, @sender_id, @source_text, @source_lang, @created_at, @translation_status, @translation_note)`,
   ),
+  updateNote: db.prepare(`UPDATE messages SET translation_note = ? WHERE id = ?`),
   selectMessage: db.prepare<[string], MessageRow>(`SELECT * FROM messages WHERE id = ?`),
   selectRecent: db.prepare<[number], MessageRow>(
     `SELECT * FROM messages ORDER BY created_at DESC, id DESC LIMIT ?`,
@@ -139,6 +156,7 @@ function hydrate(row: MessageRow): ChatMessage {
     createdAt: row.created_at,
     translationStatus: row.translation_status as TranslationStatus,
     ...(row.translation_error ? { translationError: row.translation_error } : {}),
+    ...(row.translation_note ? { translationNote: row.translation_note } : {}),
     translations,
   };
 }
@@ -149,6 +167,7 @@ export function insertMessage(message: {
   sourceText: string;
   sourceLang: LangCode;
   createdAt: number;
+  translationNote?: string;
 }): ChatMessage {
   statements.insertMessage.run({
     id: message.id,
@@ -157,8 +176,13 @@ export function insertMessage(message: {
     source_lang: message.sourceLang,
     created_at: message.createdAt,
     translation_status: 'pending',
+    translation_note: message.translationNote ?? null,
   });
   return { ...message, translationStatus: 'pending', translations: {} };
+}
+
+export function setTranslationNote(messageId: string, note: string | undefined): void {
+  statements.updateNote.run(note ?? null, messageId);
 }
 
 export function getMessage(id: string): ChatMessage | null {
@@ -215,4 +239,90 @@ export function saveSettings(userId: string, nativeLang: LangCode, displayLangs:
     native_lang: nativeLang,
     display_langs: displayLangs.join(','),
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* 용어집                                                              */
+/* ------------------------------------------------------------------ */
+
+interface GlossaryRow {
+  id: string;
+  term: string;
+  translations: string;
+  avoid: string;
+  note: string | null;
+  updated_at: number;
+}
+
+const glossaryStatements = {
+  all: db.prepare<[], GlossaryRow>(`SELECT * FROM glossary ORDER BY term COLLATE NOCASE`),
+  upsert: db.prepare(
+    `INSERT INTO glossary (id, term, translations, avoid, note, updated_at)
+     VALUES (@id, @term, @translations, @avoid, @note, @updated_at)
+     ON CONFLICT (id) DO UPDATE SET
+       term = excluded.term, translations = excluded.translations,
+       avoid = excluded.avoid, note = excluded.note, updated_at = excluded.updated_at`,
+  ),
+  remove: db.prepare(`DELETE FROM glossary WHERE id = ?`),
+  count: db.prepare<[], { n: number }>(`SELECT COUNT(*) AS n FROM glossary`),
+};
+
+function parseJson<T>(raw: string, fallback: T): T {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return (parsed ?? fallback) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function hydrateGlossary(row: GlossaryRow): GlossaryEntry {
+  const translations = parseJson<Record<string, string>>(row.translations, {});
+  const filtered: Partial<Record<LangCode, string>> = {};
+  for (const [lang, value] of Object.entries(translations)) {
+    if (isLangCode(lang) && value) filtered[lang] = value;
+  }
+  return {
+    id: row.id,
+    term: row.term,
+    ...(Object.keys(filtered).length > 0 ? { translations: filtered } : {}),
+    ...(row.note ? { note: row.note } : {}),
+    avoid: parseJson<string[]>(row.avoid, []).filter((item) => typeof item === 'string' && item.trim()),
+    updatedAt: row.updated_at,
+  };
+}
+
+export function listGlossary(): GlossaryEntry[] {
+  return glossaryStatements.all.all().map(hydrateGlossary);
+}
+
+export function saveGlossaryEntry(draft: GlossaryDraft, id?: string): GlossaryEntry {
+  const entry: GlossaryEntry = {
+    id: id ?? crypto.randomUUID(),
+    term: draft.term.trim(),
+    ...(draft.translations ? { translations: draft.translations } : {}),
+    ...(draft.note?.trim() ? { note: draft.note.trim() } : {}),
+    avoid: (draft.avoid ?? []).map((item) => item.trim()).filter(Boolean),
+    updatedAt: Date.now(),
+  };
+
+  glossaryStatements.upsert.run({
+    id: entry.id,
+    term: entry.term,
+    translations: JSON.stringify(entry.translations ?? {}),
+    avoid: JSON.stringify(entry.avoid ?? []),
+    note: entry.note ?? null,
+    updated_at: entry.updatedAt,
+  });
+  return entry;
+}
+
+export function deleteGlossaryEntry(id: string): void {
+  glossaryStatements.remove.run(id);
+}
+
+/** 처음 켰을 때만 glossary.json 의 내용을 옮겨 담는다. 이후로는 DB 가 원본이다. */
+export function seedGlossary(entries: Array<Omit<GlossaryDraft, 'avoid'> & { avoid?: string[] }>): void {
+  if ((glossaryStatements.count.get()?.n ?? 0) > 0) return;
+  for (const entry of entries) saveGlossaryEntry(entry);
 }

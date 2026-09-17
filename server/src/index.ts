@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
@@ -18,7 +18,12 @@ import { checkPasscode, issueToken, verifyToken } from './auth.js';
 import { config, findUserById, peerOf } from './config.js';
 import {
   clearTranslations,
+  deleteGlossaryEntry,
   getDisplayLangs,
+  listGlossary,
+  saveGlossaryEntry,
+  seedGlossary,
+  setTranslationNote,
   getMessage,
   getNativeLang,
   getRecentMessages,
@@ -30,6 +35,10 @@ import {
 import { TranslationError, getProvider, translateMessage } from './translation/index.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
+const MAX_NOTE_LENGTH = 500;
+
+// 파일로 관리하던 용어집을 DB 로 옮긴다. 처음 켤 때 한 번만 옮겨 담는다.
+seedGlossary(config.glossary);
 
 /** DB 에 저장된 설정을 얹은 현재 프로필. */
 function profileOf(userId: string): UserProfile {
@@ -60,6 +69,33 @@ function send(socket: WebSocket, event: ServerEvent): void {
 function broadcast(event: ServerEvent, skip?: WebSocket): void {
   for (const socket of sockets.keys()) {
     if (socket !== skip) send(socket, event);
+  }
+}
+
+/**
+ * 번역 지시는 보낸 사람만 본다. 상대에게 나가는 payload 에서는 지워 버린다.
+ * 화면에서 숨기는 것으로는 부족하다 — 아예 전송하지 않아야 한다.
+ */
+function messageFor(viewerId: string, message: ChatMessage): ChatMessage {
+  if (message.senderId === viewerId || message.translationNote === undefined) return message;
+  const { translationNote: _hidden, ...rest } = message;
+  return rest;
+}
+
+/** 메시지 이벤트는 받는 사람마다 내용이 다르므로 소켓별로 따로 만든다. */
+function broadcastMessage(
+  type: 'message' | 'message_updated',
+  message: ChatMessage,
+  clientIdFor?: { socket: WebSocket; clientId: string },
+): void {
+  for (const [socket, viewerId] of sockets.entries()) {
+    const payload = messageFor(viewerId, message);
+    if (type === 'message') {
+      const clientId = clientIdFor?.socket === socket ? clientIdFor.clientId : undefined;
+      send(socket, { type: 'message', message: payload, ...(clientId ? { clientId } : {}) });
+    } else {
+      send(socket, { type: 'message_updated', message: payload });
+    }
   }
 }
 
@@ -138,7 +174,7 @@ async function runTranslation(messageId: string): Promise<void> {
 
 function publishUpdate(messageId: string): void {
   const updated = getMessage(messageId);
-  if (updated) broadcast({ type: 'message_updated', message: updated });
+  if (updated) broadcastMessage('message_updated', updated);
 }
 
 /* ------------------------------------------------------------------ */
@@ -202,6 +238,61 @@ app.put('/api/settings', async (c) => {
   return c.json({ profile });
 });
 
+/* ---------------------------- 용어집 ---------------------------- */
+
+function parseDraft(body: unknown): { term: string; translations: Partial<Record<LangCode, string>>; avoid: string[]; note?: string } | null {
+  if (typeof body !== 'object' || body === null) return null;
+  const input = body as Record<string, unknown>;
+  const term = typeof input.term === 'string' ? input.term.trim() : '';
+  if (!term) return null;
+
+  const translations: Partial<Record<LangCode, string>> = {};
+  if (typeof input.translations === 'object' && input.translations !== null) {
+    for (const [lang, value] of Object.entries(input.translations)) {
+      if (isLangCode(lang) && typeof value === 'string' && value.trim()) translations[lang] = value.trim();
+    }
+  }
+
+  const avoid = Array.isArray(input.avoid)
+    ? input.avoid.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+
+  return {
+    term,
+    translations,
+    avoid,
+    ...(typeof input.note === 'string' && input.note.trim() ? { note: input.note.trim() } : {}),
+  };
+}
+
+app.get('/api/glossary', (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  return c.json({ entries: listGlossary() });
+});
+
+async function upsertGlossary(c: Context, id?: string) {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+
+  const draft = parseDraft(await c.req.json().catch(() => null));
+  if (!draft) return c.json({ error: '표현은 비워둘 수 없습니다.' }, 400);
+
+  const entry = saveGlossaryEntry(draft, id);
+  broadcast({ type: 'glossary', entries: listGlossary() });
+  return c.json({ entry });
+}
+
+// 생성과 수정을 나눈다. 하나의 선택적 파라미터 라우트로 두면 끝 슬래시가 붙은
+// 요청(/api/glossary/)이 매칭되지 않아 404 가 난다.
+app.post('/api/glossary', (c) => upsertGlossary(c));
+app.put('/api/glossary/:id', (c) => upsertGlossary(c, c.req.param('id')));
+
+app.delete('/api/glossary/:id', (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  deleteGlossaryEntry(c.req.param('id'));
+  broadcast({ type: 'glossary', entries: listGlossary() });
+  return c.json({ ok: true });
+});
+
 // 빌드된 웹을 같은 프로세스에서 서빙한다(배포를 단순하게 유지).
 if (fs.existsSync(config.webDist)) {
   app.use('/*', serveStatic({ root: config.webDist }));
@@ -221,6 +312,10 @@ function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent
         send(socket, { type: 'error', message: `메시지가 너무 깁니다 (최대 ${MAX_MESSAGE_LENGTH}자).` });
         return;
       }
+      if ((event.translationNote?.length ?? 0) > MAX_NOTE_LENGTH) {
+        send(socket, { type: 'error', message: `번역 지시가 너무 깁니다 (최대 ${MAX_NOTE_LENGTH}자).` });
+        return;
+      }
 
       const profile = profileOf(userId);
       const message = insertMessage({
@@ -229,11 +324,11 @@ function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent
         sourceText: text,
         sourceLang: isLangCode(event.sourceLang) ? event.sourceLang : profile.nativeLang,
         createdAt: Date.now(),
+        ...(event.translationNote?.trim() ? { translationNote: event.translationNote.trim() } : {}),
       });
 
       // 번역을 기다리지 않고 원문을 먼저 띄운다. 번역은 곧 update 로 따라붙는다.
-      send(socket, { type: 'message', message, clientId: event.clientId });
-      broadcast({ type: 'message', message }, socket);
+      broadcastMessage('message', message, { socket, clientId: event.clientId });
       enqueueTranslation(message.id);
       return;
     }
@@ -241,6 +336,10 @@ function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent
     case 'retranslate': {
       const message = getMessage(event.messageId);
       if (!message) return;
+      // 지시를 바꿔 다시 번역할 수 있다. 자기가 보낸 메시지에 대해서만.
+      if (event.translationNote !== undefined && message.senderId === userId) {
+        setTranslationNote(message.id, event.translationNote.trim() || undefined);
+      }
       clearTranslations(message.id);
       setTranslationStatus(message.id, 'pending');
       publishUpdate(message.id);
@@ -308,9 +407,10 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
 
   const me = profileOf(userId);
   const peer = profileOf(peerOf(userId).profile.id);
-  const history: ChatMessage[] = getRecentMessages(50);
+  const history = getRecentMessages(50).map((message) => messageFor(userId, message));
 
   send(socket, { type: 'hello', me, peer, messages: history });
+  send(socket, { type: 'glossary', entries: listGlossary() });
   send(socket, { type: 'presence', userId: peer.id, online: isOnline(peer.id) });
   broadcast({ type: 'presence', userId, online: true }, socket);
 

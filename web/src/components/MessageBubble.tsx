@@ -9,7 +9,7 @@ interface Props {
   /** 곁들여 보고 싶은 학습 언어들. */
   extraLangs: LangCode[];
   alwaysShowSource: boolean;
-  onRetranslate: (messageId: string) => void;
+  onRetranslate: (messageId: string, translationNote?: string) => void;
 }
 
 function formatTime(timestamp: number): string {
@@ -74,6 +74,12 @@ export default function MessageBubble({
           </ul>
         )}
       </div>
+
+      {mine && message.translationNote && (
+        <p className="bubble__note" title="나에게만 보입니다">
+          ✎ {message.translationNote}
+        </p>
+      )}
 
       {message.translationStatus === 'failed' && (
         <p className="bubble__failure">

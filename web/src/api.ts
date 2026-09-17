@@ -1,4 +1,4 @@
-import type { LangCode, UserProfile } from '@fran/shared';
+import type { GlossaryDraft, GlossaryEntry, LangCode, UserProfile } from '@fran/shared';
 
 const TOKEN_KEY = 'fran.token';
 
@@ -53,6 +53,35 @@ export async function saveSettings(
   if (!response.ok) await parseError(response);
   const body = (await response.json()) as { profile: UserProfile };
   return body.profile;
+}
+
+function authHeaders(): Record<string, string> {
+  return {
+    'content-type': 'application/json',
+    authorization: `Bearer ${getToken() ?? ''}`,
+  };
+}
+
+export async function fetchGlossary(): Promise<GlossaryEntry[]> {
+  const response = await fetch('/api/glossary', { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { entries: GlossaryEntry[] }).entries;
+}
+
+/** id 를 주면 수정, 주지 않으면 새로 만든다. */
+export async function saveGlossaryEntry(draft: GlossaryDraft, id?: string): Promise<GlossaryEntry> {
+  const response = await fetch(id ? `/api/glossary/${id}` : '/api/glossary', {
+    method: id ? 'PUT' : 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(draft),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { entry: GlossaryEntry }).entry;
+}
+
+export async function deleteGlossaryEntry(id: string): Promise<void> {
+  const response = await fetch(`/api/glossary/${id}`, { method: 'DELETE', headers: authHeaders() });
+  if (!response.ok) await parseError(response);
 }
 
 /**

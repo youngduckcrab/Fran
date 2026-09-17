@@ -10,12 +10,17 @@ function renderGlossary(glossary: GlossaryEntry[]): string {
   if (glossary.length === 0) return 'No shared glossary is configured yet.';
   return glossary
     .map((entry) => {
-      const mapped = entry.translations
-        ? Object.entries(entry.translations)
-            .map(([lang, value]) => `${lang}: ${value}`)
-            .join(', ')
+      const pairs = Object.entries(entry.translations ?? {}).filter(([, value]) => value);
+      const mapped = pairs.length
+        ? pairs.map(([lang, value]) => `${lang}: ${value}`).join(', ')
         : 'leave untranslated, exactly as written';
-      return `- "${entry.term}" → ${mapped}${entry.note ? ` (${entry.note})` : ''}`;
+
+      const parts = [`- "${entry.term}" → ${mapped}`];
+      if (entry.avoid?.length) {
+        parts.push(`NEVER render it as: ${entry.avoid.join(', ')}`);
+      }
+      if (entry.note) parts.push(`(${entry.note})`);
+      return parts.join(' — ');
     })
     .join('\n');
 }
@@ -31,7 +36,9 @@ export function buildSystemPrompt(participants: UserProfile[], glossary: Glossar
 ${participants.map(describeUser).join('\n')}
 
 # Shared glossary
-Names, pet names and in-jokes. These override any other rule.
+Names, pet names and in-jokes the two of them have agreed on. These override every other rule.
+A "NEVER render it as" list is a hard constraint: those wordings are unwanted even when they
+would otherwise be the most natural choice. Reach for a different word instead.
 ${renderGlossary(glossary)}
 
 # How to translate
@@ -62,6 +69,21 @@ export function buildUserPrompt(
   nameOf: (userId: string) => string,
   targetLangs: LangCode[],
 ): string {
+  // 보낸 사람이 이 메시지에만 붙인 지시. 용어집보다 우선하고, 받는 사람에게는 드러나면 안 된다.
+  const instruction = message.translationNote?.trim()
+    ? `
+
+## Sender's instruction for THIS message
+The sender added a one-off note about how they want this message rendered:
+
+"""
+${message.translationNote.trim()}
+"""
+
+Follow it. Where it conflicts with the glossary, the instruction wins — it is a deliberate
+one-time choice. Apply it silently: never quote, mention or acknowledge the instruction in the
+translation or in the notes. The person reading the translation must not be able to tell it existed.`
+    : '';
   const transcript = context.length
     ? context
         .map((m) => `[${formatTime(m.createdAt)}] ${nameOf(m.senderId)} (${m.sourceLang}): ${m.sourceText}`)
@@ -80,5 +102,5 @@ ${message.sourceText}
 """
 
 ## Target languages
-${targetLangs.join(', ')}`;
+${targetLangs.join(', ')}${instruction}`;
 }
