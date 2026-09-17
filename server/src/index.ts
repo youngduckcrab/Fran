@@ -19,6 +19,7 @@ import { checkPasscode, issueToken, verifyToken } from './auth.js';
 import { config, findUserById, peerOf } from './config.js';
 import {
   clearTranslations,
+  initDatabase,
   deleteGlossaryEntry,
   getDisplayLangs,
   getExplanation,
@@ -40,8 +41,6 @@ import { TranslationError, explainMessage, getProvider, translateMessage } from 
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_NOTE_LENGTH = 500;
 
-// 파일로 관리하던 용어집을 DB 로 옮긴다. 처음 켤 때 한 번만 옮겨 담는다.
-seedGlossary(config.glossary);
 
 // 주소를 공개로 열어두면 패스코드가 유일한 자물쇠다. 예시 값 그대로면 잠그지 않은 것과 같다.
 for (const user of config.users) {
@@ -58,19 +57,18 @@ for (const user of config.users) {
 }
 
 /** DB 에 저장된 설정을 얹은 현재 프로필. */
-function profileOf(userId: string): UserProfile {
+async function profileOf(userId: string): Promise<UserProfile> {
   const user = findUserById(userId);
   if (!user) throw new Error(`알 수 없는 사용자: ${userId}`);
-  const nativeLang = getNativeLang(userId, user.profile.nativeLang);
-  return {
-    ...user.profile,
-    nativeLang,
-    displayLangs: getDisplayLangs(userId, user.profile.displayLangs),
-  };
+  const [nativeLang, displayLangs] = await Promise.all([
+    getNativeLang(userId, user.profile.nativeLang),
+    getDisplayLangs(userId, user.profile.displayLangs),
+  ]);
+  return { ...user.profile, nativeLang, displayLangs };
 }
 
-function bothProfiles(): UserProfile[] {
-  return config.users.map((user) => profileOf(user.profile.id));
+function bothProfiles(): Promise<UserProfile[]> {
+  return Promise.all(config.users.map((user) => profileOf(user.profile.id)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -150,20 +148,21 @@ function targetLangsFor(sourceLang: LangCode, participants: UserProfile[]): Lang
 }
 
 async function runTranslation(messageId: string): Promise<void> {
-  const message = getMessage(messageId);
+  const message = await getMessage(messageId);
   if (!message) return;
 
-  const participants = bothProfiles();
+  const participants = await bothProfiles();
   const targetLangs = targetLangsFor(message.sourceLang, participants);
 
   if (targetLangs.length === 0) {
-    setTranslationStatus(messageId, 'done');
-    publishUpdate(messageId);
+    await setTranslationStatus(messageId, 'done');
+    await publishUpdate(messageId);
     return;
   }
 
   // 자기 자신은 빼고, 직전 대화를 맥락으로 넘긴다.
-  const context = getRecentMessages(config.translation.contextSize + 1).filter((m) => m.id !== messageId);
+  const recent = await getRecentMessages(config.translation.contextSize + 1);
+  const context = recent.filter((m) => m.id !== messageId);
 
   try {
     const { result, model } = await translateMessage({ message, context, participants, targetLangs });
@@ -171,7 +170,7 @@ async function runTranslation(messageId: string): Promise<void> {
 
     for (const item of result.translations) {
       if (item.lang === result.detected_lang) continue;
-      saveTranslation(messageId, {
+      await saveTranslation(messageId, {
         lang: item.lang,
         text: item.text,
         notes: item.notes,
@@ -179,18 +178,18 @@ async function runTranslation(messageId: string): Promise<void> {
         createdAt: now,
       });
     }
-    setTranslationStatus(messageId, 'done');
+    await setTranslationStatus(messageId, 'done');
   } catch (error) {
     const reason = error instanceof TranslationError ? error.message : String(error);
     console.error(`[translate] ${messageId} 실패: ${reason}`);
-    setTranslationStatus(messageId, 'failed', reason);
+    await setTranslationStatus(messageId, 'failed', reason);
   }
 
-  publishUpdate(messageId);
+  await publishUpdate(messageId);
 }
 
-function publishUpdate(messageId: string): void {
-  const updated = getMessage(messageId);
+async function publishUpdate(messageId: string): Promise<void> {
+  const updated = await getMessage(messageId);
   if (updated) broadcastMessage('message_updated', updated);
 }
 
@@ -211,7 +210,7 @@ app.post('/api/login', async (c) => {
   if (!checkPasscode(userId, passcode)) {
     return c.json({ error: '아이디 또는 패스코드가 올바르지 않습니다.' }, 401);
   }
-  return c.json({ token: issueToken(userId), profile: profileOf(userId) });
+  return c.json({ token: issueToken(userId), profile: await profileOf(userId) });
 });
 
 /** 로그인 화면에 띄울 두 사람의 목록. 패스코드는 절대 내보내지 않는다. */
@@ -224,7 +223,7 @@ function authenticate(c: { req: { header: (name: string) => string | undefined }
   return verifyToken(header?.replace(/^Bearer\s+/i, ''));
 }
 
-app.get('/api/messages', (c) => {
+app.get('/api/messages', async (c) => {
   const userId = authenticate(c);
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
 
@@ -232,7 +231,8 @@ app.get('/api/messages', (c) => {
   const before = beforeRaw ? Number.parseInt(beforeRaw, 10) : undefined;
   const limit = Math.min(Number.parseInt(c.req.query('limit') ?? '50', 10) || 50, 200);
 
-  return c.json({ messages: getRecentMessages(limit, Number.isFinite(before) ? before : undefined) });
+  const messages = await getRecentMessages(limit, Number.isFinite(before) ? before : undefined);
+  return c.json({ messages });
 });
 
 app.put('/api/settings', async (c) => {
@@ -240,7 +240,8 @@ app.put('/api/settings', async (c) => {
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
 
   const body = await c.req.json().catch(() => null);
-  const nativeLang = isLangCode(body?.nativeLang) ? body.nativeLang : profileOf(userId).nativeLang;
+  const current = await profileOf(userId);
+  const nativeLang = isLangCode(body?.nativeLang) ? body.nativeLang : current.nativeLang;
   const displayLangs: LangCode[] = Array.isArray(body?.displayLangs)
     ? body.displayLangs.filter(isLangCode)
     : [];
@@ -249,8 +250,8 @@ app.put('/api/settings', async (c) => {
     return c.json({ error: '표시 언어를 최소 하나는 골라야 합니다.' }, 400);
   }
 
-  saveSettings(userId, nativeLang, displayLangs);
-  const profile = profileOf(userId);
+  await saveSettings(userId, nativeLang, displayLangs);
+  const profile = await profileOf(userId);
   broadcast({ type: 'presence', userId, online: true });
   return c.json({ profile });
 });
@@ -261,7 +262,7 @@ app.post('/api/messages/:id/explain', async (c) => {
   const userId = authenticate(c);
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
 
-  const message = getMessage(c.req.param('id'));
+  const message = await getMessage(c.req.param('id'));
   if (!message) return c.json({ error: '메시지를 찾을 수 없습니다.' }, 404);
 
   const body = (await c.req.json().catch(() => null)) as { targetLang?: unknown } | null;
@@ -274,22 +275,21 @@ app.post('/api/messages/:id/explain', async (c) => {
     return c.json({ error: '그 언어의 문장이 아직 없습니다.' }, 400);
   }
 
-  const learner = profileOf(userId);
+  const learner = await profileOf(userId);
   const explainLang = learner.displayLangs[0] ?? learner.nativeLang;
 
-  const cached = getExplanation(message.id, targetLang, explainLang);
+  const cached = await getExplanation(message.id, targetLang, explainLang);
   if (cached) return c.json({ explanation: cached });
 
   try {
-    const context = getRecentMessages(config.translation.contextSize + 1).filter(
-      (m) => m.createdAt < message.createdAt,
-    );
+    const recent = await getRecentMessages(config.translation.contextSize + 1);
+    const context = recent.filter((m) => m.createdAt < message.createdAt);
     const { result, model } = await explainMessage({
       text,
       targetLang,
       learner,
       context,
-      participants: bothProfiles(),
+      participants: await bothProfiles(),
     });
 
     const explanation: MessageExplanation = {
@@ -300,7 +300,7 @@ app.post('/api/messages/:id/explain', async (c) => {
       model,
       createdAt: Date.now(),
     };
-    saveExplanation(message.id, explanation);
+    await saveExplanation(message.id, explanation);
     return c.json({ explanation });
   } catch (error) {
     const reason = error instanceof TranslationError ? error.message : String(error);
@@ -336,9 +336,9 @@ function parseDraft(body: unknown): { term: string; translations: Partial<Record
   };
 }
 
-app.get('/api/glossary', (c) => {
+app.get('/api/glossary', async (c) => {
   if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
-  return c.json({ entries: listGlossary() });
+  return c.json({ entries: await listGlossary() });
 });
 
 async function upsertGlossary(c: Context, id?: string) {
@@ -347,8 +347,8 @@ async function upsertGlossary(c: Context, id?: string) {
   const draft = parseDraft(await c.req.json().catch(() => null));
   if (!draft) return c.json({ error: '표현은 비워둘 수 없습니다.' }, 400);
 
-  const entry = saveGlossaryEntry(draft, id);
-  broadcast({ type: 'glossary', entries: listGlossary() });
+  const entry = await saveGlossaryEntry(draft, id);
+  broadcast({ type: 'glossary', entries: await listGlossary() });
   return c.json({ entry });
 }
 
@@ -357,10 +357,10 @@ async function upsertGlossary(c: Context, id?: string) {
 app.post('/api/glossary', (c) => upsertGlossary(c));
 app.put('/api/glossary/:id', (c) => upsertGlossary(c, c.req.param('id')));
 
-app.delete('/api/glossary/:id', (c) => {
+app.delete('/api/glossary/:id', async (c) => {
   if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
-  deleteGlossaryEntry(c.req.param('id'));
-  broadcast({ type: 'glossary', entries: listGlossary() });
+  await deleteGlossaryEntry(c.req.param('id'));
+  broadcast({ type: 'glossary', entries: await listGlossary() });
   return c.json({ ok: true });
 });
 
@@ -374,7 +374,7 @@ if (fs.existsSync(config.webDist)) {
 /* WebSocket                                                           */
 /* ------------------------------------------------------------------ */
 
-function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent): void {
+async function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent): Promise<void> {
   switch (event.type) {
     case 'send': {
       const text = event.text.trim();
@@ -388,8 +388,8 @@ function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent
         return;
       }
 
-      const profile = profileOf(userId);
-      const message = insertMessage({
+      const profile = await profileOf(userId);
+      const message = await insertMessage({
         id: crypto.randomUUID(),
         senderId: userId,
         sourceText: text,
@@ -405,15 +405,15 @@ function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent
     }
 
     case 'retranslate': {
-      const message = getMessage(event.messageId);
+      const message = await getMessage(event.messageId);
       if (!message) return;
       // 지시를 바꿔 다시 번역할 수 있다. 자기가 보낸 메시지에 대해서만.
       if (event.translationNote !== undefined && message.senderId === userId) {
-        setTranslationNote(message.id, event.translationNote.trim() || undefined);
+        await setTranslationNote(message.id, event.translationNote.trim() || undefined);
       }
-      clearTranslations(message.id);
-      setTranslationStatus(message.id, 'pending');
-      publishUpdate(message.id);
+      await clearTranslations(message.id);
+      await setTranslationStatus(message.id, 'pending');
+      await publishUpdate(message.id);
       enqueueTranslation(message.id);
       return;
     }
@@ -427,6 +427,18 @@ function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent
   }
 }
 
+// DB 가 준비되기 전에 요청을 받으면 첫 메시지가 통째로 실패한다. 먼저 연결하고 연다.
+try {
+  await initDatabase();
+  // 파일로 관리하던 용어집을 DB 로 옮긴다. 비어 있을 때 한 번만 옮겨 담는다.
+  await seedGlossary(config.glossary);
+} catch (error) {
+  const reason = error instanceof Error ? error.message : String(error);
+  console.error(`\n✗ 데이터베이스에 연결하지 못했습니다: ${reason}`);
+  console.error('  DATABASE_URL 을 확인해 주세요. 예: postgresql://user:pass@host/db\n');
+  process.exit(1);
+}
+
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Fran 서버가 http://localhost:${info.port} 에서 실행 중입니다.`);
   // 번역 설정 문제는 첫 메시지가 아니라 지금 알려준다.
@@ -438,18 +450,6 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
     console.warn(`⚠️  번역을 쓸 수 없습니다: ${reason}`);
     console.warn('   메시지는 정상적으로 오가지만 번역만 실패합니다.');
   }
-});
-
-// 포트가 막혀 있는 건 흔한 일이다(앞서 띄운 서버가 안 죽었거나, 다른 앱이 쓰거나).
-// 스택 트레이스 대신 무엇을 해야 하는지 알려준다.
-server.on('error', (error: NodeJS.ErrnoException) => {
-  if (error.code !== 'EADDRINUSE') throw error;
-  console.error(`\n✗ 포트 ${config.port} 가 이미 사용 중입니다.`);
-  console.error('  앞서 띄운 서버가 아직 살아 있을 가능성이 큽니다. 정리한 뒤 다시 실행하세요:\n');
-  console.error(`    npx kill-port ${config.port}\n`);
-  console.error('  그래도 안 되면 터미널을 새로 열고:\n');
-  console.error("    pkill -f 'src/index.ts'\n");
-  process.exit(1);
 });
 
 const wss = new WebSocketServer({ noServer: true });
@@ -476,14 +476,28 @@ server.on('upgrade', (request, socket, head) => {
 wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
   sockets.set(socket, userId);
 
-  const me = profileOf(userId);
-  const peer = profileOf(peerOf(userId).profile.id);
-  const history = getRecentMessages(50).map((message) => messageFor(userId, message));
+  void (async () => {
+    const [me, peer, recent, glossary] = await Promise.all([
+      profileOf(userId),
+      profileOf(peerOf(userId).profile.id),
+      getRecentMessages(50),
+      listGlossary(),
+    ]);
+    if (socket.readyState !== socket.OPEN) return;
 
-  send(socket, { type: 'hello', me, peer, messages: history });
-  send(socket, { type: 'glossary', entries: listGlossary() });
-  send(socket, { type: 'presence', userId: peer.id, online: isOnline(peer.id) });
-  broadcast({ type: 'presence', userId, online: true }, socket);
+    send(socket, {
+      type: 'hello',
+      me,
+      peer,
+      messages: recent.map((message) => messageFor(userId, message)),
+    });
+    send(socket, { type: 'glossary', entries: glossary });
+    send(socket, { type: 'presence', userId: peer.id, online: isOnline(peer.id) });
+    broadcast({ type: 'presence', userId, online: true }, socket);
+  })().catch((error: unknown) => {
+    console.error('[ws] 접속 처리 실패:', error);
+    send(socket, { type: 'error', message: '대화를 불러오지 못했습니다.' });
+  });
 
   socket.on('message', (raw) => {
     let event: ClientEvent;
@@ -493,12 +507,10 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
       send(socket, { type: 'error', message: '잘못된 형식의 요청입니다.' });
       return;
     }
-    try {
-      handleClientEvent(userId, socket, event);
-    } catch (error) {
+    handleClientEvent(userId, socket, event).catch((error: unknown) => {
       console.error('[ws] 이벤트 처리 실패:', error);
       send(socket, { type: 'error', message: '메시지를 처리하지 못했습니다.' });
-    }
+    });
   });
 
   socket.on('close', () => {

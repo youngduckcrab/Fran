@@ -149,7 +149,7 @@ export async function translateMessage({
 
   const startedAt = Date.now();
   const response = await completeWithRetry(provider, {
-    systemPrompt: buildSystemPrompt(participants, listGlossary()),
+    systemPrompt: buildSystemPrompt(participants, await listGlossary()),
     userPrompt: buildUserPrompt(message, context, nameOf, targetLangs),
     schema: OUTPUT_SCHEMA,
   });

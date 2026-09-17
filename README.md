@@ -104,10 +104,20 @@ https 라서 PWA(홈 화면에 추가, 오프라인 캐시)도 제대로 동작�
 
 끄면 사라지는 임시 환경이고 무료 사용 시간에 한도가 있으니, 계속 쓸 거라면 아래 배포로.
 
-**2. 배포 — 계속 쓸 때**
+**2. 배포 — 계속 쓸 때 (권장)**
 
-`Dockerfile` 이 들어 있어서 컨테이너를 돌릴 수 있는 곳이면 어디든 올라간다.
-Docker 를 쓰지 않는 호스트라면 이 두 줄만 설정하면 된다.
+한 번 올려두면 터미널도 Codespaces 도 다시 볼 일이 없다. 주소 하나만 남고, 두 사람 다
+그냥 접속해서 쓰면 된다. 코드를 고칠 일이 생기면 저장소에 푸시하는 것만으로 다시 배포된다.
+
+준비물은 두 가지다.
+
+**① 무료 Postgres** — [Neon](https://neon.tech) 이나 [Supabase](https://supabase.com) 에서
+프로젝트를 하나 만들면 연결 문자열(`postgresql://...`)을 준다. 대화가 여기 저장되므로
+서버가 재시작되거나 다시 배포돼도 기록이 남는다.
+
+**② 호스팅** — 이 저장소를 GitHub 에서 바로 배포할 수 있는 곳이면 어디든 된다
+(Render, Railway, Koyeb 등). `Dockerfile` 이 있으므로 Docker 배포도 되고, 아니면 이 두 줄만
+설정하면 된다.
 
 | 설정 | 값 |
 | --- | --- |
@@ -115,12 +125,20 @@ Docker 를 쓰지 않는 호스트라면 이 두 줄만 설정하면 된다.
 | Start command | `npm start` |
 | Health check | `/healthz` |
 
-환경변수는 `.env.example` 의 항목을 호스트의 환경변수 설정에 그대로 넣는다.
-`PORT` 는 호스트가 지정해 주면 그대로 따른다.
+**환경변수**는 `.env.example` 의 항목을 호스팅 대시보드에 그대로 넣는다. 최소한 이 넷:
 
-> **SQLite 파일은 영구 디스크에 두어야 한다.** 볼륨을 붙이고
-> `DATABASE_PATH=/data/fran.sqlite` 로 지정할 것. 이걸 빠뜨리면 재배포할 때마다
-> 대화 기록이 사라진다. Dockerfile 은 `/data` 를 볼륨으로 잡아두었다.
+```
+DATABASE_URL     ①에서 받은 연결 문자열
+GEMINI_API_KEY   aistudio.google.com/apikey
+AUTH_SECRET      긴 랜덤 문자열
+USER_A_PASSCODE / USER_B_PASSCODE   두 사람의 패스코드 (꼭 바꿀 것)
+```
+
+`PORT` 는 호스팅이 알아서 넣어 준다. 디스크나 볼륨은 필요 없다.
+
+> 고를 때 확인할 것: **WebSocket 지원**(실시간 메시지에 필요)과 **무료 등급의 휴면 정책**.
+> 무료 등급은 한동안 안 쓰면 잠들었다가 첫 접속이 느린 경우가 많다. 대화가 사라지지는
+> 않지만 첫 메시지가 늦게 도착한다.
 
 ### 상대와 함께 테스트하기 (다른 나라)
 
@@ -200,7 +218,7 @@ HTTPS 뒤에 두면 폰에서 브라우저 메뉴의 "홈 화면에 추가"로 �
 
 ```
 shared/   두 쪽이 공유하는 타입과 WebSocket 프로토콜
-server/   Hono + ws + SQLite + 번역 파이프라인 (Gemini / Claude)
+server/   Hono + ws + Postgres + 번역 파이프라인 (Gemini / Claude)
 web/      React + Vite PWA
 ```
 

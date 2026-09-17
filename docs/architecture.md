@@ -55,6 +55,10 @@
 
 ## 데이터 모델
 
+대화는 Postgres 에 저장한다. 파일 기반 DB 를 쓰면 배포할 때마다 디스크를 붙여야 하고,
+무료 호스팅은 대개 디스크를 주지 않아 재배포마다 대화가 사라진다. 무료 클라우드 Postgres 를
+쓰면 호스팅은 아무 데나 골라도 기록이 남는다.
+
 ```sql
 messages (
   id, sender_id, source_text, source_lang, created_at,
@@ -85,7 +89,7 @@ user_settings (
 | `shared/src/index.ts` | 언어 코드, 메시지/번역 타입, WebSocket 프로토콜 |
 | `server/src/config.ts` | `.env` 파싱, 두 사용자 정의, 용어집 로드 |
 | `server/src/auth.ts` | 패스코드 확인, HMAC 토큰 발급/검증 |
-| `server/src/db.ts` | SQLite 스키마와 질의 |
+| `server/src/db.ts` | Postgres 스키마와 질의 |
 | `server/src/translation/` | 프롬프트 조립, provider 어댑터(Gemini/Claude), 사용량 기록 |
 | `server/src/index.ts` | HTTP 라우트, WebSocket 허브, 번역 큐 |
 | `scripts/free-ports.mjs` | `npm run dev` 전에 이전 프로세스를 정리 (/proc 을 직접 읽는다) |

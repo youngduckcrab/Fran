@@ -1,45 +1,53 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
+import pg from 'pg';
 import {
   isLangCode,
   type ChatMessage,
   type GlossaryDraft,
-  type MessageExplanation,
   type GlossaryEntry,
   type LangCode,
+  type MessageExplanation,
   type Translation,
   type TranslationNote,
   type TranslationStatus,
 } from '@fran/shared';
 import { config } from './config.js';
 
-fs.mkdirSync(path.dirname(path.resolve(config.databasePath)), { recursive: true });
+// pg 는 BIGINT 를 문자열로 돌려준다. 시각을 밀리초 숫자로 다루고 있으므로 숫자로 받는다.
+pg.types.setTypeParser(pg.types.builtins.INT8, (value) => Number(value));
 
-const db = new Database(config.databasePath);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+const pool = new pg.Pool({
+  connectionString: config.databaseUrl,
+  // 클라우드 DB 는 TLS 를 요구한다. 자체 서명 인증서를 쓰는 곳이면 환경변수로 낮춘다.
+  ssl: config.databaseSsl === 'off' ? false : config.databaseSsl === 'no-verify' ? { rejectUnauthorized: false } : true,
+  max: 5,
+});
 
-db.exec(`
+pool.on('error', (error) => {
+  console.error('[db] 유휴 연결에서 오류:', error.message);
+});
+
+const SCHEMA = `
   CREATE TABLE IF NOT EXISTS messages (
     id                 TEXT PRIMARY KEY,
-    sender_id          TEXT NOT NULL,
-    source_text        TEXT NOT NULL,
-    source_lang        TEXT NOT NULL,
-    created_at         INTEGER NOT NULL,
-    translation_status TEXT NOT NULL DEFAULT 'pending'
+    sender_id          TEXT   NOT NULL,
+    source_text        TEXT   NOT NULL,
+    source_lang        TEXT   NOT NULL,
+    created_at         BIGINT NOT NULL,
+    translation_status TEXT   NOT NULL DEFAULT 'pending',
+    translation_error  TEXT,
+    translation_note   TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages (created_at);
 
   CREATE TABLE IF NOT EXISTS translations (
-    message_id TEXT NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
-    lang       TEXT NOT NULL,
-    text       TEXT NOT NULL,
-    notes      TEXT NOT NULL DEFAULT '[]',
-    model      TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
+    message_id TEXT   NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    lang       TEXT   NOT NULL,
+    text       TEXT   NOT NULL,
+    notes      TEXT   NOT NULL DEFAULT '[]',
+    model      TEXT   NOT NULL,
+    created_at BIGINT NOT NULL,
     PRIMARY KEY (message_id, lang)
   );
 
@@ -52,12 +60,12 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS glossary (
-    id           TEXT PRIMARY KEY,
-    term         TEXT NOT NULL,
-    translations TEXT NOT NULL DEFAULT '{}',
-    avoid        TEXT NOT NULL DEFAULT '[]',
+    id           TEXT   PRIMARY KEY,
+    term         TEXT   NOT NULL,
+    translations TEXT   NOT NULL DEFAULT '{}',
+    avoid        TEXT   NOT NULL DEFAULT '[]',
     note         TEXT,
-    updated_at   INTEGER NOT NULL
+    updated_at   BIGINT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS user_settings (
@@ -65,17 +73,15 @@ db.exec(`
     native_lang   TEXT NOT NULL,
     display_langs TEXT NOT NULL
   );
-`);
+`;
 
-// 이미 만들어진 DB 에도 새 컬럼을 더한다. SQLite 는 IF NOT EXISTS 를 지원하지 않는다.
-{
-  const columns = db.prepare(`PRAGMA table_info(messages)`).all() as Array<{ name: string }>;
-  if (!columns.some((column) => column.name === 'translation_error')) {
-    db.exec(`ALTER TABLE messages ADD COLUMN translation_error TEXT`);
-  }
-  if (!columns.some((column) => column.name === 'translation_note')) {
-    db.exec(`ALTER TABLE messages ADD COLUMN translation_note TEXT`);
-  }
+/** 서버가 요청을 받기 전에 한 번 부른다. 스키마가 없으면 만든다. */
+export async function initDatabase(): Promise<void> {
+  await pool.query(SCHEMA);
+}
+
+export async function closeDatabase(): Promise<void> {
+  await pool.end();
 }
 
 interface MessageRow {
@@ -98,66 +104,39 @@ interface TranslationRow {
   created_at: number;
 }
 
-const statements = {
-  insertMessage: db.prepare(
-    `INSERT INTO messages (id, sender_id, source_text, source_lang, created_at, translation_status, translation_note)
-     VALUES (@id, @sender_id, @source_text, @source_lang, @created_at, @translation_status, @translation_note)`,
-  ),
-  updateNote: db.prepare(`UPDATE messages SET translation_note = ? WHERE id = ?`),
-  selectMessage: db.prepare<[string], MessageRow>(`SELECT * FROM messages WHERE id = ?`),
-  selectRecent: db.prepare<[number], MessageRow>(
-    `SELECT * FROM messages ORDER BY created_at DESC, id DESC LIMIT ?`,
-  ),
-  selectBefore: db.prepare<[number, number], MessageRow>(
-    `SELECT * FROM messages WHERE created_at < ? ORDER BY created_at DESC, id DESC LIMIT ?`,
-  ),
-  updateStatus: db.prepare(
-    `UPDATE messages SET translation_status = ?, translation_error = ? WHERE id = ?`,
-  ),
-  upsertTranslation: db.prepare(
-    `INSERT INTO translations (message_id, lang, text, notes, model, created_at)
-     VALUES (@message_id, @lang, @text, @notes, @model, @created_at)
-     ON CONFLICT (message_id, lang) DO UPDATE SET
-       text = excluded.text, notes = excluded.notes,
-       model = excluded.model, created_at = excluded.created_at`,
-  ),
-  selectTranslations: db.prepare<[string], TranslationRow>(
-    `SELECT * FROM translations WHERE message_id = ?`,
-  ),
-  deleteTranslations: db.prepare(`DELETE FROM translations WHERE message_id = ?`),
-  selectSettings: db.prepare<[string], { user_id: string; native_lang: string; display_langs: string }>(
-    `SELECT * FROM user_settings WHERE user_id = ?`,
-  ),
-  upsertSettings: db.prepare(
-    `INSERT INTO user_settings (user_id, native_lang, display_langs)
-     VALUES (@user_id, @native_lang, @display_langs)
-     ON CONFLICT (user_id) DO UPDATE SET
-       native_lang = excluded.native_lang, display_langs = excluded.display_langs`,
-  ),
-};
-
-function parseNotes(raw: string): TranslationNote[] {
+function parseJson<T>(raw: string, fallback: T): T {
   try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as TranslationNote[]) : [];
+    const parsed: unknown = JSON.parse(raw);
+    return (parsed ?? fallback) as T;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function hydrate(row: MessageRow): ChatMessage {
-  const translations: Partial<Record<LangCode, Translation>> = {};
-  for (const t of statements.selectTranslations.all(row.id)) {
-    if (!isLangCode(t.lang)) continue;
-    translations[t.lang] = {
-      lang: t.lang,
-      text: t.text,
-      notes: parseNotes(t.notes),
-      model: t.model,
-      createdAt: t.created_at,
+/** 메시지 여러 건의 번역을 한 번에 읽어 붙인다. 건마다 질의하면 왕복이 늘어난다. */
+async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
+  if (rows.length === 0) return [];
+
+  const { rows: translationRows } = await pool.query<TranslationRow>(
+    `SELECT * FROM translations WHERE message_id = ANY($1::text[])`,
+    [rows.map((row) => row.id)],
+  );
+
+  const byMessage = new Map<string, Partial<Record<LangCode, Translation>>>();
+  for (const row of translationRows) {
+    if (!isLangCode(row.lang)) continue;
+    const bucket = byMessage.get(row.message_id) ?? {};
+    bucket[row.lang] = {
+      lang: row.lang,
+      text: row.text,
+      notes: parseJson<TranslationNote[]>(row.notes, []),
+      model: row.model,
+      createdAt: row.created_at,
     };
+    byMessage.set(row.message_id, bucket);
   }
-  return {
+
+  return rows.map((row) => ({
     id: row.id,
     senderId: row.sender_id,
     sourceText: row.source_text,
@@ -166,93 +145,130 @@ function hydrate(row: MessageRow): ChatMessage {
     translationStatus: row.translation_status as TranslationStatus,
     ...(row.translation_error ? { translationError: row.translation_error } : {}),
     ...(row.translation_note ? { translationNote: row.translation_note } : {}),
-    translations,
-  };
+    translations: byMessage.get(row.id) ?? {},
+  }));
 }
 
-export function insertMessage(message: {
+export async function insertMessage(message: {
   id: string;
   senderId: string;
   sourceText: string;
   sourceLang: LangCode;
   createdAt: number;
   translationNote?: string;
-}): ChatMessage {
-  statements.insertMessage.run({
-    id: message.id,
-    sender_id: message.senderId,
-    source_text: message.sourceText,
-    source_lang: message.sourceLang,
-    created_at: message.createdAt,
-    translation_status: 'pending',
-    translation_note: message.translationNote ?? null,
-  });
+}): Promise<ChatMessage> {
+  await pool.query(
+    `INSERT INTO messages (id, sender_id, source_text, source_lang, created_at, translation_status, translation_note)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6)`,
+    [
+      message.id,
+      message.senderId,
+      message.sourceText,
+      message.sourceLang,
+      message.createdAt,
+      message.translationNote ?? null,
+    ],
+  );
   return { ...message, translationStatus: 'pending', translations: {} };
 }
 
-export function setTranslationNote(messageId: string, note: string | undefined): void {
-  statements.updateNote.run(note ?? null, messageId);
+export async function setTranslationNote(messageId: string, note: string | undefined): Promise<void> {
+  await pool.query(`UPDATE messages SET translation_note = $1 WHERE id = $2`, [note ?? null, messageId]);
 }
 
-export function getMessage(id: string): ChatMessage | null {
-  const row = statements.selectMessage.get(id);
-  return row ? hydrate(row) : null;
+export async function getMessage(id: string): Promise<ChatMessage | null> {
+  const { rows } = await pool.query<MessageRow>(`SELECT * FROM messages WHERE id = $1`, [id]);
+  return (await hydrate(rows))[0] ?? null;
 }
 
 /** 오래된 것부터 정렬해 돌려준다(화면에 그리는 순서). */
-export function getRecentMessages(limit: number, before?: number): ChatMessage[] {
-  const rows = before === undefined
-    ? statements.selectRecent.all(limit)
-    : statements.selectBefore.all(before, limit);
-  return rows.reverse().map(hydrate);
+export async function getRecentMessages(limit: number, before?: number): Promise<ChatMessage[]> {
+  const { rows } = before === undefined
+    ? await pool.query<MessageRow>(
+        `SELECT * FROM messages ORDER BY created_at DESC, id DESC LIMIT $1`,
+        [limit],
+      )
+    : await pool.query<MessageRow>(
+        `SELECT * FROM messages WHERE created_at < $1 ORDER BY created_at DESC, id DESC LIMIT $2`,
+        [before, limit],
+      );
+  return (await hydrate(rows)).reverse();
 }
 
-export function saveTranslation(messageId: string, translation: Translation): void {
-  statements.upsertTranslation.run({
-    message_id: messageId,
-    lang: translation.lang,
-    text: translation.text,
-    notes: JSON.stringify(translation.notes),
-    model: translation.model,
-    created_at: translation.createdAt,
-  });
+export async function saveTranslation(messageId: string, translation: Translation): Promise<void> {
+  await pool.query(
+    `INSERT INTO translations (message_id, lang, text, notes, model, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (message_id, lang) DO UPDATE SET
+       text = EXCLUDED.text, notes = EXCLUDED.notes,
+       model = EXCLUDED.model, created_at = EXCLUDED.created_at`,
+    [
+      messageId,
+      translation.lang,
+      translation.text,
+      JSON.stringify(translation.notes),
+      translation.model,
+      translation.createdAt,
+    ],
+  );
 }
 
-export function setTranslationStatus(
+export async function setTranslationStatus(
   messageId: string,
   status: TranslationStatus,
   error?: string,
-): void {
-  statements.updateStatus.run(status, error ?? null, messageId);
+): Promise<void> {
+  await pool.query(`UPDATE messages SET translation_status = $1, translation_error = $2 WHERE id = $3`, [
+    status,
+    error ?? null,
+    messageId,
+  ]);
 }
 
-export function clearTranslations(messageId: string): void {
-  statements.deleteTranslations.run(messageId);
+export async function clearTranslations(messageId: string): Promise<void> {
+  await pool.query(`DELETE FROM translations WHERE message_id = $1`, [messageId]);
 }
 
-export function getDisplayLangs(userId: string, fallback: LangCode[]): LangCode[] {
-  const row = statements.selectSettings.get(userId);
+/* ---------------------------- 사용자 설정 ---------------------------- */
+
+interface SettingsRow {
+  user_id: string;
+  native_lang: string;
+  display_langs: string;
+}
+
+async function settingsOf(userId: string): Promise<SettingsRow | null> {
+  const { rows } = await pool.query<SettingsRow>(`SELECT * FROM user_settings WHERE user_id = $1`, [userId]);
+  return rows[0] ?? null;
+}
+
+export async function getDisplayLangs(userId: string, fallback: LangCode[]): Promise<LangCode[]> {
+  const row = await settingsOf(userId);
   if (!row) return fallback;
-  const langs = String(row.display_langs).split(',').filter(isLangCode);
+  const langs = row.display_langs.split(',').filter(isLangCode);
   return langs.length > 0 ? langs : fallback;
 }
 
-export function getNativeLang(userId: string, fallback: LangCode): LangCode {
-  const row = statements.selectSettings.get(userId);
+export async function getNativeLang(userId: string, fallback: LangCode): Promise<LangCode> {
+  const row = await settingsOf(userId);
   return row && isLangCode(row.native_lang) ? row.native_lang : fallback;
 }
 
-export function saveSettings(userId: string, nativeLang: LangCode, displayLangs: LangCode[]): void {
-  statements.upsertSettings.run({
-    user_id: userId,
-    native_lang: nativeLang,
-    display_langs: displayLangs.join(','),
-  });
+export async function saveSettings(
+  userId: string,
+  nativeLang: LangCode,
+  displayLangs: LangCode[],
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO user_settings (user_id, native_lang, display_langs)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id) DO UPDATE SET
+       native_lang = EXCLUDED.native_lang, display_langs = EXCLUDED.display_langs`,
+    [userId, nativeLang, displayLangs.join(',')],
+  );
 }
 
-/* ------------------------------------------------------------------ */
-/* 용어집                                                              */
-/* ------------------------------------------------------------------ */
+/* ------------------------------ 용어집 ------------------------------ */
 
 interface GlossaryRow {
   id: string;
@@ -261,28 +277,6 @@ interface GlossaryRow {
   avoid: string;
   note: string | null;
   updated_at: number;
-}
-
-const glossaryStatements = {
-  all: db.prepare<[], GlossaryRow>(`SELECT * FROM glossary ORDER BY term COLLATE NOCASE`),
-  upsert: db.prepare(
-    `INSERT INTO glossary (id, term, translations, avoid, note, updated_at)
-     VALUES (@id, @term, @translations, @avoid, @note, @updated_at)
-     ON CONFLICT (id) DO UPDATE SET
-       term = excluded.term, translations = excluded.translations,
-       avoid = excluded.avoid, note = excluded.note, updated_at = excluded.updated_at`,
-  ),
-  remove: db.prepare(`DELETE FROM glossary WHERE id = ?`),
-  count: db.prepare<[], { n: number }>(`SELECT COUNT(*) AS n FROM glossary`),
-};
-
-function parseJson<T>(raw: string, fallback: T): T {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return (parsed ?? fallback) as T;
-  } catch {
-    return fallback;
-  }
 }
 
 function hydrateGlossary(row: GlossaryRow): GlossaryEntry {
@@ -301,11 +295,12 @@ function hydrateGlossary(row: GlossaryRow): GlossaryEntry {
   };
 }
 
-export function listGlossary(): GlossaryEntry[] {
-  return glossaryStatements.all.all().map(hydrateGlossary);
+export async function listGlossary(): Promise<GlossaryEntry[]> {
+  const { rows } = await pool.query<GlossaryRow>(`SELECT * FROM glossary ORDER BY LOWER(term)`);
+  return rows.map(hydrateGlossary);
 }
 
-export function saveGlossaryEntry(draft: GlossaryDraft, id?: string): GlossaryEntry {
+export async function saveGlossaryEntry(draft: GlossaryDraft, id?: string): Promise<GlossaryEntry> {
   const entry: GlossaryEntry = {
     id: id ?? crypto.randomUUID(),
     term: draft.term.trim(),
@@ -315,64 +310,57 @@ export function saveGlossaryEntry(draft: GlossaryDraft, id?: string): GlossaryEn
     updatedAt: Date.now(),
   };
 
-  glossaryStatements.upsert.run({
-    id: entry.id,
-    term: entry.term,
-    translations: JSON.stringify(entry.translations ?? {}),
-    avoid: JSON.stringify(entry.avoid ?? []),
-    note: entry.note ?? null,
-    updated_at: entry.updatedAt,
-  });
+  await pool.query(
+    `INSERT INTO glossary (id, term, translations, avoid, note, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO UPDATE SET
+       term = EXCLUDED.term, translations = EXCLUDED.translations,
+       avoid = EXCLUDED.avoid, note = EXCLUDED.note, updated_at = EXCLUDED.updated_at`,
+    [
+      entry.id,
+      entry.term,
+      JSON.stringify(entry.translations ?? {}),
+      JSON.stringify(entry.avoid ?? []),
+      entry.note ?? null,
+      entry.updatedAt,
+    ],
+  );
   return entry;
 }
 
-export function deleteGlossaryEntry(id: string): void {
-  glossaryStatements.remove.run(id);
+export async function deleteGlossaryEntry(id: string): Promise<void> {
+  await pool.query(`DELETE FROM glossary WHERE id = $1`, [id]);
 }
 
 /** 처음 켰을 때만 glossary.json 의 내용을 옮겨 담는다. 이후로는 DB 가 원본이다. */
-export function seedGlossary(entries: Array<Omit<GlossaryDraft, 'avoid'> & { avoid?: string[] }>): void {
-  if ((glossaryStatements.count.get()?.n ?? 0) > 0) return;
-  for (const entry of entries) saveGlossaryEntry(entry);
+export async function seedGlossary(entries: GlossaryDraft[]): Promise<void> {
+  const { rows } = await pool.query<{ count: number }>(`SELECT COUNT(*)::bigint AS count FROM glossary`);
+  if ((rows[0]?.count ?? 0) > 0) return;
+  for (const entry of entries) await saveGlossaryEntry(entry);
 }
 
-/* ------------------------------------------------------------------ */
-/* 문장 설명 캐시                                                      */
-/* ------------------------------------------------------------------ */
-
-const explanationStatements = {
-  get: db.prepare<[string, string, string], { payload: string }>(
-    `SELECT payload FROM explanations
-      WHERE message_id = ? AND target_lang = ? AND explain_lang = ?`,
-  ),
-  put: db.prepare(
-    `INSERT INTO explanations (message_id, target_lang, explain_lang, payload)
-     VALUES (@message_id, @target_lang, @explain_lang, @payload)
-     ON CONFLICT (message_id, target_lang, explain_lang)
-       DO UPDATE SET payload = excluded.payload`,
-  ),
-};
+/* ---------------------------- 문장 설명 캐시 ---------------------------- */
 
 /** 한 번 설명한 문장은 다시 모델에 묻지 않는다. 같은 메시지를 여러 번 열어보게 되므로. */
-export function getExplanation(
+export async function getExplanation(
   messageId: string,
   targetLang: LangCode,
   explainLang: LangCode,
-): MessageExplanation | null {
-  const row = explanationStatements.get.get(messageId, targetLang, explainLang);
-  if (!row) return null;
-  try {
-    return JSON.parse(row.payload) as MessageExplanation;
-  } catch {
-    return null;
-  }
+): Promise<MessageExplanation | null> {
+  const { rows } = await pool.query<{ payload: string }>(
+    `SELECT payload FROM explanations
+      WHERE message_id = $1 AND target_lang = $2 AND explain_lang = $3`,
+    [messageId, targetLang, explainLang],
+  );
+  const payload = rows[0]?.payload;
+  return payload ? parseJson<MessageExplanation | null>(payload, null) : null;
 }
 
-export function saveExplanation(messageId: string, explanation: MessageExplanation): void {
-  explanationStatements.put.run({
-    message_id: messageId,
-    target_lang: explanation.targetLang,
-    explain_lang: explanation.explainLang,
-    payload: JSON.stringify(explanation),
-  });
+export async function saveExplanation(messageId: string, explanation: MessageExplanation): Promise<void> {
+  await pool.query(
+    `INSERT INTO explanations (message_id, target_lang, explain_lang, payload)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (message_id, target_lang, explain_lang) DO UPDATE SET payload = EXCLUDED.payload`,
+    [messageId, explanation.targetLang, explanation.explainLang, JSON.stringify(explanation)],
+  );
 }

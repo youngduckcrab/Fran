@@ -105,7 +105,10 @@ const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'off'] as const
 
 export const config = {
   port: int('PORT', 8787),
-  databasePath: fromRoot(process.env.DATABASE_PATH ?? './data/fran.sqlite'),
+  /** Postgres 연결 문자열. 호스팅 업체가 DATABASE_URL 로 넣어 주는 것이 표준이다. */
+  databaseUrl: required('DATABASE_URL'),
+  /** on(기본) | no-verify(자체 서명 인증서) | off(로컬) */
+  databaseSsl: oneOf('DATABASE_SSL', ['on', 'no-verify', 'off'] as const, 'on'),
   /** 빌드된 웹. 있으면 서버가 같이 서빙한다. */
   webDist: fromRoot(process.env.WEB_DIST ?? './web/dist'),
   authSecret: required('AUTH_SECRET'),
