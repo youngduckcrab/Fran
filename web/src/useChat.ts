@@ -185,6 +185,24 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
   }, []);
 
+  /**
+   * 지금 앱을 보고 있는지 서버에 알린다.
+   *
+   * 서버는 이걸 보고 폰 알림을 보낼지 정한다. 연결돼 있다고 보고 있는 것은 아니다 —
+   * 다른 앱을 보는 동안에도 연결은 한동안 살아 있어서, 그때 알림이 안 가면 아무도 모른다.
+   */
+  useEffect(() => {
+    if (!token) return;
+    const tell = () => emit({ type: 'attention', visible: document.visibilityState === 'visible' });
+    tell();
+    document.addEventListener('visibilitychange', tell);
+    window.addEventListener('focus', tell);
+    return () => {
+      document.removeEventListener('visibilitychange', tell);
+      window.removeEventListener('focus', tell);
+    };
+  }, [token, emit, state.connection]);
+
   const sendMessage = useCallback(
     (
       text: string,

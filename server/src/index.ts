@@ -139,6 +139,13 @@ function bothProfiles(): Promise<UserProfile[]> {
 /* ------------------------------------------------------------------ */
 
 const sockets = new Map<WebSocket, string>();
+/**
+ * 지금 앱을 보고 있는 소켓들.
+ *
+ * 연결돼 있다고 보고 있는 것은 아니다. 홈 화면에 두고 다른 앱을 보는 동안에도 연결은
+ * 한동안 살아 있다. 보고 있는 사람에게는 앱 안에서 알리고, 그렇지 않으면 폰 알림을 보낸다.
+ */
+const watching = new Set<WebSocket>();
 
 function send(socket: WebSocket, event: ServerEvent): void {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
@@ -180,6 +187,14 @@ function broadcastMessage(
 function isOnline(userId: string): boolean {
   for (const id of sockets.values()) {
     if (id === userId) return true;
+  }
+  return false;
+}
+
+/** 이 사람이 지금 앱을 보고 있는지(화면이 켜져 있고 앱이 앞에 있는지). */
+function isWatching(userId: string): boolean {
+  for (const [socket, id] of sockets.entries()) {
+    if (id === userId && watching.has(socket)) return true;
   }
   return false;
 }
@@ -330,8 +345,9 @@ async function notifyNewMessage(messageId: string): Promise<void> {
   if (!message) return;
 
   const recipient = peerOf(message.senderId).profile.id;
-  // 앱을 열어 두고 있으면 화면에 이미 떠 있다. 굳이 알림까지 울릴 이유가 없다.
-  if (isOnline(recipient)) return;
+  // 지금 앱을 보고 있으면 화면 안에서 알려 준다. 폰 알림까지 겹치면 두 번 울린다.
+  // 연결만 살아 있고 다른 앱을 보고 있는 경우에는 폰 알림이 가야 한다.
+  if (isWatching(recipient)) return;
 
   const [sender, receiver] = await Promise.all([profileOf(message.senderId), profileOf(recipient)]);
   const readingLang = receiver.displayLangs[0] ?? receiver.nativeLang;
@@ -942,6 +958,11 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
       return;
     }
 
+    case 'attention':
+      if (event.visible) watching.add(socket);
+      else watching.delete(socket);
+      return;
+
     case 'typing':
       broadcast({ type: 'typing', userId, isTyping: event.isTyping }, socket);
       return;
@@ -1022,6 +1043,8 @@ server.on('upgrade', (request, socket, head) => {
 
 wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
   sockets.set(socket, userId);
+  // 방금 연결했다면 보고 있는 것이다. 화면이 가려지면 곧 attention 이 와서 빠진다.
+  watching.add(socket);
 
   void (async () => {
     const [me, peer, recent, glossary, readAt] = await Promise.all([
@@ -1064,6 +1087,7 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
 
   socket.on('close', () => {
     sockets.delete(socket);
+    watching.delete(socket);
     if (!isOnline(userId)) broadcast({ type: 'presence', userId, online: false });
   });
 });

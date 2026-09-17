@@ -289,7 +289,12 @@ export type ClientEvent =
   /** 여기까지 읽었다. 값은 읽은 마지막 메시지의 시각. */
   | { type: 'read'; at: number }
   /** 이모지 반응. 같은 이모지를 다시 누르거나 null 을 보내면 지운다. */
-  | { type: 'react'; messageId: string; emoji: string | null };
+  | { type: 'react'; messageId: string; emoji: string | null }
+  /**
+   * 지금 이 앱을 보고 있는지. 화면이 가려지면 false.
+   * 서버는 이걸 보고 폰 알림을 보낼지 정한다 — 보고 있는 사람에게는 앱 안에서 알린다.
+   */
+  | { type: 'attention'; visible: boolean };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */

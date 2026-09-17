@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LangCode } from '@fran/shared';
 import { useChat } from '../useChat';
 import { fetchPhotos, fetchSaved, fetchVocab } from '../api';
-import { toUiLang, type UiLang } from '../i18n';
+import { toUiLang, useT, type UiLang } from '../i18n';
+import { previewOf } from '../preview';
 import { useBackClose } from '../backstack';
 import { applyTheme } from '../theme';
 import Album from './Album';
@@ -30,6 +31,7 @@ const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
  * 온 메시지를 놓친다. 연결은 위에 두고 화면만 갈아 끼운다.
  */
 export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
+  const t = useT();
   const chat = useChat(token, onLogout);
   const [view, setView] = useState<View>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -88,6 +90,41 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
     (message) => message.senderId !== chat.me?.id && message.createdAt > myReadAt,
   ).length;
 
+  /* ---- 화면 안 알림 ---- */
+
+  /**
+   * 채팅을 보고 있지 않을 때 메시지가 오면 위에 한 줄 띄운다.
+   *
+   * 앱이 켜져 있으면 폰 알림은 가지 않는다(두 번 울릴 이유가 없다). 대신 여기서 알린다.
+   * 번역이 늦게 붙으므로 메시지 자체가 아니라 id 만 들고 있다가 그때그때 다시 읽는다.
+   */
+  const [alertId, setAlertId] = useState<string | null>(null);
+  const lastSeen = useRef<string | null>(null);
+
+  useEffect(() => {
+    const last = chat.messages[chat.messages.length - 1];
+    if (!last) return;
+
+    const previous = lastSeen.current;
+    lastSeen.current = last.id;
+    // 처음 받아온 지난 대화는 새로 온 것이 아니다.
+    if (previous === null || previous === last.id) return;
+    if (last.senderId === chat.me?.id) return;
+    if (view === 'chat' && document.visibilityState === 'visible') return;
+
+    setAlertId(last.id);
+    // 안드로이드는 짧게 떨어 준다. 지원하지 않으면 아무 일도 없다.
+    navigator.vibrate?.(20);
+  }, [chat.messages, chat.me?.id, view]);
+
+  useEffect(() => {
+    if (!alertId) return;
+    const timer = setTimeout(() => setAlertId(null), 5000);
+    return () => clearTimeout(timer);
+  }, [alertId]);
+
+  const alerted = alertId ? chat.messages.find((message) => message.id === alertId) : undefined;
+
   // 홈 화면 아이콘에도 숫자를 붙인다(지원하는 기기에서만).
   useEffect(() => {
     const badge = navigator as Navigator & {
@@ -120,6 +157,20 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
 
   return (
     <>
+      {alerted && (
+        <button
+          type="button"
+          className="alert"
+          onClick={() => {
+            setAlertId(null);
+            setView('chat');
+          }}
+        >
+          <span className="alert__name">{chat.peer?.name}</span>
+          <span className="alert__text">{previewOf(alerted, primaryLang, t) ?? ''}</span>
+        </button>
+      )}
+
       {view === 'home' && (
         <Home
           me={chat.me}

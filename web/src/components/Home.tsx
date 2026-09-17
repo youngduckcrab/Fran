@@ -1,6 +1,8 @@
-import { messageText, type ChatMessage, type LangCode, type UserProfile } from '@fran/shared';
-import { useT, type Translate } from '../i18n';
+import type { ChatMessage, LangCode, UserProfile } from '@fran/shared';
+import { useT } from '../i18n';
+import { previewOf } from '../preview';
 import Icon from './Icon';
+import NotifyPrompt from './NotifyPrompt';
 
 export type View = 'home' | 'chat' | 'saved' | 'vocab' | 'album';
 
@@ -17,27 +19,6 @@ interface Props {
   onSettings: () => void;
 }
 
-/** 채팅 칸에 보여줄 마지막 한 줄. 내가 읽는 언어로. */
-function preview(
-  message: ChatMessage | undefined,
-  primaryLang: LangCode,
-  t: Translate,
-): string | null {
-  if (!message) return null;
-
-  const own = messageText(message);
-  const text =
-    message.sourceLang === primaryLang ? own : (message.translations[primaryLang]?.text ?? own);
-
-  // 글 없이 사진이나 음성만 보낸 메시지도 있다. 빈 줄로 두면 대화가 없는 것처럼 보인다.
-  const label = message.attachment
-    ? message.attachment.kind === 'image'
-      ? t('bubble.photo')
-      : t('bubble.voice')
-    : '';
-  return [label, text.trim()].filter(Boolean).join(' · ') || null;
-}
-
 export default function Home({
   me,
   peer,
@@ -51,7 +32,7 @@ export default function Home({
   onSettings,
 }: Props) {
   const t = useT();
-  const last = preview(lastMessage, primaryLang, t);
+  const last = previewOf(lastMessage, primaryLang, t);
 
   return (
     <div className="home">
@@ -69,6 +50,8 @@ export default function Home({
           {t('chat.settings')}
         </button>
       </header>
+
+      {me && <NotifyPrompt userId={me.id} />}
 
       <button type="button" className="tile tile--chat" onClick={() => onOpen('chat')}>
         <span className="tile__icon"><Icon name="chat" size={26} /></span>

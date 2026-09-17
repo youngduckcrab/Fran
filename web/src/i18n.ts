@@ -108,6 +108,14 @@ const ko = {
   'error.modelNotFound': '번역 모델 설정이 잘못되었습니다.',
   'error.refused': '이 메시지는 번역할 수 없었습니다.',
 
+  'ask.title': '알림을 켤까요?',
+  'ask.body': '앱을 닫아 두었을 때 새 메시지가 오면 폰이 알려줘요.',
+  'ask.enable': '켜기',
+  'ask.later': '나중에',
+  'ask.installTitle': '홈 화면에 추가하면 알림을 받을 수 있어요',
+  'ask.installBody': '아이폰은 홈 화면에 추가한 앱에서만 알림이 와요. 공유 버튼 → 홈 화면에 추가.',
+  'ask.deniedTitle': '알림이 막혀 있어요',
+
   'home.chat': '채팅',
   'home.chatEmpty': '아직 주고받은 말이 없어요',
   'home.saved': '저장한 문장',
@@ -304,6 +312,14 @@ const es: Record<StringKey, string> = {
   'error.refused': 'Este mensaje no se pudo traducir.',
   'error.unknown': 'No se pudo traducir.',
 
+  'ask.title': '¿Activamos los avisos?',
+  'ask.body': 'Te avisamos en el teléfono cuando llegue un mensaje y la app esté cerrada.',
+  'ask.enable': 'Activar',
+  'ask.later': 'Ahora no',
+  'ask.installTitle': 'Añádela a la pantalla de inicio',
+  'ask.installBody': 'En iPhone los avisos solo llegan si añades la app a la pantalla de inicio. Botón compartir → Añadir a inicio.',
+  'ask.deniedTitle': 'Los avisos están bloqueados',
+
   'home.chat': 'Chat',
   'home.chatEmpty': 'Todavía no hay mensajes',
   'home.saved': 'Frases guardadas',
@@ -495,6 +511,14 @@ const en: Record<StringKey, string> = {
   'error.modelNotFound': 'The translation model setting is wrong.',
   'error.refused': "This message couldn't be translated.",
   'error.unknown': "Couldn't translate this.",
+
+  'ask.title': 'Turn on notifications?',
+  'ask.body': 'Your phone tells you when a message arrives and the app is closed.',
+  'ask.enable': 'Turn on',
+  'ask.later': 'Not now',
+  'ask.installTitle': 'Add it to your home screen',
+  'ask.installBody': 'On iPhone, notifications only arrive from an app added to the home screen. Share button → Add to Home Screen.',
+  'ask.deniedTitle': 'Notifications are blocked',
 
   'home.chat': 'Chat',
   'home.chatEmpty': 'No messages yet',
