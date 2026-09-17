@@ -75,6 +75,12 @@ const SCHEMA = `
     native_lang   TEXT NOT NULL,
     display_langs TEXT NOT NULL
   );
+
+  -- CREATE TABLE IF NOT EXISTS 는 이미 있는 테이블에 컬럼을 더해 주지 않는다.
+  -- 먼저 배포된 DB 에도 새 컬럼이 생기도록 따로 적어 둔다. 여러 번 돌려도 안전하다.
+  ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_error      TEXT;
+  ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_error_code TEXT;
+  ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_note       TEXT;
 `;
 
 /** 서버가 요청을 받기 전에 한 번 부른다. 스키마가 없으면 만든다. */
@@ -229,6 +235,19 @@ export async function setTranslationStatus(
       WHERE id = $4`,
     [status, failure?.message ?? null, failure?.code ?? null, messageId],
   );
+}
+
+/**
+ * 번역을 기다리다 만 메시지들. 서버가 번역 도중 재시작되면(무료 호스팅은 자주 잠든다)
+ * 그 메시지는 영원히 "번역하는 중…" 으로 남는다. 시작할 때 다시 큐에 넣기 위해 찾는다.
+ */
+export async function pendingMessageIds(limit = 50): Promise<string[]> {
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM messages WHERE translation_status = 'pending'
+      ORDER BY created_at DESC LIMIT $1`,
+    [limit],
+  );
+  return rows.map((row) => row.id);
 }
 
 export async function clearTranslations(messageId: string): Promise<void> {

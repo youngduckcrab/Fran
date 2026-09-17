@@ -9,8 +9,8 @@ import { TranslationError, type ProviderRequest, type ProviderResponse, type Tra
 export interface GeminiOptions {
   apiKey: string;
   model: string;
-  /** 0 = 사고 끄기(기본). -1 = 자동. 무료 티어에서는 꺼두는 편이 빠르고 할당량도 아낀다. */
-  thinkingBudget: number;
+  /** 적어둔 경우에만 보낸다. 받지 않는 모델에 보내면 요청 전체가 거부된다. */
+  thinkingBudget?: number;
   safetyThreshold: HarmBlockThreshold;
 }
 
@@ -27,7 +27,7 @@ export class GeminiProvider implements TranslationProvider {
 
   private readonly client: GoogleGenAI;
   private readonly safetySettings: SafetySetting[];
-  private readonly thinkingBudget: number;
+  private readonly thinkingBudget?: number;
 
   constructor(options: GeminiOptions) {
     this.model = options.model;
@@ -52,8 +52,11 @@ export class GeminiProvider implements TranslationProvider {
           responseMimeType: 'application/json',
           responseJsonSchema: request.schema,
           safetySettings: this.safetySettings,
-          thinkingConfig: { thinkingBudget: this.thinkingBudget },
-          maxOutputTokens: 4096,
+          // 이 모델이 사고 설정을 받는지 알 수 없다. 적어둔 경우에만 보낸다.
+          ...(this.thinkingBudget === undefined
+            ? {}
+            : { thinkingConfig: { thinkingBudget: this.thinkingBudget } }),
+          maxOutputTokens: 8192,
         },
       });
     } catch (cause) {
@@ -67,6 +70,15 @@ export class GeminiProvider implements TranslationProvider {
         );
       }
       if (/429|RESOURCE_EXHAUSTED|quota/i.test(message)) throw quotaError(message);
+      // 모델마다 받는 파라미터가 다르다. 어느 모델에서 거부됐는지 알려줘야 손볼 수 있다.
+      if (/INVALID_ARGUMENT|invalid argument/i.test(message)) {
+        throw new TranslationError(
+          `모델 "${this.model}" 이 이 요청을 거부했습니다(INVALID_ARGUMENT). 다른 모델로 바꿔 보세요 ` +
+            `(GEMINI_MODEL=gemini-flash-latest). 원문: ${message}`,
+          false,
+          { code: 'modelNotFound' },
+        );
+      }
       // 모델 과부하와 서버 오류는 잠시 뒤면 대개 풀린다.
       if (/\b(500|502|503|504)\b|UNAVAILABLE|INTERNAL|high demand|overloaded/i.test(message)) {
         throw new TranslationError('모델이 일시적으로 혼잡합니다. 잠시 뒤 다시 시도해 주세요.', true, {

@@ -24,6 +24,7 @@ import {
   getDisplayLangs,
   getExplanation,
   listGlossary,
+  pendingMessageIds,
   saveExplanation,
   saveGlossaryEntry,
   seedGlossary,
@@ -443,6 +444,13 @@ try {
   await initDatabase();
   // 파일로 관리하던 용어집을 DB 로 옮긴다. 비어 있을 때 한 번만 옮겨 담는다.
   await seedGlossary(config.glossary);
+
+  // 번역 도중 서버가 꺼졌던 메시지들. 그냥 두면 영원히 "번역하는 중…" 으로 남는다.
+  const stuck = await pendingMessageIds();
+  if (stuck.length > 0) {
+    console.log(`번역이 끊겼던 메시지 ${stuck.length}건을 다시 시도합니다.`);
+    for (const id of stuck) enqueueTranslation(id);
+  }
 } catch (error) {
   const reason = error instanceof Error ? error.message : String(error);
   console.error(`\n✗ 데이터베이스에 연결하지 못했습니다: ${reason}`);

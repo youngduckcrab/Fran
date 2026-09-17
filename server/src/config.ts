@@ -121,8 +121,14 @@ export const config = {
     gemini: {
       apiKey: process.env.GEMINI_API_KEY,
       model: process.env.GEMINI_MODEL ?? 'gemini-flash-lite-latest',
-      /** 0 = 사고 끄기. -1 = 자동. 무료 티어에서는 꺼두는 편이 빠르고 할당량도 아낀다. */
-      thinkingBudget: int('GEMINI_THINKING_BUDGET', 0),
+      /**
+       * 0 = 사고 끄기, -1 = 자동. 모델마다 이 파라미터를 받지 않는 경우가 있어서
+       * (받지 않으면 요청 전체가 INVALID_ARGUMENT 로 거부된다) 적어둔 경우에만 보낸다.
+       */
+      thinkingBudget:
+        process.env.GEMINI_THINKING_BUDGET === undefined
+          ? undefined
+          : int('GEMINI_THINKING_BUDGET', 0),
       safetyThreshold: process.env.GEMINI_SAFETY_THRESHOLD,
     },
     claude: {

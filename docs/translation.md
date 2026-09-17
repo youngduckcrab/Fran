@@ -124,7 +124,7 @@ Gemini는 `responseJsonSchema` + `responseMimeType: 'application/json'`, Claude�
 | 환경변수 | 기본값 | 뜻 |
 | --- | --- | --- |
 | `GEMINI_MODEL` | `gemini-flash-lite-latest` | 무료 한도가 가장 넉넉한 쪽. 품질을 올리려면 `gemini-flash-latest` (한도는 줄어든다) |
-| `GEMINI_THINKING_BUDGET` | `0` | 0은 사고 끄기. 번역은 오래 생각해서 크게 나아지는 작업이 아니고, 끄면 빠르고 무료 할당량도 아낀다. `-1` 은 자동 |
+| `GEMINI_THINKING_BUDGET` | (안 보냄) | 적어 두면 그 값으로 보낸다. 0은 사고 끄기, -1은 자동. **이 파라미터를 받지 않는 모델이 있고, 보내면 요청 전체가 `INVALID_ARGUMENT` 로 거부되므로** 기본값은 아예 보내지 않는 것이다 |
 | `GEMINI_SAFETY_THRESHOLD` | `BLOCK_NONE` | 아래 참고 |
 
 **안전 필터를 왜 내리나.** Gemini는 기본적으로 성적·공격적 표현을 차단하는데, 연인끼리
