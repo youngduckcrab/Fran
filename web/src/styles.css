@@ -694,3 +694,14 @@ textarea {
 .explain__replies > li {
   margin-bottom: 6px;
 }
+
+.login__as {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}

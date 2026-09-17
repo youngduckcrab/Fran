@@ -20,6 +20,7 @@ const ko = {
   'login.checking': '확인 중…',
   'login.enter': '들어가기',
   'login.failed': '아이디 또는 패스코드가 올바르지 않습니다.',
+  'login.as': '{name} 계정으로 들어갑니다',
 
   'chat.connecting': '연결 중',
   'chat.reconnecting': '다시 연결하는 중…',
@@ -105,6 +106,7 @@ const es: Record<StringKey, string> = {
   'login.checking': 'Comprobando…',
   'login.enter': 'Entrar',
   'login.failed': 'El usuario o el código no son correctos.',
+  'login.as': 'Entras como {name}',
 
   'chat.connecting': 'Conectando',
   'chat.reconnecting': 'Reconectando…',
@@ -188,6 +190,7 @@ const en: Record<StringKey, string> = {
   'login.checking': 'Checking…',
   'login.enter': 'Enter',
   'login.failed': 'That name or passcode is not right.',
+  'login.as': 'Signing in as {name}',
 
   'chat.connecting': 'Connecting',
   'chat.reconnecting': 'Reconnecting…',
