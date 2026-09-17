@@ -3,7 +3,7 @@ import { fetchUsers, login, type LoginOption } from '../api';
 import { createTranslate, toUiLang, type UiLang } from '../i18n';
 
 interface Props {
-  onLogin: (token: string) => void;
+  onLogin: (token: string, userId: string) => void;
   /** 주소로 미리 정해진 사람이 있으면 그 사람으로 시작한다. */
   presetUserId?: string;
   uiLang: UiLang;
@@ -46,7 +46,7 @@ export default function Login({ onLogin, presetUserId, uiLang, onUiLang }: Props
     setBusy(true);
     setError(null);
     try {
-      onLogin(await login(userId, passcode));
+      onLogin(await login(userId, passcode), userId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {

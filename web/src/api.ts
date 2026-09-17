@@ -6,15 +6,53 @@ import type {
   UserProfile,
 } from '@fran/shared';
 
-const TOKEN_KEY = 'fran.token';
+const LAST_USER_KEY = 'fran.lastUser';
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+/**
+ * 토큰은 사람마다 따로 저장한다. 같은 브라우저에서 두 사람이 각자의 주소로 들어가는 일이
+ * 있는데(한 컴퓨터에서 둘이 쓰거나, 테스트할 때), 키가 하나면 나중에 로그인한 쪽이
+ * 상대의 토큰을 덮어써서 두 탭 모두 같은 사람으로 로그인된다.
+ */
+let activeUserId: string | null = null;
+
+function tokenKey(userId: string | null): string {
+  return userId ? `fran.token.${userId}` : 'fran.token';
 }
 
-export function setToken(token: string | null): void {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null; // 시크릿 모드나 저장소 차단
+  }
+}
+
+function writeStorage(key: string, value: string | null): void {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // 저장하지 못해도 이번 세션은 그대로 쓸 수 있다
+  }
+}
+
+/** 이 탭이 누구의 앱인지 정한다. 이후의 토큰 읽기·쓰기가 이 사람 것을 가리킨다. */
+export function setActiveUser(userId: string | null): void {
+  activeUserId = userId;
+  if (userId) writeStorage(LAST_USER_KEY, userId);
+}
+
+/** 주소에 ?u= 가 없을 때 쓸, 마지막으로 로그인했던 사람. */
+export function rememberedUser(): string | null {
+  return readStorage(LAST_USER_KEY);
+}
+
+export function getToken(userId: string | null = activeUserId): string | null {
+  return readStorage(tokenKey(userId));
+}
+
+export function setToken(token: string | null, userId: string | null = activeUserId): void {
+  writeStorage(tokenKey(userId), token);
 }
 
 async function parseError(response: Response): Promise<never> {
