@@ -88,6 +88,7 @@ user_settings (
 | `server/src/db.ts` | SQLite 스키마와 질의 |
 | `server/src/translation/` | 프롬프트 조립, provider 어댑터(Gemini/Claude), 사용량 기록 |
 | `server/src/index.ts` | HTTP 라우트, WebSocket 허브, 번역 큐 |
+| `scripts/free-ports.mjs` | `npm run dev` 전에 이전 프로세스를 정리 (/proc 을 직접 읽는다) |
 | `server/glossary.json` | 애칭·고유명사·둘만 아는 표현 |
 | `web/src/useChat.ts` | WebSocket 연결과 재연결, 클라이언트 상태 |
 | `web/src/components/` | 로그인 / 채팅방 / 말풍선 / 설정 |

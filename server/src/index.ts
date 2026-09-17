@@ -43,6 +43,20 @@ const MAX_NOTE_LENGTH = 500;
 // 파일로 관리하던 용어집을 DB 로 옮긴다. 처음 켤 때 한 번만 옮겨 담는다.
 seedGlossary(config.glossary);
 
+// 주소를 공개로 열어두면 패스코드가 유일한 자물쇠다. 예시 값 그대로면 잠그지 않은 것과 같다.
+for (const user of config.users) {
+  if (/^change-me/i.test(user.passcode)) {
+    console.warn(
+      `⚠️  ${user.profile.name} 의 패스코드가 예시 값(${user.passcode}) 그대로입니다. ` +
+        '저장소에 공개된 값이므로 아는 사람은 누구나 들어올 수 있습니다.',
+    );
+    console.warn(
+      `   바꾸려면: sed -i 's/^USER_${config.users[0] === user ? 'A' : 'B'}_PASSCODE=.*/USER_` +
+        `${config.users[0] === user ? 'A' : 'B'}_PASSCODE=원하는값/' .env  (뒤에 서버 재시작)`,
+    );
+  }
+}
+
 /** DB 에 저장된 설정을 얹은 현재 프로필. */
 function profileOf(userId: string): UserProfile {
   const user = findUserById(userId);

@@ -16,7 +16,9 @@
     "build": "npm run build --workspace=shared && npm run build --workspace=server && npm run build --workspace=web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "start": "npm run start --workspace=server",
-    "postinstall": "npm run build --workspace=shared"
+    "postinstall": "npm run build --workspace=shared",
+    "predev": "node scripts/free-ports.mjs 5173 8787",
+    "free-ports": "node scripts/free-ports.mjs 5173 8787"
   },
   "engines": {
     "node": ">=20"

@@ -4,8 +4,18 @@
   "postCreateCommand": "npm install",
   "forwardPorts": [5173, 8787],
   "portsAttributes": {
-    "5173": { "label": "web", "onAutoForward": "openBrowser" },
-    "8787": { "label": "server", "onAutoForward": "silent" }
+    "5173": {
+      "label": "web",
+      // 폰에서 바로 열 수 있도록 공개로 잡는다. 이렇게 하지 않으면 매번
+      // 포트 탭에서 손으로 바꿔야 하고, 깜빡하면 폰에서 404 만 보인다.
+      // 대신 패스코드가 유일한 자물쇠가 되므로 기본값을 쓰면 서버가 경고한다.
+      "visibility": "public",
+      "onAutoForward": "openBrowser"
+    },
+    "8787": {
+      "label": "server",
+      "onAutoForward": "silent"
+    }
   },
   "remoteEnv": {
     // Codespaces 는 https://<이름>-5173.app.github.dev 로 포트를 열어준다.
