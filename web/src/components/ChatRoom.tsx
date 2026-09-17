@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { LangCode } from '@fran/shared';
+import type { ChatMessage, LangCode } from '@fran/shared';
 import { useChat } from '../useChat';
+import Explanation from './Explanation';
 import Glossary from './Glossary';
+import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
 import Settings from './Settings';
 
@@ -21,6 +23,9 @@ export default function ChatRoom({ token, onLogout }: Props) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
+  /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
+  const [picked, setPicked] = useState<ChatMessage | null>(null);
+  const [explaining, setExplaining] = useState<ChatMessage | null>(null);
   const [alwaysShowSource, setAlwaysShowSource] = useState(
     () => localStorage.getItem(SOURCE_PREF_KEY) === '1',
   );
@@ -98,6 +103,7 @@ export default function ChatRoom({ token, onLogout }: Props) {
             extraLangs={extraLangs}
             alwaysShowSource={alwaysShowSource}
             onRetranslate={chat.retranslate}
+            onLongPress={setPicked}
           />
         ))}
         <div ref={bottomRef} />
@@ -143,6 +149,36 @@ export default function ChatRoom({ token, onLogout }: Props) {
           보내기
         </button>
       </form>
+
+      {picked && (
+        <MessageActions
+          canRetranslate={picked.senderId === chat.me?.id || picked.translationStatus === 'failed'}
+          onExplain={() => {
+            setExplaining(picked);
+            setPicked(null);
+          }}
+          onCopy={() => {
+            void navigator.clipboard?.writeText(picked.sourceText).catch(() => undefined);
+            setPicked(null);
+          }}
+          onRetranslate={() => {
+            chat.retranslate(picked.id);
+            setPicked(null);
+          }}
+          onClose={() => setPicked(null)}
+        />
+      )}
+
+      {explaining && (
+        <Explanation
+          message={explaining}
+          initialLang={
+            // 내가 공부하는 언어 쪽 문장을 먼저 보여준다.
+            explaining.sourceLang !== primaryLang ? explaining.sourceLang : (extraLangs[0] ?? primaryLang)
+          }
+          onClose={() => setExplaining(null)}
+        />
+      )}
 
       {glossaryOpen && (
         <Glossary

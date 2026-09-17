@@ -554,3 +554,121 @@ textarea {
   margin-top: 8px;
   font-size: 14px;
 }
+
+/* ---------- 길게 누르기 메뉴 ---------- */
+
+.bubble__body {
+  /* 길게 눌렀을 때 브라우저 기본 선택·확대 메뉴가 끼어들지 않게 한다. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.actions__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--surface-raised);
+  text-align: left;
+  cursor: pointer;
+}
+
+.actions__item span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.actions__cancel {
+  align-items: center;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* ---------- 문장 설명 ---------- */
+
+.explain__langs {
+  margin-top: 12px;
+}
+
+.explain__sentence {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-raised);
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.explain__loading {
+  margin: 16px 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.explain__summary {
+  margin: 14px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.explain__chunks {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.explain__chunks > li {
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+}
+
+.explain__chunkText {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.explain__reading {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.explain__meaning {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+
+.explain__note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.explain__points,
+.explain__replies {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.explain__replies > li {
+  margin-bottom: 6px;
+}

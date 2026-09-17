@@ -6,6 +6,7 @@ import {
   isLangCode,
   type ChatMessage,
   type GlossaryDraft,
+  type MessageExplanation,
   type GlossaryEntry,
   type LangCode,
   type Translation,
@@ -40,6 +41,14 @@ db.exec(`
     model      TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     PRIMARY KEY (message_id, lang)
+  );
+
+  CREATE TABLE IF NOT EXISTS explanations (
+    message_id   TEXT NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    target_lang  TEXT NOT NULL,
+    explain_lang TEXT NOT NULL,
+    payload      TEXT NOT NULL,
+    PRIMARY KEY (message_id, target_lang, explain_lang)
   );
 
   CREATE TABLE IF NOT EXISTS glossary (
@@ -325,4 +334,45 @@ export function deleteGlossaryEntry(id: string): void {
 export function seedGlossary(entries: Array<Omit<GlossaryDraft, 'avoid'> & { avoid?: string[] }>): void {
   if ((glossaryStatements.count.get()?.n ?? 0) > 0) return;
   for (const entry of entries) saveGlossaryEntry(entry);
+}
+
+/* ------------------------------------------------------------------ */
+/* 문장 설명 캐시                                                      */
+/* ------------------------------------------------------------------ */
+
+const explanationStatements = {
+  get: db.prepare<[string, string, string], { payload: string }>(
+    `SELECT payload FROM explanations
+      WHERE message_id = ? AND target_lang = ? AND explain_lang = ?`,
+  ),
+  put: db.prepare(
+    `INSERT INTO explanations (message_id, target_lang, explain_lang, payload)
+     VALUES (@message_id, @target_lang, @explain_lang, @payload)
+     ON CONFLICT (message_id, target_lang, explain_lang)
+       DO UPDATE SET payload = excluded.payload`,
+  ),
+};
+
+/** 한 번 설명한 문장은 다시 모델에 묻지 않는다. 같은 메시지를 여러 번 열어보게 되므로. */
+export function getExplanation(
+  messageId: string,
+  targetLang: LangCode,
+  explainLang: LangCode,
+): MessageExplanation | null {
+  const row = explanationStatements.get.get(messageId, targetLang, explainLang);
+  if (!row) return null;
+  try {
+    return JSON.parse(row.payload) as MessageExplanation;
+  } catch {
+    return null;
+  }
+}
+
+export function saveExplanation(messageId: string, explanation: MessageExplanation): void {
+  explanationStatements.put.run({
+    message_id: messageId,
+    target_lang: explanation.targetLang,
+    explain_lang: explanation.explainLang,
+    payload: JSON.stringify(explanation),
+  });
 }

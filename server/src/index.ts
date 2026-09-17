@@ -11,6 +11,7 @@ import {
   type ChatMessage,
   type ClientEvent,
   type LangCode,
+  type MessageExplanation,
   type ServerEvent,
   type UserProfile,
 } from '@fran/shared';
@@ -20,7 +21,9 @@ import {
   clearTranslations,
   deleteGlossaryEntry,
   getDisplayLangs,
+  getExplanation,
   listGlossary,
+  saveExplanation,
   saveGlossaryEntry,
   seedGlossary,
   setTranslationNote,
@@ -32,7 +35,7 @@ import {
   saveTranslation,
   setTranslationStatus,
 } from './db.js';
-import { TranslationError, getProvider, translateMessage } from './translation/index.js';
+import { TranslationError, explainMessage, getProvider, translateMessage } from './translation/index.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_NOTE_LENGTH = 500;
@@ -236,6 +239,60 @@ app.put('/api/settings', async (c) => {
   const profile = profileOf(userId);
   broadcast({ type: 'presence', userId, online: true });
   return c.json({ profile });
+});
+
+/* --------------------------- 문장 설명 --------------------------- */
+
+app.post('/api/messages/:id/explain', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const message = getMessage(c.req.param('id'));
+  if (!message) return c.json({ error: '메시지를 찾을 수 없습니다.' }, 404);
+
+  const body = (await c.req.json().catch(() => null)) as { targetLang?: unknown } | null;
+  const targetLang = isLangCode(body?.targetLang) ? body.targetLang : message.sourceLang;
+
+  // 설명 대상 문장 고르기: 원문이거나, 그 언어로 번역된 문장.
+  const text =
+    targetLang === message.sourceLang ? message.sourceText : message.translations[targetLang]?.text;
+  if (!text) {
+    return c.json({ error: '그 언어의 문장이 아직 없습니다.' }, 400);
+  }
+
+  const learner = profileOf(userId);
+  const explainLang = learner.displayLangs[0] ?? learner.nativeLang;
+
+  const cached = getExplanation(message.id, targetLang, explainLang);
+  if (cached) return c.json({ explanation: cached });
+
+  try {
+    const context = getRecentMessages(config.translation.contextSize + 1).filter(
+      (m) => m.createdAt < message.createdAt,
+    );
+    const { result, model } = await explainMessage({
+      text,
+      targetLang,
+      learner,
+      context,
+      participants: bothProfiles(),
+    });
+
+    const explanation: MessageExplanation = {
+      targetLang,
+      explainLang,
+      text,
+      ...result,
+      model,
+      createdAt: Date.now(),
+    };
+    saveExplanation(message.id, explanation);
+    return c.json({ explanation });
+  } catch (error) {
+    const reason = error instanceof TranslationError ? error.message : String(error);
+    console.error(`[explain] ${message.id} 실패: ${reason}`);
+    return c.json({ error: reason }, 502);
+  }
 });
 
 /* ---------------------------- 용어집 ---------------------------- */

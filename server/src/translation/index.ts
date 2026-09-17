@@ -1,8 +1,20 @@
 import type { ChatMessage, LangCode, UserProfile } from '@fran/shared';
 import { config } from '../config.js';
 import { listGlossary } from '../db.js';
-import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
-import { resultSchema, type TranslationResult } from './schema.js';
+import {
+  buildExplanationSystemPrompt,
+  buildExplanationUserPrompt,
+  buildSystemPrompt,
+  buildUserPrompt,
+} from './prompt.js';
+import {
+  EXPLANATION_SCHEMA,
+  OUTPUT_SCHEMA,
+  explanationSchema,
+  resultSchema,
+  type ExplanationResult,
+  type TranslationResult,
+} from './schema.js';
 import { ClaudeProvider } from './providers/claude.js';
 import { GeminiProvider, parseSafetyThreshold } from './providers/gemini.js';
 import {
@@ -14,7 +26,7 @@ import {
 } from './providers/types.js';
 
 export { TranslationError } from './providers/types.js';
-export type { TranslationResult } from './schema.js';
+export type { ExplanationResult, TranslationResult } from './schema.js';
 
 /* ------------------------------------------------------------------ */
 /* provider 선택                                                       */
@@ -135,6 +147,7 @@ export async function translateMessage({
   const response = await completeWithRetry(provider, {
     systemPrompt: buildSystemPrompt(participants, listGlossary()),
     userPrompt: buildUserPrompt(message, context, nameOf, targetLangs),
+    schema: OUTPUT_SCHEMA,
   });
   recordUsage(provider, response.usage, Date.now() - startedAt);
 
@@ -150,5 +163,55 @@ export async function translateMessage({
     throw new TranslationError(`모델 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
   }
 
+  return { result: parsed.data, model: provider.model };
+}
+
+/* ------------------------------------------------------------------ */
+/* 문장 설명                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface ExplainArgs {
+  /** 설명할 문장. 원문일 수도, 번역문일 수도 있다. */
+  text: string;
+  targetLang: LangCode;
+  learner: UserProfile;
+  context: ChatMessage[];
+  participants: UserProfile[];
+}
+
+export interface ExplainOutcome {
+  result: ExplanationResult;
+  model: string;
+}
+
+export async function explainMessage({
+  text,
+  targetLang,
+  learner,
+  context,
+  participants,
+}: ExplainArgs): Promise<ExplainOutcome> {
+  const provider = getProvider();
+  const nameOf = (userId: string) => participants.find((p) => p.id === userId)?.name ?? userId;
+
+  const startedAt = Date.now();
+  const response = await completeWithRetry(provider, {
+    systemPrompt: buildExplanationSystemPrompt(learner, targetLang),
+    userPrompt: buildExplanationUserPrompt(text, targetLang, context, nameOf),
+    schema: EXPLANATION_SCHEMA,
+  });
+  recordUsage(provider, response.usage, Date.now() - startedAt);
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(response.json);
+  } catch {
+    throw new TranslationError(`모델이 JSON 이 아닌 응답을 돌려줬습니다: ${response.json.slice(0, 200)}`);
+  }
+
+  const parsed = explanationSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new TranslationError(`설명 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
+  }
   return { result: parsed.data, model: provider.model };
 }

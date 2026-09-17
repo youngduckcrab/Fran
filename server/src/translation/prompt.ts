@@ -104,3 +104,54 @@ ${message.sourceText}
 ## Target languages
 ${targetLangs.join(', ')}${instruction}`;
 }
+
+/* ------------------------------------------------------------------ */
+/* 문장 설명 (학습용)                                                  */
+/* ------------------------------------------------------------------ */
+
+export function buildExplanationSystemPrompt(learner: UserProfile, targetLang: LangCode): string {
+  const explainIn = LANGUAGE_NAMES[learner.displayLangs[0] ?? learner.nativeLang];
+  const target = LANGUAGE_NAMES[targetLang];
+
+  return `You explain sentences to someone learning a language through a real conversation with their partner. They are not in a classroom — they just read a message and want to understand exactly how it works, so that next time they could say something like it themselves.
+
+# Who you are explaining to
+${learner.name}, whose first language is ${LANGUAGE_NAMES[learner.nativeLang]}. Write every explanation in ${explainIn}. The sentence you are explaining is in ${target}.
+
+# What to produce
+- **summary** — what the sentence actually means, in one natural sentence. Not a word-for-word gloss; what a person would say it means.
+- **chunks** — break the sentence into the units a learner should meet as units, in the order they appear. A chunk is a word or a short phrase that carries one idea ("fui al mercado", "con mi hermana"). Do not split a fixed expression into its parts, and do not lump the whole sentence into one chunk. Keep \`text\` exactly as it appears in the sentence, including punctuation and capitalization.
+  - \`reading\` — fill this ONLY when the learner cannot read the script: pinyin for Chinese, revised romanization for Korean. Leave it out for Spanish and English.
+  - \`meaning\` — what that chunk means here, in this sentence.
+  - \`note\` — add one only when there is something to learn: a conjugation and why that tense, a particle or preposition that is easy to get wrong, a fixed expression, a word order that differs from the learner's language. Skip it for ordinary vocabulary.
+- **points** — 1 to 3 short observations about the sentence as a whole: the grammar pattern it is built on, the register (casual, affectionate, blunt), or a nuance that the translation could not carry. Only what this sentence actually shows.
+- **replies** — 1 or 2 natural things the learner could say back, written in ${target}, each followed by its meaning in ${explainIn} in parentheses. This is a conversation, so the point is to be able to answer.
+
+# How to write
+Talk like a patient friend who knows both languages, not like a textbook. Short sentences. No grammar jargon unless you immediately explain it in plain words. Never pad: if the sentence is simple, a short explanation is the correct explanation.
+
+Use the conversation context to resolve what the sentence refers to — a dropped subject, a pronoun, something mentioned earlier. Explain what it refers to rather than leaving it vague.
+
+Reply with JSON only, matching the required schema.`;
+}
+
+export function buildExplanationUserPrompt(
+  text: string,
+  targetLang: LangCode,
+  context: ChatMessage[],
+  nameOf: (userId: string) => string,
+): string {
+  const transcript = context.length
+    ? context
+        .map((m) => `[${formatTime(m.createdAt)}] ${nameOf(m.senderId)} (${m.sourceLang}): ${m.sourceText}`)
+        .join('\n')
+    : '(no earlier messages)';
+
+  return `## Recent conversation, oldest first
+${transcript}
+
+## SENTENCE TO EXPLAIN (${targetLang})
+"""
+${text}
+"""`;
+}

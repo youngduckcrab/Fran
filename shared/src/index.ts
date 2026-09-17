@@ -65,6 +65,38 @@ export interface ChatMessage {
   translations: Partial<Record<LangCode, Translation>>;
 }
 
+/* ---------- 문장 설명 (학습용) ---------- */
+
+/** 문장을 의미 단위로 자른 조각 하나. */
+export interface ExplanationChunk {
+  /** 원문에서 잘라낸 그대로. 예: "fui al mercado" */
+  text: string;
+  /** 읽는 법. 한글·한자처럼 읽는 사람이 못 읽는 문자일 때만 채운다. */
+  reading?: string;
+  /** 이 조각의 뜻. */
+  meaning: string;
+  /** 문법·용법 설명. 배울 게 있을 때만. */
+  note?: string;
+}
+
+export interface MessageExplanation {
+  /** 설명 대상 문장의 언어. */
+  targetLang: LangCode;
+  /** 설명을 어느 언어로 썼는지(읽는 사람의 언어). */
+  explainLang: LangCode;
+  /** 설명한 문장 그대로. 원문일 수도 번역문일 수도 있다. */
+  text: string;
+  /** 이 문장이 결국 무슨 말인지 한 줄로. */
+  summary: string;
+  chunks: ExplanationChunk[];
+  /** 문법·뉘앙스 포인트. */
+  points: string[];
+  /** 이럴 때 이렇게 답하면 자연스럽다. */
+  replies: string[];
+  model: string;
+  createdAt: number;
+}
+
 /** 애칭·고유명사·둘만 아는 표현. 번역할 때 그대로 두거나 지정한 대로 옮긴다. */
 export interface GlossaryEntry {
   id: string;

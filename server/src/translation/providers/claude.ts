@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { OUTPUT_SCHEMA } from '../schema.js';
 import { TranslationError, type ProviderRequest, type ProviderResponse, type TranslationProvider } from './types.js';
 
 export type ClaudeEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'off';
@@ -33,7 +32,8 @@ export class ClaudeProvider implements TranslationProvider {
     this.client = new Anthropic(options.apiKey ? { apiKey: options.apiKey } : {});
   }
 
-  async complete({ systemPrompt, userPrompt }: ProviderRequest): Promise<ProviderResponse> {
+  async complete(request: ProviderRequest): Promise<ProviderResponse> {
+    const { systemPrompt, userPrompt } = request;
     let response: Anthropic.Message;
     try {
       response = await this.client.messages.create({
@@ -49,7 +49,7 @@ export class ClaudeProvider implements TranslationProvider {
         ],
         output_config: {
           ...(this.effort ? { effort: this.effort } : {}),
-          format: { type: 'json_schema', schema: OUTPUT_SCHEMA },
+          format: { type: 'json_schema', schema: request.schema as Record<string, unknown> },
         },
         messages: [{ role: 'user', content: userPrompt }],
       });

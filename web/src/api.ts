@@ -1,4 +1,10 @@
-import type { GlossaryDraft, GlossaryEntry, LangCode, UserProfile } from '@fran/shared';
+import type {
+  GlossaryDraft,
+  GlossaryEntry,
+  LangCode,
+  MessageExplanation,
+  UserProfile,
+} from '@fran/shared';
 
 const TOKEN_KEY = 'fran.token';
 
@@ -60,6 +66,19 @@ function authHeaders(): Record<string, string> {
     'content-type': 'application/json',
     authorization: `Bearer ${getToken() ?? ''}`,
   };
+}
+
+export async function explainMessage(
+  messageId: string,
+  targetLang: LangCode,
+): Promise<MessageExplanation> {
+  const response = await fetch(`/api/messages/${messageId}/explain`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ targetLang }),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { explanation: MessageExplanation }).explanation;
 }
 
 export async function fetchGlossary(): Promise<GlossaryEntry[]> {

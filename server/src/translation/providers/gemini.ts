@@ -4,7 +4,6 @@ import {
   HarmCategory,
   type SafetySetting,
 } from '@google/genai';
-import { OUTPUT_SCHEMA } from '../schema.js';
 import { TranslationError, type ProviderRequest, type ProviderResponse, type TranslationProvider } from './types.js';
 
 export interface GeminiOptions {
@@ -41,7 +40,8 @@ export class GeminiProvider implements TranslationProvider {
     }));
   }
 
-  async complete({ systemPrompt, userPrompt }: ProviderRequest): Promise<ProviderResponse> {
+  async complete(request: ProviderRequest): Promise<ProviderResponse> {
+    const { systemPrompt, userPrompt } = request;
     let response;
     try {
       response = await this.client.models.generateContent({
@@ -50,7 +50,7 @@ export class GeminiProvider implements TranslationProvider {
         config: {
           systemInstruction: systemPrompt,
           responseMimeType: 'application/json',
-          responseJsonSchema: OUTPUT_SCHEMA,
+          responseJsonSchema: request.schema,
           safetySettings: this.safetySettings,
           thinkingConfig: { thinkingBudget: this.thinkingBudget },
           maxOutputTokens: 4096,

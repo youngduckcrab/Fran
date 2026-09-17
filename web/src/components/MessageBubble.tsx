@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLongPress } from '../useLongPress';
 import { LANGUAGE_NAMES, type ChatMessage, type LangCode } from '@fran/shared';
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
   extraLangs: LangCode[];
   alwaysShowSource: boolean;
   onRetranslate: (messageId: string, translationNote?: string) => void;
+  /** 길게 눌렀을 때. 메뉴는 부모가 띄운다. */
+  onLongPress: (message: ChatMessage) => void;
 }
 
 function formatTime(timestamp: number): string {
@@ -23,8 +26,10 @@ export default function MessageBubble({
   extraLangs,
   alwaysShowSource,
   onRetranslate,
+  onLongPress,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const { handlers, consumeClick } = useLongPress(() => onLongPress(message));
 
   const isSourceLanguage = message.sourceLang === primaryLang;
   const primary = message.translations[primaryLang];
@@ -40,7 +45,15 @@ export default function MessageBubble({
 
   return (
     <li className={`bubble ${mine ? 'bubble--mine' : 'bubble--theirs'}`}>
-      <div className="bubble__body" onClick={() => setExpanded((value) => !value)}>
+      <div
+        className="bubble__body"
+        {...handlers}
+        onClick={() => {
+          // 길게 눌러 메뉴를 연 뒤 따라오는 click 은 무시한다.
+          if (consumeClick()) return;
+          setExpanded((value) => !value);
+        }}
+      >
         {headline ? (
           <p className="bubble__text">{headline}</p>
         ) : message.translationStatus === 'failed' ? (

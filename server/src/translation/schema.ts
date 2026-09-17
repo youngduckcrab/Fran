@@ -52,3 +52,49 @@ export const resultSchema = z.object({
 });
 
 export type TranslationResult = z.infer<typeof resultSchema>;
+
+/* ------------------------------------------------------------------ */
+/* 문장 설명                                                           */
+/* ------------------------------------------------------------------ */
+
+const chunkSchema = {
+  type: 'object',
+  properties: {
+    text: { type: 'string' },
+    reading: { type: 'string' },
+    meaning: { type: 'string' },
+    note: { type: 'string' },
+  },
+  required: ['text', 'meaning'],
+  additionalProperties: false,
+} as const;
+
+export const EXPLANATION_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    chunks: { type: 'array', items: chunkSchema },
+    points: { type: 'array', items: { type: 'string' } },
+    replies: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['summary', 'chunks', 'points', 'replies'],
+  additionalProperties: false,
+} as const;
+
+export const explanationSchema = z.object({
+  summary: z.string(),
+  chunks: z
+    .array(
+      z.object({
+        text: z.string(),
+        reading: z.string().optional(),
+        meaning: z.string(),
+        note: z.string().optional(),
+      }),
+    )
+    .default([]),
+  points: z.array(z.string()).default([]),
+  replies: z.array(z.string()).default([]),
+});
+
+export type ExplanationResult = z.infer<typeof explanationSchema>;

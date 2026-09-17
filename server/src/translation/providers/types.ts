@@ -3,6 +3,8 @@
 export interface ProviderRequest {
   systemPrompt: string;
   userPrompt: string;
+  /** 이 요청의 출력 형식(JSON Schema). 번역과 설명이 서로 다른 모양을 쓴다. */
+  schema: object;
 }
 
 export interface ProviderUsage {
