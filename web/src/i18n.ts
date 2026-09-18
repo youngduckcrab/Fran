@@ -62,6 +62,14 @@ const ko = {
   'explain.points': '짚고 갈 점',
   'explain.replies': '이렇게 답할 수 있어요',
 
+  'actions.pickWord': '단어 선택',
+  'actions.pickWordHint': '단어를 눌러 뜻을 보고 담아요',
+  'pick.title': '단어 눌러보기',
+  'pick.hint': '모르는 단어를 눌러보세요. 뜻을 알려주고 단어장에 담을 수 있어요.',
+  'pick.loading': '찾아보는 중…',
+  'pick.base': '기본형 {base}',
+  'pick.add': '{term} 담기',
+
   'settings.title': '설정',
   'settings.myLang': '내가 쓰는 언어',
   'settings.myLangHint': '입력한 문장이 이 언어라고 가정하고 번역합니다.',
@@ -273,6 +281,14 @@ const es: Record<StringKey, string> = {
   'explain.points': 'Para fijarse',
   'explain.replies': 'Puedes responder así',
 
+  'actions.pickWord': 'Elegir palabra',
+  'actions.pickWordHint': 'Toca una palabra para ver qué significa',
+  'pick.title': 'Toca una palabra',
+  'pick.hint': 'Toca la palabra que no conozcas. Te digo qué significa y la puedes guardar.',
+  'pick.loading': 'Buscándola…',
+  'pick.base': 'Forma base: {base}',
+  'pick.add': 'Guardar {term}',
+
   'settings.title': 'Ajustes',
   'settings.myLang': 'El idioma en que escribo',
   'settings.myLangHint': 'Se asume que escribes en este idioma al traducir.',
@@ -480,6 +496,14 @@ const en: Record<StringKey, string> = {
   'explain.loading': 'Reading it…',
   'explain.points': 'Worth noticing',
   'explain.replies': 'You could reply',
+
+  'actions.pickWord': 'Pick a word',
+  'actions.pickWordHint': 'Tap a word to see what it means',
+  'pick.title': 'Tap a word',
+  'pick.hint': 'Tap any word you do not know. I will tell you what it means and you can save it.',
+  'pick.loading': 'Looking it up…',
+  'pick.base': 'Base form: {base}',
+  'pick.add': 'Save {term}',
 
   'settings.title': 'Settings',
   'settings.myLang': 'The language I write in',

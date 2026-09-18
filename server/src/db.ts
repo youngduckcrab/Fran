@@ -20,6 +20,7 @@ import {
   type VocabDraft,
   type VocabEntry,
   type VocabExample,
+  type WordLookup,
 } from '@fran/shared';
 import { config } from './config.js';
 
@@ -78,6 +79,15 @@ const SCHEMA = `
     explain_lang TEXT NOT NULL,
     payload      TEXT NOT NULL,
     PRIMARY KEY (message_id, target_lang, explain_lang)
+  );
+
+  CREATE TABLE IF NOT EXISTS word_lookups (
+    message_id   TEXT NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    target_lang  TEXT NOT NULL,
+    explain_lang TEXT NOT NULL,
+    word         TEXT NOT NULL,
+    payload      TEXT NOT NULL,
+    PRIMARY KEY (message_id, target_lang, explain_lang, word)
   );
 
   CREATE TABLE IF NOT EXISTS glossary (
@@ -687,6 +697,43 @@ export async function saveExplanation(messageId: string, explanation: MessageExp
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (message_id, target_lang, explain_lang) DO UPDATE SET payload = EXCLUDED.payload`,
     [messageId, explanation.targetLang, explanation.explainLang, JSON.stringify(explanation)],
+  );
+}
+
+/* ---------------------------- 단어 풀이 캐시 ---------------------------- */
+
+/**
+ * 같은 문장의 같은 단어는 한 번만 묻는다.
+ *
+ * 단어를 눌러 보는 건 읽다가 걸릴 때마다 하는 일이라 금방 쌓인다. 문장이 달라지면
+ * 뜻도 달라질 수 있으니 메시지와 언어까지 함께 열쇠로 삼는다.
+ */
+export async function getWordLookup(
+  messageId: string,
+  targetLang: LangCode,
+  explainLang: LangCode,
+  word: string,
+): Promise<WordLookup | null> {
+  const { rows } = await pool.query<{ payload: string }>(
+    `SELECT payload FROM word_lookups
+      WHERE message_id = $1 AND target_lang = $2 AND explain_lang = $3 AND word = $4`,
+    [messageId, targetLang, explainLang, word],
+  );
+  const payload = rows[0]?.payload;
+  return payload ? parseJson<WordLookup | null>(payload, null) : null;
+}
+
+export async function saveWordLookup(
+  messageId: string,
+  explainLang: LangCode,
+  lookup: WordLookup,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO word_lookups (message_id, target_lang, explain_lang, word, payload)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (message_id, target_lang, explain_lang, word)
+       DO UPDATE SET payload = EXCLUDED.payload`,
+    [messageId, lookup.lang, explainLang, lookup.word, JSON.stringify(lookup)],
   );
 }
 

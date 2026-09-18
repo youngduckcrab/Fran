@@ -165,6 +165,33 @@ export interface MessageExplanation {
   createdAt: number;
 }
 
+/* ---------- 단어 하나만 풀어보기 ---------- */
+
+/**
+ * 문장에서 한 단어만 눌러 봤을 때 돌아오는 것.
+ *
+ * 설명(MessageExplanation)은 문장 전체를 뜯어보는 것이라 무겁다. 모르는 단어 하나가
+ * 걸렸을 뿐일 때는 그 단어만 짧게 알면 된다. 그래서 따로 둔다.
+ */
+export interface WordLookup {
+  /** 문장에서 누른 그대로. 예: "fui" */
+  word: string;
+  /** 사전에 실리는 형태. 예: "ir". 활용하지 않는 말이면 word 와 같다. */
+  base: string;
+  /** 그 단어의 언어. */
+  lang: LangCode;
+  /** 읽는 법. 한자·한글처럼 읽는 사람이 못 읽는 문자일 때만. */
+  reading?: string;
+  /** 품사. "동사", "verbo" 처럼 읽는 사람의 말로. */
+  pos?: string;
+  /** 사전에 실릴 법한 뜻. 단어장에 담을 때 이게 뜻이 된다. */
+  meaning: string;
+  /** 이 문장 안에서는 무슨 뜻으로 쓰였는지 한 줄. */
+  inSentence: string;
+  /** 활용·용법에서 짚을 것이 있을 때만. */
+  note?: string;
+}
+
 /** 애칭·고유명사·둘만 아는 표현. 번역할 때 그대로 두거나 지정한 대로 옮긴다. */
 export interface GlossaryEntry {
   id: string;

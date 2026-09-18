@@ -10,6 +10,7 @@ import type {
   UserProfile,
   VocabDraft,
   VocabEntry,
+  WordLookup,
 } from '@fran/shared';
 
 const LAST_USER_KEY = 'fran.lastUser';
@@ -125,6 +126,24 @@ export async function explainMessage(
   });
   if (!response.ok) await parseError(response);
   return ((await response.json()) as { explanation: MessageExplanation }).explanation;
+}
+
+/**
+ * 문장에서 단어 하나만 눌렀을 때 그 단어의 뜻.
+ * 문장 전체 설명보다 짧고 빠르다. 같은 문장의 같은 단어는 서버가 기억해 둔다.
+ */
+export async function lookUpWord(
+  messageId: string,
+  targetLang: LangCode,
+  word: string,
+): Promise<WordLookup> {
+  const response = await fetch(`/api/messages/${messageId}/word`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ targetLang, word }),
+  });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { lookup: WordLookup }).lookup;
 }
 
 export async function fetchGlossary(): Promise<GlossaryEntry[]> {

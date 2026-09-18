@@ -4,11 +4,14 @@ import { useT } from '../i18n';
 interface Props {
   /** 실패한 메시지에만 재번역을 띄운다. */
   canRetranslate: boolean;
+  /** 글이 있는 메시지에만 단어를 고를 수 있다. 사진만 보낸 것에는 고를 말이 없다. */
+  canPickWord: boolean;
   /** 내가 이미 단 반응. 다시 누르면 지운다. */
   myReaction: string | null;
   onReact: (emoji: string | null) => void;
   onReply: () => void;
   onExplain: () => void;
+  onPickWord: () => void;
   onSave: () => void;
   onCopy: () => void;
   onRetranslate: () => void;
@@ -18,10 +21,12 @@ interface Props {
 /** 말풍선을 길게 눌렀을 때 뜨는 메뉴. */
 export default function MessageActions({
   canRetranslate,
+  canPickWord,
   myReaction,
   onReact,
   onReply,
   onExplain,
+  onPickWord,
   onSave,
   onCopy,
   onRetranslate,
@@ -53,6 +58,12 @@ export default function MessageActions({
           <b>{t('actions.explain')}</b>
           <span>{t('actions.explainHint')}</span>
         </button>
+        {canPickWord && (
+          <button type="button" className="actions__item" onClick={onPickWord}>
+            <b>{t('actions.pickWord')}</b>
+            <span>{t('actions.pickWordHint')}</span>
+          </button>
+        )}
         <button type="button" className="actions__item" onClick={onSave}>
           <b>{t('actions.save')}</b>
           <span>{t('actions.saveHint')}</span>

@@ -21,6 +21,7 @@ import {
   type MessageExplanation,
   type ServerEvent,
   type UserProfile,
+  type WordLookup,
 } from '@fran/shared';
 import {
   MAX_PASSCODE_LENGTH,
@@ -65,6 +66,8 @@ import {
   deleteGlossaryEntry,
   getDisplayLangs,
   getExplanation,
+  getWordLookup,
+  saveWordLookup,
   listGlossary,
   pendingMessageIds,
   saveExplanation,
@@ -83,6 +86,7 @@ import {
   TranslationError,
   explainMessage,
   getProvider,
+  lookUpWord,
   makeExample,
   transcribeAudio,
   translateMessage,
@@ -791,6 +795,66 @@ app.post('/api/messages/:id/explain', async (c) => {
   } catch (error) {
     const reason = error instanceof TranslationError ? error.message : String(error);
     console.error(`[explain] ${message.id} 실패: ${reason}`);
+    return c.json({ error: reason }, 502);
+  }
+});
+
+/* --------------------------- 단어 풀이 --------------------------- */
+
+/** 눌러서 풀어볼 수 있는 단어의 최대 길이. 문장을 통째로 보내는 걸 막는다. */
+const MAX_WORD_LENGTH = 40;
+
+/**
+ * 문장에서 단어 하나만 눌렀을 때.
+ *
+ * 문장 전체 설명과 달리 문맥 전체를 모델에 보내지 않는다. 그 문장과 그 단어면 충분하고,
+ * 짧게 묻는 만큼 빨리 돌아온다. 같은 문장의 같은 단어는 캐시에서 꺼낸다.
+ */
+app.post('/api/messages/:id/word', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const message = await getMessage(c.req.param('id'));
+  if (!message) return c.json({ error: '메시지를 찾을 수 없습니다.' }, 404);
+
+  const body = (await c.req.json().catch(() => null)) as
+    | { targetLang?: unknown; word?: unknown }
+    | null;
+  const targetLang = isLangCode(body?.targetLang) ? body.targetLang : message.sourceLang;
+  const word = typeof body?.word === 'string' ? body.word.trim() : '';
+  if (!word || word.length > MAX_WORD_LENGTH) {
+    return c.json({ error: '단어를 찾을 수 없습니다.' }, 400);
+  }
+
+  const sentence =
+    targetLang === message.sourceLang ? messageText(message) : message.translations[targetLang]?.text;
+  if (!sentence) return c.json({ error: '그 언어의 문장이 아직 없습니다.' }, 400);
+  // 그 문장에 없는 말이면 물어볼 이유가 없다. 문장을 열쇠 삼은 캐시도 어긋난다.
+  if (!sentence.includes(word)) return c.json({ error: '문장에 없는 단어입니다.' }, 400);
+
+  const learner = await profileOf(userId);
+  const explainLang = learner.displayLangs[0] ?? learner.nativeLang;
+
+  const cached = await getWordLookup(message.id, targetLang, explainLang, word);
+  if (cached) return c.json({ lookup: cached });
+
+  try {
+    const { result } = await lookUpWord({ word, sentence, lang: targetLang, learner });
+    const lookup: WordLookup = {
+      word,
+      base: result.base,
+      lang: targetLang,
+      ...(result.reading ? { reading: result.reading } : {}),
+      ...(result.pos ? { pos: result.pos } : {}),
+      meaning: result.meaning,
+      inSentence: result.in_sentence,
+      ...(result.note ? { note: result.note } : {}),
+    };
+    await saveWordLookup(message.id, explainLang, lookup);
+    return c.json({ lookup });
+  } catch (error) {
+    const reason = error instanceof TranslationError ? error.message : String(error);
+    console.error(`[word] ${word} 실패: ${reason}`);
     return c.json({ error: reason }, 502);
   }
 });

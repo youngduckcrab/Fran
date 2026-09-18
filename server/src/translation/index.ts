@@ -10,20 +10,25 @@ import {
   buildTranscriptionSystemPrompt,
   buildTranscriptionUserPrompt,
   buildUserPrompt,
+  buildWordSystemPrompt,
+  buildWordUserPrompt,
 } from './prompt.js';
 import {
   EXAMPLE_SCHEMA,
   EXPLANATION_SCHEMA,
   OUTPUT_SCHEMA,
   TRANSCRIPT_SCHEMA,
+  WORD_SCHEMA,
   exampleSchema,
   explanationSchema,
   resultSchema,
   transcriptSchema,
+  wordSchema,
   type ExampleResult,
   type ExplanationResult,
   type TranscriptResult,
   type TranslationResult,
+  type WordResult,
 } from './schema.js';
 import { ClaudeProvider } from './providers/claude.js';
 import { GeminiProvider, parseSafetyThreshold } from './providers/gemini.js';
@@ -41,6 +46,7 @@ export type {
   ExplanationResult,
   TranscriptResult,
   TranslationResult,
+  WordResult,
 } from './schema.js';
 
 /* ------------------------------------------------------------------ */
@@ -332,6 +338,48 @@ export async function makeExample({
   const parsed = exampleSchema.safeParse(raw);
   if (!parsed.success) {
     throw new TranslationError(`예문 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
+  }
+  return { result: parsed.data, model: provider.model };
+}
+
+/* ------------------------------------------------------------------ */
+/* 단어 하나 풀어보기                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface WordArgs {
+  /** 누른 단어. 문장에서 잘라낸 그대로. */
+  word: string;
+  /** 그 단어가 들어 있는 문장. 문맥이 있어야 무슨 뜻으로 쓰였는지 말할 수 있다. */
+  sentence: string;
+  lang: LangCode;
+  learner: UserProfile;
+}
+
+export async function lookUpWord({
+  word,
+  sentence,
+  lang,
+  learner,
+}: WordArgs): Promise<{ result: WordResult; model: string }> {
+  const provider = getProvider();
+
+  const startedAt = Date.now();
+  const response = await completeWithRetry(provider, {
+    systemPrompt: buildWordSystemPrompt(learner, lang),
+    userPrompt: buildWordUserPrompt(word, sentence, lang),
+    schema: WORD_SCHEMA,
+  });
+  recordUsage(provider, response.usage, Date.now() - startedAt);
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(response.json);
+  } catch {
+    throw new TranslationError(`모델이 JSON 이 아닌 응답을 돌려줬습니다: ${response.json.slice(0, 200)}`);
+  }
+  const parsed = wordSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new TranslationError(`단어 풀이 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
   }
   return { result: parsed.data, model: provider.model };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, LangCode, SavedSentence } from '@fran/shared';
+import { messageText, type ChatMessage, type LangCode, type SavedSentence } from '@fran/shared';
 import type { Chat } from '../useChat';
 import { useT } from '../i18n';
 import Icon from './Icon';
@@ -12,6 +12,7 @@ import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
 import PhotoViewer from './PhotoViewer';
 import SaveSheet from './SaveSheet';
+import WordPicker from './WordPicker';
 import Composer from './Composer';
 
 interface Props {
@@ -46,6 +47,8 @@ export default function ChatRoom({
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
   const [picked, setPicked] = useState<ChatMessage | null>(null);
   const [explaining, setExplaining] = useState<ChatMessage | null>(null);
+  /** 단어를 하나씩 눌러 보고 있는 메시지. */
+  const [picking, setPicking] = useState<ChatMessage | null>(null);
   /**
    * 잠깐 떴다 사라지는 한 줄. 값과 함께 시각을 들고 있어야 같은 문구가 연달아 떠도
    * 다시 보이고, 앞의 것이 남긴 타이머가 뒤의 것을 지우지 않는다.
@@ -90,6 +93,10 @@ export default function ChatRoom({
 
   /** 상대가 실제로 읽는 언어. 내 메시지가 어떻게 갔는지 보여줄 때 쓴다. */
   const peerLang: LangCode = chat.peer?.displayLangs[0] ?? chat.peer?.nativeLang ?? 'es';
+
+  /** 공부하는 언어 쪽 문장을 먼저 펴 준다. 내 언어로 쓴 글이면 배우는 언어의 번역을. */
+  const studyLangOf = (message: ChatMessage): LangCode =>
+    message.sourceLang !== primaryLang ? message.sourceLang : (extraLangs[0] ?? primaryLang);
 
   const byId = new Map(chat.messages.map((message) => [message.id, message]));
   useEffect(() => {
@@ -193,6 +200,7 @@ export default function ChatRoom({
       {picked && (
         <MessageActions
           canRetranslate={picked.senderId === chat.me?.id || picked.translationStatus === 'failed'}
+          canPickWord={Boolean(messageText(picked))}
           myReaction={picked.reactions?.[chat.me?.id ?? ''] ?? null}
           onReact={(emoji) => {
             chat.react(picked.id, emoji);
@@ -204,6 +212,10 @@ export default function ChatRoom({
           }}
           onExplain={() => {
             setExplaining(picked);
+            setPicked(null);
+          }}
+          onPickWord={() => {
+            setPicking(picked);
             setPicked(null);
           }}
           onSave={() => {
@@ -243,13 +255,20 @@ export default function ChatRoom({
         />
       )}
 
+      {picking && (
+        <WordPicker
+          message={picking}
+          initialLang={studyLangOf(picking)}
+          extraLangs={extraLangs}
+          onAdded={onVocabAdded}
+          onClose={() => setPicking(null)}
+        />
+      )}
+
       {explaining && (
         <Explanation
           message={explaining}
-          initialLang={
-            // 내가 공부하는 언어 쪽 문장을 먼저 보여준다.
-            explaining.sourceLang !== primaryLang ? explaining.sourceLang : (extraLangs[0] ?? primaryLang)
-          }
+          initialLang={studyLangOf(explaining)}
           onAdded={onVocabAdded}
           onClose={() => setExplaining(null)}
         />

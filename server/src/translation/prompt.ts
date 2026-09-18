@@ -263,3 +263,45 @@ Meaning the learner saved: ${meaning}${note ? `\nNote: ${note}` : ''}${already}
 
 Write one example sentence using this word.`;
 }
+
+/* --------------------------- 단어 하나 풀어보기 --------------------------- */
+
+/**
+ * 문장에서 단어 하나만 눌렀을 때.
+ *
+ * 문장 전체 설명과 다른 점은 "짧아야 한다"는 것이다. 읽다가 걸린 단어 하나를 확인하는
+ * 중이라 긴 글이 뜨면 읽지 않는다. 대신 단어장에 그대로 담기게 되므로, 뜻은 나중에
+ * 다시 봐도 알아볼 수 있게 적어야 한다.
+ */
+export function buildWordSystemPrompt(learner: UserProfile, targetLang: LangCode): string {
+  const explainIn = LANGUAGE_NAMES[learner.displayLangs[0] ?? learner.nativeLang];
+  return `Someone reading a message in a language they are learning tapped one word in it. Tell them what that word means, briefly.
+
+# Who is asking
+${learner.name}, whose first language is ${LANGUAGE_NAMES[learner.nativeLang]}. The word is in ${LANGUAGE_NAMES[targetLang]}. Write everything in ${explainIn}.
+
+# What to give back
+- \`base\`: the dictionary form of the word, in ${LANGUAGE_NAMES[targetLang]} — the form you would look up ("fui" → "ir", "갔어요" → "가다", "了解" stays "了解"). If the word is already the dictionary form, repeat it as is.
+- \`reading\`: how to read it — only when the script itself is hard for this reader (hanzi, kanji, hangul for someone who does not read it). Leave it out otherwise.
+- \`pos\`: the part of speech, in plain words (noun / verb / adjective …), written in ${explainIn}.
+- \`meaning\`: the dictionary meaning, in ${explainIn}. One line. This goes straight into their vocabulary book, so it must stand on its own away from this sentence.
+- \`in_sentence\`: what it is doing in THIS sentence, in ${explainIn}. One line. If the word is inflected, conjugated or part of a set phrase, that is what to say here ("여기서는 과거형 — 갔다").
+- \`note\`: only when there is something worth knowing — a false friend, a Chilean usage, a word that changes meaning with a preposition. Leave it out when there is nothing to say. Never pad.
+
+# How to write
+Short. Like a friend answering across the table, not a dictionary entry. No grammar jargon unless you explain it in the same breath.
+
+Reply with JSON only, matching the required schema.`;
+}
+
+export function buildWordUserPrompt(word: string, sentence: string, targetLang: LangCode): string {
+  return `## The sentence (${targetLang})
+"""
+${sentence}
+"""
+
+## The word they tapped
+"${word}"
+
+Explain just that word.`;
+}

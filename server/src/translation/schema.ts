@@ -134,3 +134,32 @@ export const explanationSchema = z.object({
 });
 
 export type ExplanationResult = z.infer<typeof explanationSchema>;
+
+/* ------------------------------------------------------------------ */
+/* 단어 하나 풀어보기                                                  */
+/* ------------------------------------------------------------------ */
+
+export const WORD_SCHEMA = {
+  type: 'object',
+  properties: {
+    base: { type: 'string' },
+    reading: { type: 'string' },
+    pos: { type: 'string' },
+    meaning: { type: 'string' },
+    in_sentence: { type: 'string' },
+    note: { type: 'string' },
+  },
+  required: ['base', 'meaning', 'in_sentence'],
+  additionalProperties: false,
+} as const;
+
+export const wordSchema = z.object({
+  base: z.string().min(1),
+  reading: z.string().optional(),
+  pos: z.string().optional(),
+  meaning: z.string().min(1),
+  in_sentence: z.string().default(''),
+  note: z.string().optional(),
+});
+
+export type WordResult = z.infer<typeof wordSchema>;

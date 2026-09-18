@@ -2193,3 +2193,107 @@ button:active:not(:disabled) {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+/* ---------- 단어 눌러보기 ---------- */
+
+/*
+ * 문장을 그대로 보여 주되 단어마다 손가락이 닿을 자리를 준다. 줄바꿈은 문장처럼
+ * 자연스럽게 흐르고, 누를 수 있다는 건 옅은 밑줄로만 알린다 — 알록달록해지면
+ * 정작 읽기가 어렵다.
+ */
+.pick__sentence {
+  margin: 12px 0 0;
+  padding: 12px 10px;
+  border-radius: 16px;
+  background: var(--surface-raised);
+  font-size: 18px;
+  line-height: 2;
+}
+
+.pick__word {
+  /* 손가락이 닿을 자리는 넓히되, 눈에 보이는 간격은 그대로 두어 문장이 벌어져 보이지 않게. */
+  margin: 0 -2px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  text-underline-offset: 4px;
+}
+
+.pick__word.is-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* 이미 단어장에 담은 말. 어디까지 챙겼는지 문장에서 바로 보인다. */
+.pick__word.is-added {
+  text-decoration-style: solid;
+  text-decoration-color: var(--accent);
+}
+
+.wordcard {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.wordcard__pos {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.wordcard__base {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.wordcard__in {
+  margin: 8px 0 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--accent);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.wordcard__add {
+  margin-top: 14px;
+  width: 100%;
+  padding: 11px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-grad);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+.wordcard__add.is-on,
+.wordcard__add:disabled {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+  cursor: default;
+}
