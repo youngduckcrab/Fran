@@ -9,6 +9,7 @@ import {
   type LangCode,
 } from '@fran/shared';
 import { attachmentUrl, formatDuration } from '../media';
+import { hasSpeech } from '../speech';
 
 interface Props {
   message: ChatMessage;
@@ -101,13 +102,15 @@ export default function MessageBubble({
   const sourceKey = `${message.id}:source`;
   const sentAsKey = `${message.id}:sentAs`;
   const primaryKey = `${message.id}:primary`;
-  const canHearSource = speechSupported && !mine && Boolean(own);
+  // 이모지만 있는 말에는 읽어 줄 것이 없다. 눌러도 아무 일 없는 버튼은 띄우지 않는다.
+  const canHearSource = speechSupported && !mine && hasSpeech(own);
 
   /**
    * 소리 버튼. 줄마다 하나씩 붙어서, 그 줄에 적힌 말을 읽는다.
    * 무엇을 읽는지(원문인지 번역인지)를 설명에 적어 둔다 — 버튼이 둘 다 같게 생겼기 때문이다.
    */
   const speaker = (key: string, text: string, lang: LangCode, what: 'source' | 'translation') => {
+    if (!hasSpeech(text)) return null;
     const label = speakingKey === key
       ? t('bubble.stop')
       : what === 'source'

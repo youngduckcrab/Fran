@@ -15,7 +15,7 @@ import {
 } from '../api';
 import { useT } from '../i18n';
 import Icon from './Icon';
-import { useSpeaker, type Speaker } from '../speech';
+import { hasSpeech, useSpeaker, type Speaker } from '../speech';
 import { plainText } from '../text';
 
 interface Props {
@@ -171,7 +171,8 @@ function VocabCard({
   const [duplicate, setDuplicate] = useState(false);
 
   const speakButton = (key: string, text: string) =>
-    speaker.supported && (
+    speaker.supported &&
+    hasSpeech(text) && (
       <button
         type="button"
         className={`bubble__speak ${speaker.speakingKey === key ? 'is-on' : ''}`}

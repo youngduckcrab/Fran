@@ -10,7 +10,7 @@ import {
 import { lookUpWord, saveVocab } from '../api';
 import { useBackClose } from '../backstack';
 import { useT } from '../i18n';
-import { useSpeaker } from '../speech';
+import { hasSpeech, useSpeaker } from '../speech';
 import { splitWords } from '../words';
 import Icon from './Icon';
 
@@ -175,7 +175,7 @@ export default function WordPicker({ message, initialLang, extraLangs, onAdded, 
               <b>{lookup.word}</b>
               {lookup.reading && <span className="card__reading">{lookup.reading}</span>}
               {lookup.pos && <span className="wordcard__pos">{lookup.pos}</span>}
-              {speaker.supported && (
+              {speaker.supported && hasSpeech(lookup.word) && (
                 <button
                   type="button"
                   className={`bubble__speak ${speaker.speakingKey === speakKey ? 'is-on' : ''}`}
