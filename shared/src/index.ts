@@ -206,6 +206,14 @@ export interface SavedSentence {
 
 export type SavedSentenceDraft = Omit<SavedSentence, 'id' | 'userId' | 'createdAt'>;
 
+/** 단어장의 예문 한 줄. */
+export interface VocabExample {
+  sentence: string;
+  /** 그 문장의 뜻(담은 사람의 언어로). */
+  translation: string;
+  createdAt: number;
+}
+
 /** 단어장 한 줄. 설명 화면에서 조각을 그대로 담아 온다. */
 export interface VocabEntry {
   id: string;
@@ -219,19 +227,30 @@ export interface VocabEntry {
   note?: string;
   /** 외웠다고 표시했는지. 외운 것과 아직인 것을 갈라 보기 위해. */
   learned: boolean;
-  /** 이 단어가 실제로 쓰인 예문. 눌러서 만들면 그대로 저장된다. */
-  example?: string;
-  /** 위 예문의 뜻(내 언어로). */
-  exampleTranslation?: string;
+  /**
+   * 이 단어가 쓰인 예문들. 눌러서 만들 때마다 하나씩 쌓인다.
+   * 앞의 것을 지우지 않는다 — 같은 단어가 여러 상황에서 어떻게 쓰이는지가 배울 거리다.
+   */
+  examples: VocabExample[];
   /** 어느 메시지에서 담았는지. 되짚어 보기 위해. */
   messageId?: string;
   createdAt: number;
 }
 
-export type VocabDraft = Omit<
-  VocabEntry,
-  'id' | 'userId' | 'createdAt' | 'learned' | 'example' | 'exampleTranslation'
->;
+export type VocabDraft = Omit<VocabEntry, 'id' | 'userId' | 'createdAt' | 'learned' | 'examples'>;
+
+/**
+ * 예문이 겹치는지 견줄 때 쓰는 모양.
+ * 대소문자와 문장부호만 다른 것은 같은 문장으로 본다.
+ */
+export function sameSentence(a: string, b: string): boolean {
+  const plain = (text: string) =>
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  return plain(a) === plain(b);
+}
 
 /**
  * 표제어에서 문장부호를 떼어낸다. "¿Dormiste" → "Dormiste"

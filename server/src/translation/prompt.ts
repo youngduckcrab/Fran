@@ -242,9 +242,24 @@ ${learner.name}, whose first language is ${LANGUAGE_NAMES[learner.nativeLang]}. 
 Reply with JSON only, matching the required schema.`;
 }
 
-export function buildExampleUserPrompt(term: string, meaning: string, note?: string): string {
+export function buildExampleUserPrompt(
+  term: string,
+  meaning: string,
+  note: string | undefined,
+  existing: string[],
+): string {
+  // 이미 있는 문장을 보여 주고 다른 상황을 부탁한다. 같은 문장이 또 나오면 배울 것이 없다.
+  const already = existing.length
+    ? `
+
+Sentences already written for this word:
+${existing.map((sentence) => `- ${sentence}`).join('\n')}
+
+Write a DIFFERENT one: another situation, another sentence shape, not a reworded version of the above.`
+    : '';
+
   return `Word: ${term}
-Meaning the learner saved: ${meaning}${note ? `\nNote: ${note}` : ''}
+Meaning the learner saved: ${meaning}${note ? `\nNote: ${note}` : ''}${already}
 
 Write one example sentence using this word.`;
 }

@@ -301,6 +301,8 @@ export interface ExampleArgs {
   note?: string;
   lang: LangCode;
   learner: UserProfile;
+  /** 이미 만들어 둔 예문들. 같은 문장이 또 나오지 않도록 모델에 알려 준다. */
+  existing?: string[];
 }
 
 export async function makeExample({
@@ -309,13 +311,14 @@ export async function makeExample({
   note,
   lang,
   learner,
+  existing = [],
 }: ExampleArgs): Promise<{ result: ExampleResult; model: string }> {
   const provider = getProvider();
 
   const startedAt = Date.now();
   const response = await completeWithRetry(provider, {
     systemPrompt: buildExampleSystemPrompt(learner, lang),
-    userPrompt: buildExampleUserPrompt(term, meaning, note),
+    userPrompt: buildExampleUserPrompt(term, meaning, note, existing),
     schema: EXAMPLE_SCHEMA,
   });
   recordUsage(provider, response.usage, Date.now() - startedAt);

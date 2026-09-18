@@ -19,6 +19,7 @@ import {
   type TranslationStatus,
   type VocabDraft,
   type VocabEntry,
+  type VocabExample,
 } from '@fran/shared';
 import { config } from './config.js';
 
@@ -186,6 +187,19 @@ const SCHEMA = `
   ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS learned BOOLEAN NOT NULL DEFAULT FALSE;
   ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS example TEXT;
   ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS example_translation TEXT;
+  ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS examples TEXT NOT NULL DEFAULT '[]';
+
+  -- 예문을 하나만 두던 때 만들어 둔 것을 목록으로 옮긴다. 한 번만 움직이고 그 뒤로는
+  -- 조건에 걸리지 않는다.
+  UPDATE vocab
+     SET examples = json_build_array(
+           json_build_object(
+             'sentence', example,
+             'translation', COALESCE(example_translation, ''),
+             'createdAt', created_at
+           )
+         )::text
+   WHERE example IS NOT NULL AND (examples IS NULL OR examples = '[]');
 `;
 
 /** 서버가 요청을 받기 전에 한 번 부른다. 스키마가 없으면 만든다. */
@@ -764,8 +778,7 @@ interface VocabRow {
   meaning: string;
   note: string | null;
   learned: boolean;
-  example: string | null;
-  example_translation: string | null;
+  examples: string;
   message_id: string | null;
   created_at: number;
 }
@@ -780,8 +793,9 @@ function toVocab(row: VocabRow): VocabEntry {
     meaning: row.meaning,
     ...(row.note ? { note: row.note } : {}),
     learned: row.learned,
-    ...(row.example ? { example: row.example } : {}),
-    ...(row.example_translation ? { exampleTranslation: row.example_translation } : {}),
+    examples: parseJson<VocabExample[]>(row.examples ?? '[]', []).filter(
+      (item) => typeof item?.sentence === 'string' && item.sentence.trim(),
+    ),
     ...(row.message_id ? { messageId: row.message_id } : {}),
     createdAt: row.created_at,
   };
@@ -1003,15 +1017,22 @@ export async function getVocab(userId: string, id: string): Promise<VocabEntry |
   return rows[0] ? toVocab(rows[0]) : null;
 }
 
-export async function setVocabExample(
+/** 예문을 하나 더 쌓는다. 앞의 것은 그대로 둔다. */
+export async function addVocabExample(
   userId: string,
   id: string,
   example: { sentence: string; translation: string },
 ): Promise<VocabEntry | null> {
+  const current = await getVocab(userId, id);
+  if (!current) return null;
+
+  const next: VocabExample[] = [
+    ...current.examples,
+    { sentence: example.sentence, translation: example.translation, createdAt: Date.now() },
+  ];
   const { rows } = await pool.query<VocabRow>(
-    `UPDATE vocab SET example = $1, example_translation = $2
-      WHERE id = $3 AND user_id = $4 RETURNING *`,
-    [example.sentence, example.translation, id, userId],
+    `UPDATE vocab SET examples = $1 WHERE id = $2 AND user_id = $3 RETURNING *`,
+    [JSON.stringify(next), id, userId],
   );
   return rows[0] ? toVocab(rows[0]) : null;
 }

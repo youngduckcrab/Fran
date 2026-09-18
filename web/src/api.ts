@@ -248,15 +248,20 @@ export async function setVocabLearned(id: string, learned: boolean): Promise<Voc
   return ((await response.json()) as { entry: VocabEntry }).entry;
 }
 
-/** 이 단어가 쓰인 예문. 이미 있으면 그대로 돌려주고, refresh 를 주면 새로 만든다. */
-export async function makeVocabExample(id: string, refresh = false): Promise<VocabEntry> {
+/**
+ * 예문을 하나 더 만든다. 앞의 것은 그대로 쌓여 있다.
+ * 계속 같은 문장만 나오면 `duplicate` 로 알려 준다.
+ */
+export async function makeVocabExample(
+  id: string,
+): Promise<{ entry: VocabEntry; duplicate?: boolean }> {
   const response = await fetch(`/api/vocab/${id}/example`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ refresh }),
+    body: JSON.stringify({}),
   });
   if (!response.ok) await parseError(response);
-  return ((await response.json()) as { entry: VocabEntry }).entry;
+  return (await response.json()) as { entry: VocabEntry; duplicate?: boolean };
 }
 
 export async function saveTheme(theme: ThemeId): Promise<UserProfile> {

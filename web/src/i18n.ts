@@ -180,7 +180,9 @@ const ko = {
   'vocab.markLearned': '외웠어요로 옮기기',
   'vocab.markLearning': '다시 외우는 중으로',
   'vocab.example': '예문 보기',
-  'vocab.exampleAgain': '다른 예문',
+  'vocab.exampleAgain': '예문 더 만들기',
+  'vocab.exampleCount': '예문 {count}개',
+  'vocab.exampleDuplicate': '이미 있는 예문과 비슷한 것만 나와요. 조금 뒤에 다시 눌러 보세요.',
   'vocab.exampleLoading': '예문 만드는 중…',
   'vocab.emptyLearned': '아직 외웠다고 표시한 단어가 없어요.',
 
@@ -390,7 +392,9 @@ const es: Record<StringKey, string> = {
   'vocab.markLearned': 'Marcar como aprendida',
   'vocab.markLearning': 'Volver a por aprender',
   'vocab.example': 'Ver un ejemplo',
-  'vocab.exampleAgain': 'Otro ejemplo',
+  'vocab.exampleAgain': 'Otro ejemplo más',
+  'vocab.exampleCount': '{count} ejemplos',
+  'vocab.exampleDuplicate': 'Solo salen frases parecidas a las que ya hay. Inténtalo de nuevo en un rato.',
   'vocab.exampleLoading': 'Escribiendo un ejemplo…',
   'vocab.emptyLearned': 'Todavía no marcaste ninguna como aprendida.',
 
@@ -596,7 +600,9 @@ const en: Record<StringKey, string> = {
   'vocab.markLearned': 'Mark as learned',
   'vocab.markLearning': 'Move back to learning',
   'vocab.example': 'Show an example',
-  'vocab.exampleAgain': 'Another example',
+  'vocab.exampleAgain': 'One more example',
+  'vocab.exampleCount': '{count} examples',
+  'vocab.exampleDuplicate': 'Only sentences like the ones you already have. Try again in a moment.',
   'vocab.exampleLoading': 'Writing an example…',
   'vocab.emptyLearned': 'Nothing marked as learned yet.',
 

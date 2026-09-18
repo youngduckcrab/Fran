@@ -9,6 +9,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import {
   cleanTerm,
   isLangCode,
+  sameSentence,
   isThemeId,
   isWallpaperId,
   messageText,
@@ -56,7 +57,7 @@ import {
   saveTheme,
   saveWallpaper,
   savedKeysOf,
-  setVocabExample,
+  addVocabExample,
   setVocabLearned,
   toggleReaction,
   retryTranscript,
@@ -663,9 +664,14 @@ app.patch('/api/vocab/:id', async (c) => {
 });
 
 /**
- * 이 단어가 쓰인 예문 한 줄. 한 번 만들면 저장해 두고 다시 만들지 않는다 —
- * 무료 한도를 아끼기도 하고, 볼 때마다 문장이 바뀌면 외울 수가 없다.
+ * 이 단어가 쓰인 예문을 하나 더 만든다.
+ *
+ * 앞의 것을 지우지 않고 쌓는다 — 같은 단어가 여러 상황에서 어떻게 쓰이는지가 배울 거리다.
+ * 이미 있는 문장은 모델에 알려 주고 다른 것을 부탁하지만, 그래도 같은 말이 나오면
+ * 몇 번 더 물어본다. 계속 겹치면 그냥 겹친다고 알려 준다(무료 한도를 갉아먹을 이유가 없다).
  */
+const EXAMPLE_TRIES = 3;
+
 app.post('/api/vocab/:id/example', async (c) => {
   const userId = authenticate(c);
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
@@ -673,19 +679,29 @@ app.post('/api/vocab/:id/example', async (c) => {
   const entry = await getVocab(userId, c.req.param('id'));
   if (!entry) return c.json({ error: '단어를 찾을 수 없습니다.' }, 404);
 
-  const body = (await c.req.json().catch(() => null)) as { refresh?: unknown } | null;
-  if (entry.example && body?.refresh !== true) return c.json({ entry });
+  const learner = await profileOf(userId);
+  const existing = entry.examples.map((example) => example.sentence);
 
   try {
-    const { result } = await makeExample({
-      term: entry.term,
-      meaning: entry.meaning,
-      ...(entry.note ? { note: entry.note } : {}),
-      lang: entry.lang,
-      learner: await profileOf(userId),
-    });
-    const updated = await setVocabExample(userId, entry.id, result);
-    return c.json({ entry: updated ?? entry });
+    for (let attempt = 0; attempt < EXAMPLE_TRIES; attempt += 1) {
+      const { result } = await makeExample({
+        term: entry.term,
+        meaning: entry.meaning,
+        ...(entry.note ? { note: entry.note } : {}),
+        lang: entry.lang,
+        learner,
+        existing,
+      });
+
+      if (existing.some((sentence) => sameSentence(sentence, result.sentence))) {
+        console.log(`[example] ${entry.term}: 같은 문장이 나와 다시 물어봅니다 (${attempt + 1}/${EXAMPLE_TRIES})`);
+        continue;
+      }
+
+      const updated = await addVocabExample(userId, entry.id, result);
+      return c.json({ entry: updated ?? entry });
+    }
+    return c.json({ entry, duplicate: true });
   } catch (error) {
     const reason = error instanceof TranslationError ? error.message : String(error);
     console.error(`[example] ${entry.term} 실패: ${reason}`);

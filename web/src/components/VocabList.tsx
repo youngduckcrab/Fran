@@ -130,6 +130,8 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
   const [busy, setBusy] = useState(false);
   /** 예문은 눌렀을 때만 펼친다. 카드가 길어지면 훑어보기 어렵다. */
   const [open, setOpen] = useState(false);
+  /** 아무리 물어도 같은 문장만 나올 때. */
+  const [duplicate, setDuplicate] = useState(false);
 
   const speakButton = (key: string, text: string) =>
     speaker.supported && (
@@ -143,12 +145,15 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
       </button>
     );
 
-  const example = async (refresh: boolean) => {
+  /** 예문을 하나 더. 이미 있는 것은 그대로 두고 아래에 쌓는다. */
+  const addExample = async () => {
     setOpen(true);
-    if (entry.example && !refresh) return;
     setBusy(true);
+    setDuplicate(false);
     try {
-      onChanged(await makeVocabExample(entry.id, refresh));
+      const result = await makeVocabExample(entry.id);
+      onChanged(result.entry);
+      setDuplicate(Boolean(result.duplicate));
     } catch (cause) {
       onError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -176,24 +181,24 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
 
       {open && (
         <div className="card__example">
+          <ol className="examples">
+            {entry.examples.map((example, index) => (
+              <li key={`${example.createdAt}-${index}`}>
+                <p className="card__main">
+                  {example.sentence}
+                  {speakButton(`${entry.id}:example:${index}`, example.sentence)}
+                </p>
+                {example.translation && <p className="card__sub">{example.translation}</p>}
+              </li>
+            ))}
+          </ol>
+
           {busy && <p className="card__note">{t('vocab.exampleLoading')}</p>}
-          {entry.example && (
-            <>
-              <p className="card__main">
-                {entry.example}
-                {speakButton(`${entry.id}:example`, entry.example)}
-              </p>
-              {entry.exampleTranslation && <p className="card__sub">{entry.exampleTranslation}</p>}
-              <button
-                type="button"
-                className="card__delete"
-                onClick={() => void example(true)}
-                disabled={busy}
-              >
-                {t('vocab.exampleAgain')}
-              </button>
-            </>
-          )}
+          {duplicate && <p className="card__note">{t('vocab.exampleDuplicate')}</p>}
+
+          <button type="button" className="card__delete" onClick={() => void addExample()} disabled={busy}>
+            {t('vocab.exampleAgain')}
+          </button>
         </div>
       )}
 
@@ -210,8 +215,14 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
 
         <div className="card__tools">
           {!open && (
-            <button type="button" className="card__delete" onClick={() => void example(false)}>
-              {t('vocab.example')}
+            <button
+              type="button"
+              className="card__delete"
+              onClick={() => (entry.examples.length > 0 ? setOpen(true) : void addExample())}
+            >
+              {entry.examples.length > 0
+                ? t('vocab.exampleCount', { count: String(entry.examples.length) })
+                : t('vocab.example')}
             </button>
           )}
           <button type="button" className="card__delete" onClick={onDelete}>
