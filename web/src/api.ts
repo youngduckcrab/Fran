@@ -173,10 +173,10 @@ export function websocketUrl(token: string): string {
 
 /* ---------------------- 저장한 문장 / 단어장 ---------------------- */
 
-export async function fetchSaved(): Promise<{ items: SavedSentence[]; keys: string[] }> {
+export async function fetchSaved(): Promise<SavedSentence[]> {
   const response = await fetch('/api/saved', { headers: authHeaders() });
   if (!response.ok) await parseError(response);
-  return (await response.json()) as { items: SavedSentence[]; keys: string[] };
+  return ((await response.json()) as { items: SavedSentence[] }).items;
 }
 
 export async function saveSentence(draft: SavedSentenceDraft): Promise<SavedSentence> {

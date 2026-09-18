@@ -2169,3 +2169,27 @@ button:active:not(:disabled) {
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
+
+/* 예문을 보관함에 담는 작은 버튼 */
+.example__save {
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.18);
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.example__save.is-on {
+  opacity: 1;
+  background: var(--accent-soft);
+  color: var(--accent);
+}

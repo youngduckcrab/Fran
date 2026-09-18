@@ -1,17 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LANGUAGE_NAMES, type LangCode, type VocabEntry } from '@fran/shared';
-import { deleteVocab, fetchVocab, makeVocabExample, setVocabLearned } from '../api';
+import {
+  LANGUAGE_NAMES,
+  type LangCode,
+  type SavedSentence,
+  type VocabEntry,
+} from '@fran/shared';
+import {
+  deleteSaved,
+  deleteVocab,
+  fetchVocab,
+  makeVocabExample,
+  saveSentence,
+  setVocabLearned,
+} from '../api';
 import { useT } from '../i18n';
 import Icon from './Icon';
 import { useSpeaker, type Speaker } from '../speech';
+import { plainText } from '../text';
 
 interface Props {
   onBack: () => void;
+  /** 내가 읽는 언어. 예문을 보관할 때 뜻을 함께 남기는 데 쓴다. */
+  primaryLang: LangCode;
+  /** 이미 보관함에 있는 문장들. `<언어>:<다듬은 문장>` → 저장 항목 id. */
+  savedTexts: Map<string, string>;
+  onSaved: (item: SavedSentence) => void;
+  onUnsaved: (id: string) => void;
 }
 
 type Shelf = 'learning' | 'learned';
 
-export default function VocabList({ onBack }: Props) {
+export default function VocabList({ onBack, primaryLang, savedTexts, onSaved, onUnsaved }: Props) {
   const t = useT();
   const [entries, setEntries] = useState<VocabEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +126,10 @@ export default function VocabList({ onBack }: Props) {
             key={entry.id}
             entry={entry}
             speaker={speaker}
+            primaryLang={primaryLang}
+            savedTexts={savedTexts}
+            onSaved={onSaved}
+            onUnsaved={onUnsaved}
             onChanged={replace}
             onDelete={() => void remove(entry.id)}
             onError={setError}
@@ -120,12 +143,26 @@ export default function VocabList({ onBack }: Props) {
 interface CardProps {
   entry: VocabEntry;
   speaker: Speaker;
+  primaryLang: LangCode;
+  savedTexts: Map<string, string>;
+  onSaved: (item: SavedSentence) => void;
+  onUnsaved: (id: string) => void;
   onChanged: (entry: VocabEntry) => void;
   onDelete: () => void;
   onError: (message: string) => void;
 }
 
-function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) {
+function VocabCard({
+  entry,
+  speaker,
+  primaryLang,
+  savedTexts,
+  onSaved,
+  onUnsaved,
+  onChanged,
+  onDelete,
+  onError,
+}: CardProps) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   /** 예문은 눌렀을 때만 펼친다. 카드가 길어지면 훑어보기 어렵다. */
@@ -161,6 +198,30 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
     }
   };
 
+  /** 예문을 보관함에 담거나 뺀다. 다시 누르면 취소된다. */
+  const toggleSaved = async (sentence: string, translation: string) => {
+    const key = `${entry.lang}:${plainText(sentence)}`;
+    const existing = savedTexts.get(key);
+    try {
+      if (existing) {
+        await deleteSaved(existing);
+        onUnsaved(existing);
+        return;
+      }
+      onSaved(
+        await saveSentence({
+          lang: entry.lang,
+          text: sentence,
+          vocabTerm: entry.term,
+          // 예문의 뜻은 내가 읽는 언어로 온다. 짝으로 함께 보관한다.
+          ...(translation ? { pairLang: primaryLang, pairText: translation } : {}),
+        }),
+      );
+    } catch (cause) {
+      onError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
   const toggleLearned = async () => {
     try {
       onChanged(await setVocabLearned(entry.id, !entry.learned));
@@ -182,15 +243,28 @@ function VocabCard({ entry, speaker, onChanged, onDelete, onError }: CardProps) 
       {open && (
         <div className="card__example">
           <ol className="examples">
-            {entry.examples.map((example, index) => (
-              <li key={`${example.createdAt}-${index}`}>
-                <p className="card__main">
-                  {example.sentence}
-                  {speakButton(`${entry.id}:example:${index}`, example.sentence)}
-                </p>
-                {example.translation && <p className="card__sub">{example.translation}</p>}
-              </li>
-            ))}
+            {entry.examples.map((example, index) => {
+              const saved = savedTexts.has(`${entry.lang}:${plainText(example.sentence)}`);
+              return (
+                <li key={`${example.createdAt}-${index}`}>
+                  <p className="card__main">
+                    {example.sentence}
+                    {speakButton(`${entry.id}:example:${index}`, example.sentence)}
+                    {/* 마음에 드는 예문은 보관함으로. 다시 누르면 빠진다. */}
+                    <button
+                      type="button"
+                      className={`example__save ${saved ? 'is-on' : ''}`}
+                      title={saved ? t('save.remove') : t('actions.save')}
+                      aria-label={saved ? t('save.remove') : t('actions.save')}
+                      onClick={() => void toggleSaved(example.sentence, example.translation)}
+                    >
+                      <Icon name={saved ? 'check' : 'bookmark'} size={14} />
+                    </button>
+                  </p>
+                  {example.translation && <p className="card__sub">{example.translation}</p>}
+                </li>
+              );
+            })}
           </ol>
 
           {busy && <p className="card__note">{t('vocab.exampleLoading')}</p>}

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChatMessage, LangCode } from '@fran/shared';
+import type { ChatMessage, LangCode, SavedSentence } from '@fran/shared';
 import type { Chat } from '../useChat';
 import { useT } from '../i18n';
 import Icon from './Icon';
@@ -21,8 +21,8 @@ interface Props {
   alwaysShowSource: boolean;
   /** 이미 저장한 문장들. `<메시지 id>:<언어>` → 저장 항목 id. */
   savedIds: Map<string, string>;
-  onSaved: (key: string, id: string) => void;
-  onUnsaved: (key: string) => void;
+  onSaved: (item: SavedSentence) => void;
+  onUnsaved: (id: string) => void;
   onVocabAdded: () => void;
   onBack: () => void;
   onGlossary: () => void;
@@ -231,12 +231,12 @@ export default function ChatRoom({
           message={saving}
           primaryLang={primaryLang}
           savedIds={savedIds}
-          onSaved={(key, id) => {
-            onSaved(key, id);
+          onSaved={(item) => {
+            onSaved(item);
             say(t('actions.saved'));
           }}
-          onUnsaved={(key) => {
-            onUnsaved(key);
+          onUnsaved={(id) => {
+            onUnsaved(id);
             say(t('save.removed'));
           }}
           onClose={() => setSaving(null)}

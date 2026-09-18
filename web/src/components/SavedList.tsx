@@ -19,7 +19,7 @@ export default function SavedList({ onBack }: Props) {
 
   useEffect(() => {
     fetchSaved()
-      .then((result) => setItems(result.items))
+      .then(setItems)
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
   }, []);
 
@@ -109,7 +109,11 @@ export default function SavedList({ onBack }: Props) {
               </p>
             )}
             <div className="card__foot">
-              <span className="card__tag">{new Date(item.createdAt).toLocaleDateString()}</span>
+              <span className="card__tag">
+                {/* 단어장 예문에서 담은 것이면 어느 단어에서 왔는지 적어 둔다. */}
+                {item.vocabTerm ? `${item.vocabTerm} · ` : ''}
+                {new Date(item.createdAt).toLocaleDateString()}
+              </span>
               <button type="button" className="card__delete" onClick={() => void remove(item.id)}>
                 {t('saved.delete')}
               </button>

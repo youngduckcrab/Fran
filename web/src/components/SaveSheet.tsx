@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { LANGUAGE_NAMES, messageText, type ChatMessage, type LangCode } from '@fran/shared';
+import {
+  LANGUAGE_NAMES,
+  messageText,
+  type ChatMessage,
+  type LangCode,
+  type SavedSentence,
+} from '@fran/shared';
 import { deleteSaved, saveSentence } from '../api';
 import { useBackClose } from '../backstack';
 import { useT } from '../i18n';
@@ -11,8 +17,8 @@ interface Props {
   primaryLang: LangCode;
   /** 이미 저장한 것들. `<메시지 id>:<언어>` → 저장 항목 id. */
   savedIds: Map<string, string>;
-  onSaved: (key: string, id: string) => void;
-  onUnsaved: (key: string) => void;
+  onSaved: (item: SavedSentence) => void;
+  onUnsaved: (id: string) => void;
   onClose: () => void;
 }
 
@@ -52,7 +58,7 @@ export default function SaveSheet({
       const existing = savedIds.get(key);
       if (existing) {
         await deleteSaved(existing);
-        onUnsaved(key);
+        onUnsaved(existing);
         return;
       }
 
@@ -66,7 +72,7 @@ export default function SaveSheet({
         text,
         ...(pairText && pairLang !== lang ? { pairLang, pairText } : {}),
       });
-      onSaved(key, item.id);
+      onSaved(item);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {

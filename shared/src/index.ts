@@ -193,7 +193,10 @@ export interface SavedSentence {
   id: string;
   /** 저장한 사람. 각자의 보관함이다. */
   userId: string;
-  messageId: string;
+  /** 대화에서 저장했다면 그 메시지. 단어장 예문에서 저장한 것에는 없다. */
+  messageId?: string;
+  /** 단어장 예문에서 저장했다면 그 단어. 어디서 온 문장인지 보여주는 데 쓴다. */
+  vocabTerm?: string;
   /** 저장한 문장의 언어. */
   lang: LangCode;
   text: string;

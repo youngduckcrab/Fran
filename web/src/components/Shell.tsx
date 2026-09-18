@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LangCode } from '@fran/shared';
+import type { LangCode, SavedSentence } from '@fran/shared';
 import { useChat } from '../useChat';
 import { fetchPhotos, fetchSaved, fetchVocab } from '../api';
 import { toUiLang, useT, type UiLang } from '../i18n';
 import { previewOf } from '../preview';
+import { plainText } from '../text';
 import { useBackClose } from '../backstack';
 import { applyTheme } from '../theme';
 import Album from './Album';
@@ -42,17 +43,14 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
 
   /** 모아 보기 화면들의 개수. 홈에 숫자를 띄우고, 저장할 때마다 다시 센다. */
   const [counts, setCounts] = useState({ saved: 0, vocab: 0, photos: 0 });
-  /**
-   * 이미 저장해 둔 문장. `<메시지 id>:<언어>` → 저장 항목 id.
-   * 취소하려면 항목 id 가 있어야 해서 키만 들고 있지 않는다.
-   */
-  const [savedIds, setSavedIds] = useState<Map<string, string>>(new Map());
+/** 저장한 문장 목록. 화면마다 필요한 색인은 여기서 만든다. */
+  const [savedItems, setSavedItems] = useState<SavedSentence[]>([]);
 
   const refreshCounts = useCallback(async () => {
     try {
       const [saved, vocab, photos] = await Promise.all([fetchSaved(), fetchVocab(), fetchPhotos()]);
-      setCounts({ saved: saved.items.length, vocab: vocab.length, photos: photos.length });
-      setSavedIds(new Map(saved.items.map((item) => [`${item.messageId}:${item.lang}`, item.id])));
+      setCounts({ saved: saved.length, vocab: vocab.length, photos: photos.length });
+      setSavedItems(saved);
     } catch {
       // 숫자는 있으면 좋은 것일 뿐이다. 실패해도 대화에는 영향이 없다.
     }
@@ -156,19 +154,32 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const lastMessage = chat.messages[chat.messages.length - 1];
   const extraLangs = useMemo(() => chat.me?.displayLangs.slice(1) ?? [], [chat.me]);
 
-  const markSaved = useCallback((key: string, id: string) => {
-    setSavedIds((previous) => new Map(previous).set(key, id));
+  const markSaved = useCallback((item: SavedSentence) => {
+    setSavedItems((previous) => [item, ...previous]);
     setCounts((previous) => ({ ...previous, saved: previous.saved + 1 }));
   }, []);
 
-  const unmarkSaved = useCallback((key: string) => {
-    setSavedIds((previous) => {
-      const next = new Map(previous);
-      next.delete(key);
-      return next;
-    });
+  const unmarkSaved = useCallback((id: string) => {
+    setSavedItems((previous) => previous.filter((item) => item.id !== id));
     setCounts((previous) => ({ ...previous, saved: Math.max(0, previous.saved - 1) }));
   }, []);
+
+  /** 대화의 말풍선용 색인: `<메시지 id>:<언어>` → 저장 항목 id. */
+  const savedIds = useMemo(
+    () =>
+      new Map(
+        savedItems
+          .filter((item) => item.messageId)
+          .map((item) => [`${item.messageId}:${item.lang}`, item.id]),
+      ),
+    [savedItems],
+  );
+
+  /** 단어장 예문용 색인: 문장 자체로 찾는다(예문에는 메시지가 없다). */
+  const savedTexts = useMemo(
+    () => new Map(savedItems.map((item) => [`${item.lang}:${plainText(item.text)}`, item.id])),
+    [savedItems],
+  );
 
   const backHome = useCallback(() => {
     setView('home');
@@ -228,7 +239,15 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
       )}
 
       {view === 'saved' && <SavedList onBack={backHome} />}
-      {view === 'vocab' && <VocabList onBack={backHome} />}
+      {view === 'vocab' && (
+        <VocabList
+          onBack={backHome}
+          primaryLang={primaryLang}
+          savedTexts={savedTexts}
+          onSaved={markSaved}
+          onUnsaved={unmarkSaved}
+        />
+      )}
       {view === 'album' && (
         <Album onBack={backHome} me={chat.me} peer={chat.peer} />
       )}

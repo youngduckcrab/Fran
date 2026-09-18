@@ -56,7 +56,6 @@ import {
   saveVocab,
   saveTheme,
   saveWallpaper,
-  savedKeysOf,
   addVocabExample,
   setVocabLearned,
   toggleReaction,
@@ -589,8 +588,7 @@ app.get('/api/photos', async (c) => {
 app.get('/api/saved', async (c) => {
   const userId = authenticate(c);
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
-  const [items, keys] = await Promise.all([listSaved(userId), savedKeysOf(userId)]);
-  return c.json({ items, keys });
+  return c.json({ items: await listSaved(userId) });
 });
 
 app.post('/api/saved', async (c) => {
@@ -598,13 +596,18 @@ app.post('/api/saved', async (c) => {
   if (!userId) return c.json({ error: 'unauthorized' }, 401);
 
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
-  const messageId = typeof body?.messageId === 'string' ? body.messageId : '';
   const text = typeof body?.text === 'string' ? body.text.trim() : '';
   const lang = isLangCode(body?.lang) ? body.lang : null;
-  if (!messageId || !text || !lang) return c.json({ error: '저장할 문장이 없습니다.' }, 400);
+  if (!text || !lang) return c.json({ error: '저장할 문장이 없습니다.' }, 400);
 
+  // 대화의 말풍선에서 온 것이면 메시지가, 단어장 예문에서 온 것이면 그 단어가 붙는다.
   const item = await saveSentence(userId, {
-    messageId,
+    ...(typeof body?.messageId === 'string' && body.messageId
+      ? { messageId: body.messageId }
+      : {}),
+    ...(typeof body?.vocabTerm === 'string' && body.vocabTerm.trim()
+      ? { vocabTerm: body.vocabTerm.trim() }
+      : {}),
     lang,
     text,
     ...(isLangCode(body?.pairLang) ? { pairLang: body.pairLang } : {}),

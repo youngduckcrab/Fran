@@ -188,6 +188,9 @@ const SCHEMA = `
   ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS example TEXT;
   ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS example_translation TEXT;
   ALTER TABLE vocab         ADD COLUMN IF NOT EXISTS examples TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE saved_sentences ADD COLUMN IF NOT EXISTS vocab_term TEXT;
+  -- 단어장 예문처럼 대화에 없는 문장도 보관한다. 메시지가 없을 수 있다.
+  ALTER TABLE saved_sentences ALTER COLUMN message_id DROP NOT NULL;
 
   -- 예문을 하나만 두던 때 만들어 둔 것을 목록으로 옮긴다. 한 번만 움직이고 그 뒤로는
   -- 조건에 걸리지 않는다.
@@ -692,7 +695,8 @@ export async function saveExplanation(messageId: string, explanation: MessageExp
 interface SavedRow {
   id: string;
   user_id: string;
-  message_id: string;
+  message_id: string | null;
+  vocab_term: string | null;
   lang: string;
   text: string;
   pair_lang: string | null;
@@ -705,7 +709,8 @@ function toSaved(row: SavedRow): SavedSentence {
   return {
     id: row.id,
     userId: row.user_id,
-    messageId: row.message_id,
+    ...(row.message_id ? { messageId: row.message_id } : {}),
+    ...(row.vocab_term ? { vocabTerm: row.vocab_term } : {}),
     lang: isLangCode(row.lang) ? row.lang : 'ko',
     text: row.text,
     ...(row.pair_lang && isLangCode(row.pair_lang) ? { pairLang: row.pair_lang } : {}),
@@ -727,7 +732,8 @@ export async function saveSentence(userId: string, draft: SavedSentenceDraft): P
   const entry: SavedSentence = {
     id: crypto.randomUUID(),
     userId,
-    messageId: draft.messageId,
+    ...(draft.messageId ? { messageId: draft.messageId } : {}),
+    ...(draft.vocabTerm ? { vocabTerm: draft.vocabTerm } : {}),
     lang: draft.lang,
     text: draft.text,
     ...(draft.pairLang ? { pairLang: draft.pairLang } : {}),
@@ -736,12 +742,14 @@ export async function saveSentence(userId: string, draft: SavedSentenceDraft): P
     createdAt: Date.now(),
   };
   await pool.query(
-    `INSERT INTO saved_sentences (id, user_id, message_id, lang, text, pair_lang, pair_text, note, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO saved_sentences
+       (id, user_id, message_id, vocab_term, lang, text, pair_lang, pair_text, note, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       entry.id,
       userId,
-      entry.messageId,
+      entry.messageId ?? null,
+      entry.vocabTerm ?? null,
       entry.lang,
       entry.text,
       entry.pairLang ?? null,
@@ -756,15 +764,6 @@ export async function saveSentence(userId: string, draft: SavedSentenceDraft): P
 /** 자기 것만 지울 수 있다. */
 export async function deleteSaved(userId: string, id: string): Promise<void> {
   await pool.query(`DELETE FROM saved_sentences WHERE id = $1 AND user_id = $2`, [id, userId]);
-}
-
-/** 이 메시지의 이 언어 문장을 이미 저장해 뒀는지. 화면에서 별을 채워 보여주려고. */
-export async function savedKeysOf(userId: string): Promise<string[]> {
-  const { rows } = await pool.query<{ message_id: string; lang: string }>(
-    `SELECT message_id, lang FROM saved_sentences WHERE user_id = $1`,
-    [userId],
-  );
-  return rows.map((row) => `${row.message_id}:${row.lang}`);
 }
 
 /* ------------------------------ 단어장 ------------------------------ */
