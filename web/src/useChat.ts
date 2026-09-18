@@ -252,6 +252,12 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     [emit],
   );
 
+  /** 보낸 글을 고친다. 서버가 번역을 다시 돌려서 update 로 돌려준다. */
+  const editMessage = useCallback(
+    (messageId: string, text: string) => emit({ type: 'edit', messageId, text }),
+    [emit],
+  );
+
   const retranslate = useCallback(
     (messageId: string, translationNote?: string) =>
       emit({ type: 'retranslate', messageId, translationNote }),
@@ -272,6 +278,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   return {
     ...state,
     sendMessage,
+    editMessage,
     markRead,
     react,
     retranslate,

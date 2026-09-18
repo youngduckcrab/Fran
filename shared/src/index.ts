@@ -18,6 +18,17 @@ export function isLangCode(value: unknown): value is LangCode {
   return typeof value === 'string' && (LANGUAGES as readonly string[]).includes(value);
 }
 
+/**
+ * 문법적 성. 스페인어는 자기 얘기를 할 때도("cansado/cansada") 상대를 부를 때도
+ * 성에 따라 말이 달라진다. 모르면 번역이 반은 틀린다.
+ */
+export const GENDERS = ['female', 'male', 'unspecified'] as const;
+export type Gender = (typeof GENDERS)[number];
+
+export function isGender(value: unknown): value is Gender {
+  return typeof value === 'string' && (GENDERS as readonly string[]).includes(value);
+}
+
 /** 두 사용자 중 한 명. 가입 절차 없이 설정 파일로 고정된다. */
 export interface UserProfile {
   id: string;
@@ -26,6 +37,10 @@ export interface UserProfile {
   nativeLang: LangCode;
   /** 상대 메시지를 어떤 언어로 받아볼지. 첫 번째가 주 언어. */
   displayLangs: LangCode[];
+  /** 문법적 성. 스페인어 형용사·호칭이 이걸 따라간다. 안 고르면 'unspecified'. */
+  gender?: Gender;
+  /** 사는 곳. 같은 스페인어라도 칠레에서 쓰는 말과 스페인에서 쓰는 말이 다르다. */
+  region?: string;
   /** 대화방 배경. 기본 배경 id 이거나 `photo:<첨부 id>`. */
   wallpaper?: string;
   /** 앱 색. 고르지 않았으면 기본(rose). */
@@ -115,6 +130,8 @@ export interface ChatMessage {
   replyTo?: string;
   /** 사람 id -> 이모지. 한 사람당 하나만 남는다. */
   reactions?: Record<string, string>;
+  /** 보낸 뒤 글을 고쳤다면 그 시각. 상대에게 "수정됨" 으로 보인다. */
+  editedAt?: number;
 }
 
 /** 말풍선에 달 수 있는 반응. 고르는 게 빨라야 해서 몇 개로 줄여 둔다. */
@@ -335,6 +352,8 @@ export type ClientEvent =
   | { type: 'typing'; isTyping: boolean }
   /** 지시를 바꿔서 다시 번역할 수 있다. 생략하면 기존 지시를 그대로 쓴다. */
   | { type: 'retranslate'; messageId: string; translationNote?: string }
+  /** 보낸 글을 고친다. 자기가 보낸 것만. 고치면 번역도 다시 돌린다. */
+  | { type: 'edit'; messageId: string; text: string }
   /** 여기까지 읽었다. 값은 읽은 마지막 메시지의 시각. */
   | { type: 'read'; at: number }
   /** 이모지 반응. 같은 이모지를 다시 누르거나 null 을 보내면 지운다. */

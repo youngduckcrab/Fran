@@ -8,6 +8,7 @@ import { cors } from 'hono/cors';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
   cleanTerm,
+  isGender,
   isLangCode,
   sameSentence,
   isThemeId,
@@ -40,6 +41,7 @@ import {
   countUnread,
   deleteSaved,
   deleteVocab,
+  editMessage,
   getAttachmentBytes,
   getAudioForTranscription,
   getReadState,
@@ -66,6 +68,7 @@ import {
   deleteGlossaryEntry,
   getDisplayLangs,
   getExplanation,
+  getIdentity,
   getWordLookup,
   saveWordLookup,
   listGlossary,
@@ -95,6 +98,8 @@ import { toModelAudio } from './audio.js';
 import { initPush, kindLabel, notify, publicKey, subscribe, unsubscribe } from './push.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
+/** 사는 곳. "Santiago, Chile" 정도면 충분하다. 주소를 적는 칸이 아니다. */
+const MAX_REGION_LENGTH = 60;
 const MAX_NOTE_LENGTH = 500;
 /** 첨부 한 건의 최대 크기. 사진은 화면에서 미리 줄여서 올라온다. */
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -119,16 +124,19 @@ function warnAboutDefaultPasscodes(): void {
 async function profileOf(userId: string): Promise<UserProfile> {
   const user = findUserById(userId);
   if (!user) throw new Error(`알 수 없는 사용자: ${userId}`);
-  const [nativeLang, displayLangs, wallpaper, theme] = await Promise.all([
+  const [nativeLang, displayLangs, wallpaper, theme, identity] = await Promise.all([
     getNativeLang(userId, user.profile.nativeLang),
     getDisplayLangs(userId, user.profile.displayLangs),
     getWallpaper(userId),
     getTheme(userId),
+    getIdentity(userId),
   ]);
   return {
     ...user.profile,
     nativeLang,
     displayLangs,
+    // 앱에서 고른 것이 .env 의 기본값을 이긴다.
+    ...identity,
     ...(wallpaper ? { wallpaper } : {}),
     ...(theme ? { theme } : {}),
   };
@@ -449,7 +457,15 @@ app.put('/api/settings', async (c) => {
     return c.json({ error: '표시 언어를 최소 하나는 골라야 합니다.' }, 400);
   }
 
-  await saveSettings(userId, nativeLang, displayLangs);
+  // 번역이 쓰는 나에 대한 정보. 안 보내면 지금 값을 그대로 둔다.
+  const gender = isGender(body?.gender) ? body.gender : current.gender;
+  const region =
+    typeof body?.region === 'string' ? body.region.trim().slice(0, MAX_REGION_LENGTH) : current.region;
+
+  await saveSettings(userId, nativeLang, displayLangs, {
+    ...(gender ? { gender } : {}),
+    ...(region ? { region } : {}),
+  });
   const profile = await profileOf(userId);
   broadcast({ type: 'presence', userId, online: true });
   return c.json({ profile });
@@ -1029,6 +1045,25 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
       await setTranslationStatus(message.id, 'pending');
       await publishUpdate(message.id);
       enqueueTranslation(message.id);
+      return;
+    }
+
+    case 'edit': {
+      const text = event.text.trim();
+      if (!text) return;
+      if (text.length > MAX_MESSAGE_LENGTH) {
+        send(socket, { type: 'error', message: `메시지가 너무 깁니다 (최대 ${MAX_MESSAGE_LENGTH}자).` });
+        return;
+      }
+
+      // 내가 보낸 것만, 실제로 달라졌을 때만. 같은 글로 다시 번역을 돌릴 이유가 없다.
+      if (!(await editMessage(event.messageId, userId, text))) return;
+
+      // 고친 순간부터 옛 번역은 틀린 말이다. 먼저 비우고, 새 원문과 함께 보낸다.
+      await clearTranslations(event.messageId);
+      await setTranslationStatus(event.messageId, 'pending');
+      await publishUpdate(event.messageId);
+      enqueueTranslation(event.messageId);
       return;
     }
 

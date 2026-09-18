@@ -2297,3 +2297,18 @@ button:active:not(:disabled) {
   box-shadow: none;
   cursor: default;
 }
+
+/* ---------- 메시지 수정 ---------- */
+
+/* 답장 줄과 같은 자리에 뜨지만 하는 일이 다르다. 색으로 구분해 준다. */
+.replyBar--editing {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* "수정됨". 시각 옆에 작게 — 알아볼 수만 있으면 되는 표시다. */
+.bubble__edited {
+  font-size: 11px;
+  font-style: italic;
+  opacity: 0.75;
+}

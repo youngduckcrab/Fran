@@ -7,6 +7,7 @@ import { useBackClose } from '../backstack';
 import { clearDelivered } from '../notifications';
 import { useSpeaker } from '../speech';
 import { wallpaperProps } from '../wallpaper';
+import type { BubbleView } from '../view';
 import Explanation from './Explanation';
 import MessageActions from './MessageActions';
 import MessageBubble from './MessageBubble';
@@ -19,7 +20,7 @@ interface Props {
   chat: Chat;
   primaryLang: LangCode;
   extraLangs: LangCode[];
-  alwaysShowSource: boolean;
+  view: BubbleView;
   /** 이미 저장한 문장들. `<메시지 id>:<언어>` → 저장 항목 id. */
   savedIds: Map<string, string>;
   onSaved: (item: SavedSentence) => void;
@@ -34,7 +35,7 @@ export default function ChatRoom({
   chat,
   primaryLang,
   extraLangs,
-  alwaysShowSource,
+  view,
   savedIds,
   onSaved,
   onUnsaved,
@@ -61,6 +62,8 @@ export default function ChatRoom({
   const [saving, setSaving] = useState<ChatMessage | null>(null);
   /** 크게 보고 있는 사진. */
   const [photo, setPhoto] = useState<string | null>(null);
+  /** 고치고 있는 내 메시지. */
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
   const speaker = useSpeaker();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -109,6 +112,7 @@ export default function ChatRoom({
   useBackClose(Boolean(saving), () => setSaving(null));
   useBackClose(Boolean(explaining), () => setExplaining(null));
   useBackClose(Boolean(replyTo), () => setReplyTo(null));
+  useBackClose(Boolean(editing), () => setEditing(null));
 
   const wall = wallpaperProps(chat.me?.wallpaper);
 
@@ -150,7 +154,7 @@ export default function ChatRoom({
             extraLangs={extraLangs}
             peerLang={peerLang}
             peerName={chat.peer?.name ?? ''}
-            alwaysShowSource={alwaysShowSource}
+            view={view}
             speechSupported={speaker.supported}
             speakingKey={speaker.speakingKey}
             failedSpeechKey={speaker.failedKey}
@@ -182,6 +186,12 @@ export default function ChatRoom({
 
       <Composer
         peerName={chat.peer?.name ?? ''}
+        editing={editing}
+        onEdit={(messageId, text) => {
+          chat.editMessage(messageId, text);
+          say(t('edit.saved'));
+        }}
+        onCancelEdit={() => setEditing(null)}
         onSend={(text, options) => {
           chat.sendMessage(text, {
             ...options,
@@ -201,6 +211,7 @@ export default function ChatRoom({
         <MessageActions
           canRetranslate={picked.senderId === chat.me?.id || picked.translationStatus === 'failed'}
           canPickWord={Boolean(messageText(picked))}
+          canEdit={picked.senderId === chat.me?.id && Boolean(messageText(picked))}
           myReaction={picked.reactions?.[chat.me?.id ?? ''] ?? null}
           onReact={(emoji) => {
             chat.react(picked.id, emoji);
@@ -216,6 +227,11 @@ export default function ChatRoom({
           }}
           onPickWord={() => {
             setPicking(picked);
+            setPicked(null);
+          }}
+          onEdit={() => {
+            setEditing(picked);
+            setReplyTo(null);
             setPicked(null);
           }}
           onSave={() => {

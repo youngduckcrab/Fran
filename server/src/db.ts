@@ -1,11 +1,13 @@
 import crypto from 'node:crypto';
 import pg from 'pg';
 import {
+  isGender,
   isLangCode,
   isThemeId,
   type Attachment,
   type AttachmentKind,
   type ChatMessage,
+  type Gender,
   type GlossaryDraft,
   type GlossaryEntry,
   type LangCode,
@@ -190,6 +192,11 @@ const SCHEMA = `
   ALTER TABLE messages ADD COLUMN IF NOT EXISTS translation_note       TEXT;
   ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS wallpaper TEXT;
   ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS theme     TEXT;
+  -- 스페인어는 말하는 사람과 듣는 사람의 성에 따라 말이 달라진다. 사는 곳도 말을 가른다.
+  ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS gender    TEXT;
+  ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS region    TEXT;
+  -- 보낸 뒤 고친 메시지. 상대에게 "수정됨" 으로 보인다.
+  ALTER TABLE messages      ADD COLUMN IF NOT EXISTS edited_at BIGINT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript        TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_lang   TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_status TEXT;
@@ -235,6 +242,7 @@ interface MessageRow {
   translation_error_code: string | null;
   translation_note: string | null;
   reply_to: string | null;
+  edited_at: number | null;
 }
 
 interface TranslationRow {
@@ -352,6 +360,7 @@ async function hydrate(rows: MessageRow[]): Promise<ChatMessage[]> {
     ...(attachments.has(row.id) ? { attachment: attachments.get(row.id) as Attachment } : {}),
     ...(row.reply_to ? { replyTo: row.reply_to } : {}),
     ...(reactions.has(row.id) ? { reactions: reactions.get(row.id) } : {}),
+    ...(row.edited_at ? { editedAt: Number(row.edited_at) } : {}),
   }));
 }
 
@@ -558,6 +567,22 @@ export async function pendingMessageIds(limit = 50): Promise<string[]> {
   return rows.map((row) => row.id);
 }
 
+/**
+ * 보낸 글을 고친다. 자기가 보낸 것만, 내용이 실제로 달라졌을 때만.
+ *
+ * 고친 글이 원문이 되므로 번역은 여기서 손대지 않고 부르는 쪽에서 비운다 —
+ * 원문과 번역이 어긋난 채 잠깐이라도 남으면 상대가 그 사이에 엉뚱한 말을 읽는다.
+ * 돌려주는 값은 실제로 고쳤는지다.
+ */
+export async function editMessage(messageId: string, userId: string, text: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE messages SET source_text = $1, edited_at = $2
+      WHERE id = $3 AND sender_id = $4 AND source_text <> $1`,
+    [text, Date.now(), messageId, userId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 export async function clearTranslations(messageId: string): Promise<void> {
   await pool.query(`DELETE FROM translations WHERE message_id = $1`, [messageId]);
 }
@@ -570,6 +595,8 @@ interface SettingsRow {
   display_langs: string;
   wallpaper: string | null;
   theme: string | null;
+  gender: string | null;
+  region: string | null;
 }
 
 async function settingsOf(userId: string): Promise<SettingsRow | null> {
@@ -589,17 +616,33 @@ export async function getNativeLang(userId: string, fallback: LangCode): Promise
   return row && isLangCode(row.native_lang) ? row.native_lang : fallback;
 }
 
+/** 번역이 쓰는 나에 대한 정보. 고르지 않았으면 .env 의 값이 그대로 남는다. */
+export async function getIdentity(
+  userId: string,
+): Promise<{ gender?: Gender; region?: string }> {
+  const row = await settingsOf(userId);
+  if (!row) return {};
+  return {
+    ...(isGender(row.gender) ? { gender: row.gender } : {}),
+    ...(row.region?.trim() ? { region: row.region.trim() } : {}),
+  };
+}
+
 export async function saveSettings(
   userId: string,
   nativeLang: LangCode,
   displayLangs: LangCode[],
+  identity: { gender?: Gender; region?: string } = {},
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO user_settings (user_id, native_lang, display_langs)
-     VALUES ($1, $2, $3)
+    `INSERT INTO user_settings (user_id, native_lang, display_langs, gender, region)
+     VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (user_id) DO UPDATE SET
-       native_lang = EXCLUDED.native_lang, display_langs = EXCLUDED.display_langs`,
-    [userId, nativeLang, displayLangs.join(',')],
+       native_lang = EXCLUDED.native_lang,
+       display_langs = EXCLUDED.display_langs,
+       gender = EXCLUDED.gender,
+       region = EXCLUDED.region`,
+    [userId, nativeLang, displayLangs.join(','), identity.gender ?? null, identity.region ?? null],
   );
 }
 

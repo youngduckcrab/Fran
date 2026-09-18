@@ -160,6 +160,28 @@ Gemini는 `responseJsonSchema` + `responseMimeType: 'application/json'`, Claude�
 한 번 만든 설명은 `explanations` 테이블에 (메시지, 대상 언어, 설명 언어) 단위로 저장된다.
 같은 문장을 다시 열어도 모델을 다시 부르지 않는다.
 
+## 두 사람이 누구인지
+
+시스템 프롬프트의 "두 사람" 소개에 **성과 사는 곳** 이 함께 들어간다.
+
+```
+- 승윤 (id: me) — writes mainly in 한국어 (ko); is studying English;
+  a man — use masculine agreement for him; lives in 한국.
+- Fran (id: fran) — writes mainly in Español (es); is studying English, 中文;
+  a woman — use feminine agreement for her; lives in Chile.
+```
+
+없어도 번역은 되지만 스페인어에서는 절반이 어긋난다. "피곤해" 는 쓴 사람이 남자면
+`estoy cansado`, 여자면 `estoy cansada` 이고, "예쁘더라" 는 듣는 사람 쪽을 따라간다.
+한국어에는 이 단서가 아예 없어서 알려주지 않으면 모델이 기본값(대개 남성형)으로 찍는다.
+
+사는 곳은 어느 나라 말씨로 쓸지를 정한다. 칠레 사람에게 `vosotros` 나 `vale` 가 가면
+읽는 맛이 확 떨어진다. 다만 공부하는 사람이 읽는 글이라, 알아듣기 어려울 만큼 두꺼운
+지역 슬랭까지는 쓰지 말라고 함께 적어 둔다.
+
+성이 적히지 않았으면 **찍지 말고 성이 드러나지 않게 돌려 쓰라**고 못박는다. 반반 확률로
+맞히는 것보다 중립적으로 쓰는 편이 낫다.
+
 ## 단어 하나만 풀어보기
 
 **단어 선택** 은 문장 설명과 다른 요청이다. 문장을 통째로 뜯는 대신, 누른 단어 하나만
@@ -194,7 +216,8 @@ Gemini는 `responseJsonSchema` + `responseMimeType: 'application/json'`, Claude�
 
 **요청은 언제 나가나.** 메시지 한 통에 번역 1회(대상 언어가 몇 개든 한 번), 설명 1회
 (같은 문장·같은 언어는 저장해 두고 다시 부르지 않는다), 눌러 본 단어마다 1회(같은 문장의
-같은 단어는 역시 저장해 둔다). 테스트하며 메시지를 연달아 보내면
+같은 단어는 역시 저장해 둔다). 보낸 글을 고치면 그 메시지의 번역이 다시 1회 나간다 —
+글이 실제로 달라졌을 때만이라, 같은 글로 다시 저장하는 것으로는 나가지 않는다. 테스트하며 메시지를 연달아 보내면
 분당 한도에 쉽게 닿는다. 터미널의 `[usage] ... 누적 N회` 로 지금까지 몇 번 썼는지 볼 수 있다.
 
 **모델을 바꾸면 한도도 바뀐다.** 대체로 `lite` < `flash` < `pro` 순으로 한도가 줄고 품질이

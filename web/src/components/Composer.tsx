@@ -16,6 +16,10 @@ interface Props {
   peerName: string;
   onSend: (text: string, options: { translationNote?: string; attachmentId?: string }) => void;
   onTyping: (isTyping: boolean) => void;
+  /** 고치고 있는 내 메시지. 없으면 평소처럼 새로 쓴다. */
+  editing: ChatMessage | null;
+  onEdit: (messageId: string, text: string) => void;
+  onCancelEdit: () => void;
   /** 지금 답하고 있는 메시지. 없으면 평소처럼 보낸다. */
   replyTo: ChatMessage | null;
   /** 그 메시지를 쓴 사람의 이름. */
@@ -35,6 +39,9 @@ export default function Composer({
   peerName,
   onSend,
   onTyping,
+  editing,
+  onEdit,
+  onCancelEdit,
   replyTo,
   replyName,
   onCancelReply,
@@ -58,7 +65,26 @@ export default function Composer({
   const [trayOpen, setTrayOpen] = useState(false);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * 엔터가 줄바꿈이 되면서 여러 줄짜리 글이 흔해졌다. 한 줄만 보이면 쓴 것을 다시
+   * 읽어볼 수가 없다. 내용에 맞춰 늘리되, 화면을 다 덮지 않게 CSS 의 최대 높이까지만.
+   */
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${input.scrollHeight}px`;
+  }, [draft]);
+
+  /** 고치기 시작하면 그 글을 입력칸에 옮겨 담는다. 처음부터 다시 칠 이유가 없다. */
+  useEffect(() => {
+    if (!editing) return;
+    setDraft(messageText(editing));
+    inputRef.current?.focus();
+  }, [editing]);
 
   // 녹음 중에는 시간이 흐르는 게 보여야 한다. 멈춘 줄 알고 한참 떠들게 되면 곤란하다.
   useEffect(() => {
@@ -124,6 +150,16 @@ export default function Composer({
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
+
+    // 고치는 중에는 글만 바꾼다. 사진·음성·번역 지시는 보낼 때 정해진 것 그대로 둔다.
+    if (editing) {
+      if (text) onEdit(editing.id, text);
+      setDraft('');
+      onCancelEdit();
+      onTyping(false);
+      return;
+    }
+
     if (!text && !pending) return;
 
     onSend(text, {
@@ -139,7 +175,29 @@ export default function Composer({
 
   return (
     <>
-      {replyTo && (
+      {editing && (
+        <div className="replyBar replyBar--editing">
+          <span className="replyBar__bar" aria-hidden="true" />
+          <span className="replyBar__body">
+            <b>{t('edit.bar')}</b>
+            <span className="replyBar__text">{t('edit.hint')}</span>
+          </span>
+          <button
+            type="button"
+            className="attachBar__remove"
+            onClick={() => {
+              setDraft('');
+              onCancelEdit();
+              onTyping(false);
+            }}
+            aria-label={t('edit.cancel')}
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      )}
+
+      {replyTo && !editing && (
         <div className="replyBar">
           <span className="replyBar__bar" aria-hidden="true" />
           <span className="replyBar__body">
@@ -213,7 +271,7 @@ export default function Composer({
         </div>
       ) : (
         <>
-          {trayOpen && (
+          {trayOpen && !editing && (
             <div className="tray">
               <button
                 type="button"
@@ -268,37 +326,38 @@ export default function Composer({
               if (file) void pickPhoto(file);
             }}
           />
-          <button
-            type="button"
-            className={`composer__icon ${trayOpen ? 'is-on' : ''}`}
-            onClick={() => setTrayOpen((open) => !open)}
-            aria-label={t('composer.more')}
-            title={t('composer.more')}
-          >
-            <Icon name={trayOpen ? 'close' : 'plus'} />
-          </button>
+          {!editing && (
+            <button
+              type="button"
+              className={`composer__icon ${trayOpen ? 'is-on' : ''}`}
+              onClick={() => setTrayOpen((open) => !open)}
+              aria-label={t('composer.more')}
+              title={t('composer.more')}
+            >
+              <Icon name={trayOpen ? 'close' : 'plus'} />
+            </button>
+          )}
 
+          {/*
+            엔터는 줄을 바꾼다. 보내는 건 오른쪽 버튼이다 — 폰에서 쓰는 메신저라
+            엔터로 보내면 문단을 나누려다 반쯤 쓴 말이 날아간다.
+          */}
           <textarea
+            ref={inputRef}
             className="composer__input"
             rows={1}
             value={draft}
-            placeholder={t('chat.sendTo', { name: peerName })}
+            placeholder={editing ? t('edit.placeholder') : t('chat.sendTo', { name: peerName })}
             onChange={(event) => handleDraftChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                submit(event);
-              }
-            }}
           />
           <button
             className="composer__send"
             type="submit"
-            disabled={!draft.trim() && !pending}
-            aria-label={t('chat.send')}
-            title={t('chat.send')}
+            disabled={editing ? !draft.trim() : !draft.trim() && !pending}
+            aria-label={editing ? t('edit.save') : t('chat.send')}
+            title={editing ? t('edit.save') : t('chat.send')}
           >
-            <Icon name="send" />
+            <Icon name={editing ? 'check' : 'send'} />
           </button>
         </form>
         </>

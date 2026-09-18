@@ -9,6 +9,7 @@ import {
   type LangCode,
 } from '@fran/shared';
 import { attachmentUrl, formatDuration } from '../media';
+import type { BubbleView } from '../view';
 import { hasSpeech } from '../speech';
 
 interface Props {
@@ -22,7 +23,8 @@ interface Props {
   peerLang: LangCode;
   /** 상대 이름. 위 안내에 쓴다. */
   peerName: string;
-  alwaysShowSource: boolean;
+  /** 원문·번역 중 무엇을 크게 볼지. 상대가 보낸 말에만 해당한다. */
+  view: BubbleView;
   /** 읽어주기. 브라우저가 못 하면 버튼을 띄우지 않는다. */
   speechSupported: boolean;
   speakingKey: string | null;
@@ -54,7 +56,7 @@ export default function MessageBubble({
   extraLangs,
   peerLang,
   peerName,
-  alwaysShowSource,
+  view,
   speechSupported,
   speakingKey,
   failedSpeechKey,
@@ -80,9 +82,18 @@ export default function MessageBubble({
 
   const isSourceLanguage = message.sourceLang === primaryLang;
   const primary = message.translations[primaryLang];
-  const headline = isSourceLanguage ? own : primary?.text;
+
+  /*
+   * "원문만 보기" 는 크게 보이는 줄을 번역문에서 원문으로 바꾼다. 번역은 말풍선을
+   * 눌렀을 때 아래에 나온다. 내가 보낸 말은 원래 원문이 크게 보이므로 그대로다.
+   */
+  const sourceOnly = view === 'source' && !isSourceLanguage;
+  const headline = isSourceLanguage || sourceOnly ? own : primary?.text;
   // 받아쓴 글은 늘 보여준다. 뭐라고 말했는지가 이 앱에서 가장 배울 거리가 많은 부분이다.
-  const showSource = !isSourceLanguage && (alwaysShowSource || expanded || Boolean(audio));
+  const showSource =
+    !isSourceLanguage && !sourceOnly && (view === 'both' || expanded || Boolean(audio));
+  /** 원문만 보기에서 말풍선을 눌렀을 때 아래에 붙는 번역문. */
+  const showTranslation = sourceOnly && expanded && Boolean(primary?.text);
 
   const extras = extraLangs
     .filter((lang) => lang !== primaryLang && lang !== message.sourceLang)
@@ -104,6 +115,8 @@ export default function MessageBubble({
   const primaryKey = `${message.id}:primary`;
   // 이모지만 있는 말에는 읽어 줄 것이 없다. 눌러도 아무 일 없는 버튼은 띄우지 않는다.
   const canHearSource = speechSupported && !mine && hasSpeech(own);
+  /** 원문이 어디엔가 이미 적혀 있는지. 시각 옆의 소리 버튼을 띄울지 정한다. */
+  const sourceOnScreen = showSource || sourceOnly;
 
   /**
    * 소리 버튼. 줄마다 하나씩 붙어서, 그 줄에 적힌 말을 읽는다.
@@ -197,8 +210,12 @@ export default function MessageBubble({
         {headline ? (
           <p className="bubble__text">
             {headline}
-            {/* 크게 보이는 줄이 번역문일 때. 내 언어로 어떻게 들리는지도 들어볼 수 있다. */}
-            {speechSupported && !isSourceLanguage && speaker(primaryKey, headline, primaryLang, 'translation')}
+            {/* 크게 보이는 줄에 맞춰 읽어준다 — 원문 줄이면 원문의 언어로. */}
+            {sourceOnly
+              ? canHearSource && speaker(sourceKey, headline, message.sourceLang, 'source')
+              : speechSupported &&
+                !isSourceLanguage &&
+                speaker(primaryKey, headline, primaryLang, 'translation')}
           </p>
         ) : message.translationStatus === 'failed' ? (
           <p className="bubble__text bubble__text--muted">{own}</p>
@@ -251,6 +268,14 @@ export default function MessageBubble({
             </span>
             {own}
             {canHearSource && speaker(sourceKey, own, message.sourceLang, 'source')}
+          </p>
+        )}
+
+        {showTranslation && primary && (
+          <p className="bubble__source">
+            <span className="bubble__lang">{LANGUAGE_NAMES[primaryLang]}</span>
+            {primary.text}
+            {speechSupported && speaker(primaryKey, primary.text, primaryLang, 'translation')}
           </p>
         )}
 
@@ -308,7 +333,8 @@ export default function MessageBubble({
 
       <div className="bubble__meta">
         {/* 원문 줄이 접혀 있을 때만. 펼치면 그 줄에 붙은 버튼이 같은 일을 한다. */}
-        {canHearSource && !showSource && speaker(sourceKey, own, message.sourceLang, 'source')}
+        {canHearSource && !sourceOnScreen && speaker(sourceKey, own, message.sourceLang, 'source')}
+        {message.editedAt && <span className="bubble__edited">{t('edit.mark')}</span>}
         <time dateTime={new Date(message.createdAt).toISOString()}>{formatTime(message.createdAt)}</time>
         {/* 내가 보낸 것에만. 체크 하나는 보냈다, 둘은 상대가 읽었다. */}
         {mine && (

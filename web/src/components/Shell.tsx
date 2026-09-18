@@ -13,6 +13,7 @@ import Glossary from './Glossary';
 import Home, { type View } from './Home';
 import SavedList from './SavedList';
 import Settings from './Settings';
+import { loadBubbleView, saveBubbleView, type BubbleView } from '../view';
 import VocabList from './VocabList';
 
 interface Props {
@@ -22,8 +23,6 @@ interface Props {
   /** 비밀번호를 바꾸면 서버가 새 토큰을 준다. */
   onToken: (token: string) => void;
 }
-
-const SOURCE_PREF_KEY = 'fran.alwaysShowSource';
 
 /**
  * 로그인한 뒤의 모든 화면. 대화 연결(useChat)은 여기서 한 번만 잡는다.
@@ -37,9 +36,8 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const [view, setView] = useState<View>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
-  const [alwaysShowSource, setAlwaysShowSource] = useState(
-    () => localStorage.getItem(SOURCE_PREF_KEY) === '1',
-  );
+  /** 말풍선에서 원문·번역 중 무엇을 크게 볼지. 화면 전환(view)과는 다른 것이다. */
+  const [bubbleView, setBubbleView] = useState<BubbleView>(loadBubbleView);
 
   /** 모아 보기 화면들의 개수. 홈에 숫자를 띄우고, 저장할 때마다 다시 센다. */
   const [counts, setCounts] = useState({ saved: 0, vocab: 0, photos: 0 });
@@ -60,9 +58,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
     void refreshCounts();
   }, [refreshCounts]);
 
-  useEffect(() => {
-    localStorage.setItem(SOURCE_PREF_KEY, alwaysShowSource ? '1' : '0');
-  }, [alwaysShowSource]);
+  useEffect(() => saveBubbleView(bubbleView), [bubbleView]);
 
   const primaryLang: LangCode = chat.me?.displayLangs[0] ?? chat.me?.nativeLang ?? 'ko';
 
@@ -227,7 +223,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           chat={chat}
           primaryLang={primaryLang}
           extraLangs={extraLangs}
-          alwaysShowSource={alwaysShowSource}
+          view={bubbleView}
           savedIds={savedIds}
           onSaved={markSaved}
           onUnsaved={unmarkSaved}
@@ -263,8 +259,8 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
       {settingsOpen && chat.me && (
         <Settings
           profile={chat.me}
-          alwaysShowSource={alwaysShowSource}
-          onToggleSource={setAlwaysShowSource}
+          view={bubbleView}
+          onChangeView={setBubbleView}
           onSaved={chat.setProfile}
           onClose={() => setSettingsOpen(false)}
           onLogout={onLogout}

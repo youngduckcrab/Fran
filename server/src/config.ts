@@ -2,7 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { LANGUAGES, isLangCode, type GlossaryEntry, type LangCode, type UserProfile } from '@fran/shared';
+import {
+  GENDERS,
+  LANGUAGES,
+  isLangCode,
+  type Gender,
+  type GlossaryEntry,
+  type LangCode,
+  type UserProfile,
+} from '@fran/shared';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -75,12 +83,18 @@ export interface UserSecret {
  */
 function buildUser(slot: 'A' | 'B', fallbackLang: LangCode): UserSecret {
   const nativeLang = lang(`USER_${slot}_NATIVE_LANG`, fallbackLang);
+  // 성과 사는 곳은 번역에 쓰인다. 스페인어는 성에 따라 말이 달라지고, 같은 말도
+  // 칠레와 스페인이 다르다. 안 적으면 번역이 그만큼 뭉뚱그려질 뿐, 앱은 그대로 돈다.
+  const gender = oneOf(`USER_${slot}_GENDER`, GENDERS, 'unspecified' as Gender);
+  const region = process.env[`USER_${slot}_REGION`]?.trim();
   return {
     profile: {
       id: required(`USER_${slot}_ID`),
       name: required(`USER_${slot}_NAME`),
       nativeLang,
       displayLangs: [nativeLang],
+      gender,
+      ...(region ? { region } : {}),
     },
     passcode: required(`USER_${slot}_PASSCODE`),
   };

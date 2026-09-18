@@ -6,12 +6,15 @@ interface Props {
   canRetranslate: boolean;
   /** 글이 있는 메시지에만 단어를 고를 수 있다. 사진만 보낸 것에는 고를 말이 없다. */
   canPickWord: boolean;
+  /** 내가 보낸 글만 고칠 수 있다. */
+  canEdit: boolean;
   /** 내가 이미 단 반응. 다시 누르면 지운다. */
   myReaction: string | null;
   onReact: (emoji: string | null) => void;
   onReply: () => void;
   onExplain: () => void;
   onPickWord: () => void;
+  onEdit: () => void;
   onSave: () => void;
   onCopy: () => void;
   onRetranslate: () => void;
@@ -22,11 +25,13 @@ interface Props {
 export default function MessageActions({
   canRetranslate,
   canPickWord,
+  canEdit,
   myReaction,
   onReact,
   onReply,
   onExplain,
   onPickWord,
+  onEdit,
   onSave,
   onCopy,
   onRetranslate,
@@ -54,6 +59,12 @@ export default function MessageActions({
         <button type="button" className="actions__item" onClick={onReply}>
           <b>{t('actions.reply')}</b>
         </button>
+        {canEdit && (
+          <button type="button" className="actions__item" onClick={onEdit}>
+            <b>{t('actions.edit')}</b>
+            <span>{t('actions.editHint')}</span>
+          </button>
+        )}
         <button type="button" className="actions__item" onClick={onExplain}>
           <b>{t('actions.explain')}</b>
           <span>{t('actions.explainHint')}</span>

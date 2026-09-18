@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   LANGUAGES,
   LANGUAGE_NAMES,
+  GENDERS,
   THEMES,
   WALLPAPERS,
+  type Gender,
   type LangCode,
   type ThemeId,
   type UserProfile,
@@ -15,11 +17,13 @@ import { applyTheme } from '../theme';
 import Icon from './Icon';
 import { attachmentUrl, prepareImage, uploadAttachment } from '../media';
 import { photoWallpaper, wallpaperPhotoId } from '../wallpaper';
+import { BUBBLE_VIEWS, type BubbleView } from '../view';
 
 interface Props {
   profile: UserProfile;
-  alwaysShowSource: boolean;
-  onToggleSource: (value: boolean) => void;
+  /** 말풍선에서 원문·번역 중 무엇을 크게 볼지. */
+  view: BubbleView;
+  onChangeView: (value: BubbleView) => void;
   onSaved: (profile: UserProfile) => void;
   onClose: () => void;
   onLogout: () => void;
@@ -29,8 +33,8 @@ interface Props {
 
 export default function Settings({
   profile,
-  alwaysShowSource,
-  onToggleSource,
+  view,
+  onChangeView,
   onSaved,
   onClose,
   onLogout,
@@ -39,6 +43,9 @@ export default function Settings({
   const t = useT();
   const [nativeLang, setNativeLang] = useState<LangCode>(profile.nativeLang);
   const [displayLangs, setDisplayLangs] = useState<LangCode[]>(profile.displayLangs);
+  /* ---- 번역이 참고하는 나에 대한 정보 ---- */
+  const [gender, setGender] = useState<Gender>(profile.gender ?? 'unspecified');
+  const [region, setRegion] = useState(profile.region ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -173,7 +180,7 @@ export default function Settings({
     setBusy(true);
     setError(null);
     try {
-      onSaved(await saveSettings(nativeLang, displayLangs));
+      onSaved(await saveSettings(nativeLang, displayLangs, { gender, region: region.trim() }));
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -241,14 +248,43 @@ export default function Settings({
         </section>
 
         <section className="sheet__section">
-          <label className="sheet__toggle">
-            <input
-              type="checkbox"
-              checked={alwaysShowSource}
-              onChange={(event) => onToggleSource(event.target.checked)}
-            />
-            {t('settings.showSource')}
-          </label>
+          <h3>{t('settings.view')}</h3>
+          <p className="sheet__hint">{t('settings.viewHint')}</p>
+          <div className="chips">
+            {BUBBLE_VIEWS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`chip ${view === item ? 'is-on' : ''}`}
+                onClick={() => onChangeView(item)}
+              >
+                {t(`view.${item}` as StringKey)}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="sheet__section">
+          <h3>{t('settings.about')}</h3>
+          <p className="sheet__hint">{t('settings.aboutHint')}</p>
+          <div className="chips">
+            {GENDERS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`chip ${gender === item ? 'is-on' : ''}`}
+                onClick={() => setGender(item)}
+              >
+                {t(`gender.${item}` as StringKey)}
+              </button>
+            ))}
+          </div>
+          <input
+            className="login__input"
+            value={region}
+            placeholder={t('settings.regionPlaceholder')}
+            onChange={(event) => setRegion(event.target.value)}
+          />
         </section>
 
         <section className="sheet__section">

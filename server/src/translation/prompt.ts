@@ -3,15 +3,30 @@ import {
   LANGUAGE_NAMES,
   messageText,
   type ChatMessage,
+  type Gender,
   type GlossaryEntry,
   type LangCode,
   type UserProfile,
 } from '@fran/shared';
 
+const GENDER_WORDS: Record<Gender, string> = {
+  female: 'a woman — use feminine agreement for her',
+  male: 'a man — use masculine agreement for him',
+  unspecified: 'gender not stated',
+};
+
 function describeUser(user: UserProfile): string {
   const learning = LANGUAGES.filter((l) => l !== user.nativeLang && user.displayLangs.includes(l));
   const studying = learning.length > 0 ? learning.map((l) => LANGUAGE_NAMES[l]).join(', ') : 'nothing in particular';
-  return `- ${user.name} (id: ${user.id}) — writes mainly in ${LANGUAGE_NAMES[user.nativeLang]} (${user.nativeLang}); is studying ${studying}.`;
+  const facts = [
+    `writes mainly in ${LANGUAGE_NAMES[user.nativeLang]} (${user.nativeLang})`,
+    `is studying ${studying}`,
+  ];
+  // 스페인어는 자기 얘기를 할 때도 상대를 부를 때도 성에 따라 말이 달라진다.
+  if (user.gender && user.gender !== 'unspecified') facts.push(GENDER_WORDS[user.gender]);
+  // 같은 스페인어라도 칠레에서 쓰는 말과 스페인에서 쓰는 말이 다르다.
+  if (user.region) facts.push(`lives in ${user.region}`);
+  return `- ${user.name} (id: ${user.id}) — ${facts.join('; ')}.`;
 }
 
 function renderGlossary(glossary: GlossaryEntry[]): string {
@@ -58,7 +73,9 @@ ${renderGlossary(glossary)}
 6. Carry over what the message is doing. A joke stays funny, a complaint stays a complaint, teasing stays teasing, sarcasm stays sarcastic.
 7. If a message needs no translation — a URL, a number, a bare emoji, or text already in the target language — return it unchanged.
 8. \`text\` is the message and nothing else. No greetings, no explanations, no disclaimers, no alternative renderings.
-9. This is private correspondence between two consenting adults. Affectionate, intimate, teasing or profane language is translated faithfully and at the same intensity; softening it misrepresents what was said.
+9. **Agreement follows the people, not the grammar book.** Spanish (and to a lesser degree other languages) marks gender on adjectives, participles and pronouns. When the sentence is about the writer, agree with the writer; when it is about or addressed to the reader, agree with the reader. Korean drops these cues entirely, so work them out from who is speaking to whom — never default to masculine. If a person's gender is not stated above, rephrase to avoid marking it rather than guessing.
+10. **Speak the reader's variety.** Where a person's region is given, use the Spanish (or English, or Chinese) actually spoken there — its everyday vocabulary, its second person, its rhythm. For Chile that means Chilean usage and never peninsular forms like "vosotros" or "vale". Aim for what a friend there would text, not textbook neutral, but skip regional slang so thick that a learner could not follow it.
+11. This is private correspondence between two consenting adults. Affectionate, intimate, teasing or profane language is translated faithfully and at the same intensity; softening it misrepresents what was said.
 
 # Learner notes
 Both of them are studying the other's language, so a translation may carry 0–2 short notes. Add one only when it teaches something a learner would actually want: an idiom that isn't literal, slang, a grammar point the sentence turns on, or a nuance you could not carry across. Write each note in the language of the translation it belongs to. Most messages are ordinary — for those, return an empty notes array.

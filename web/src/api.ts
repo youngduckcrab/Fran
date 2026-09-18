@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  Gender,
   GlossaryDraft,
   GlossaryEntry,
   LangCode,
@@ -94,6 +95,8 @@ export async function login(userId: string, passcode: string): Promise<string> {
 export async function saveSettings(
   nativeLang: LangCode,
   displayLangs: LangCode[],
+  /** 번역이 참고하는 나에 대한 정보. 보내지 않으면 지금 값 그대로 둔다. */
+  identity: { gender?: Gender; region?: string } = {},
 ): Promise<UserProfile> {
   const response = await fetch('/api/settings', {
     method: 'PUT',
@@ -101,7 +104,7 @@ export async function saveSettings(
       'content-type': 'application/json',
       authorization: `Bearer ${getToken() ?? ''}`,
     },
-    body: JSON.stringify({ nativeLang, displayLangs }),
+    body: JSON.stringify({ nativeLang, displayLangs, ...identity }),
   });
   if (!response.ok) await parseError(response);
   const body = (await response.json()) as { profile: UserProfile };
