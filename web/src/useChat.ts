@@ -7,7 +7,8 @@ import type {
   ServerEvent,
   UserProfile,
 } from '@fran/shared';
-import { isTokenValid, websocketUrl } from './api';
+import { activeUser, isTokenValid, websocketUrl } from './api';
+import { loadChat, saveChat } from './cache';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
 
@@ -25,7 +26,15 @@ export interface ChatState {
 }
 
 const RECONNECT_BASE_MS = 1000;
-const RECONNECT_MAX_MS = 15000;
+/**
+ * 기다리는 시간의 상한.
+ *
+ * 예전에는 15초였다. 그런데 무료 호스팅의 서버는 한동안 쓰지 않으면 잠들고, 깨어나는 데
+ * 30초쯤 걸린다. 그 사이 몇 번 실패하면 대기 시간이 상한까지 올라가서, 서버가 이미
+ * 일어난 뒤에도 최대 15초를 더 기다리게 된다. 실패해서 버리는 요청 하나보다
+ * 사람을 빈 화면 앞에 세워 두는 쪽이 훨씬 비싸다.
+ */
+const RECONNECT_MAX_MS = 5000;
 /** 이 횟수만큼 hello 없이 실패하면 토큰이 죽은 건지 서버에 확인해 본다. */
 const VERIFY_AFTER_ATTEMPTS = 2;
 
@@ -49,17 +58,26 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   const authenticated = useRef(false);
   /** 연속 실패 횟수. hello 를 받으면 0 으로 돌아간다. */
   const attempts = useRef(0);
+  /** 기다리는 타이머를 건너뛰고 지금 다시 연결한다. 연결 effect 가 채워 넣는다. */
+  const reconnectNow = useRef<(() => void) | null>(null);
 
-  const [state, setState] = useState<ChatState>({
-    connection: 'connecting',
-    me: null,
-    peer: null,
-    messages: [],
-    readAt: {},
-    peerOnline: false,
-    peerTyping: false,
-    error: null,
-    glossary: [],
+  /*
+   * 마지막으로 본 대화를 먼저 그린다. 서버가 잠들어 있었다면 hello 가 오기까지
+   * 30초가 걸리는데, 그동안 빈 화면을 보여 줄 이유가 없다. hello 가 오면 통째로 덮인다.
+   */
+  const [state, setState] = useState<ChatState>(() => {
+    const cached = loadChat(activeUser());
+    return {
+      connection: 'connecting',
+      me: cached?.me ?? null,
+      peer: cached?.peer ?? null,
+      messages: cached?.messages ?? [],
+      readAt: cached?.readAt ?? {},
+      peerOnline: false,
+      peerTyping: false,
+      error: null,
+      glossary: [],
+    };
   });
 
   const applyEvent = useCallback((event: ServerEvent) => {
@@ -170,15 +188,62 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
       retryTimer = setTimeout(connect, delay);
     };
 
+    reconnectNow.current = () => {
+      if (cancelled) return;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      // 실패 횟수는 그대로 둔다. 토큰이 죽었는지 확인하는 일이 이 숫자를 보고 돈다.
+      connect();
+    };
+
     connect();
 
     return () => {
       cancelled = true;
+      reconnectNow.current = null;
       if (retryTimer) clearTimeout(retryTimer);
       socketRef.current?.close();
       socketRef.current = null;
     };
   }, [token, applyEvent, onUnauthorized]);
+
+  /**
+   * 다시 돌아오면 기다리지 않고 바로 잇는다.
+   *
+   * 폰은 앱을 내려 두면 얼마 뒤 연결을 끊는다. 그때 재연결 대기가 상한까지 올라가 있으면,
+   * 앱을 다시 열어도 다음 시도가 올 때까지 멍하니 기다리게 된다. 사람이 화면을 보고 있는
+   * 그 순간이 가장 급한 때이므로 타이머를 무시하고 지금 시도한다.
+   */
+  useEffect(() => {
+    if (!token) return;
+    const wakeUp = () => {
+      if (document.visibilityState !== 'visible') return;
+      const socket = socketRef.current;
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+      reconnectNow.current?.();
+    };
+    document.addEventListener('visibilitychange', wakeUp);
+    window.addEventListener('focus', wakeUp);
+    window.addEventListener('online', wakeUp);
+    return () => {
+      document.removeEventListener('visibilitychange', wakeUp);
+      window.removeEventListener('focus', wakeUp);
+      window.removeEventListener('online', wakeUp);
+    };
+  }, [token]);
+
+  /**
+   * 본 것을 적어 둔다. 다음에 열 때 이걸 먼저 그린다.
+   *
+   * 말풍선이 하나 오갈 때마다 적으면 잦다. 잠깐 모았다가 한 번에 적는다 —
+   * 어차피 이 기록은 "다음에 열 때"만 쓰인다.
+   */
+  useEffect(() => {
+    if (!state.me || !state.peer) return;
+    const { me, peer, messages, readAt } = state;
+    const timer = setTimeout(() => saveChat(activeUser(), { me, peer, messages, readAt }), 800);
+    return () => clearTimeout(timer);
+  }, [state.me, state.peer, state.messages, state.readAt]);
 
   const emit = useCallback((event: ClientEvent) => {
     const socket = socketRef.current;

@@ -45,9 +45,7 @@ import {
   getAttachmentBytes,
   getAudioForTranscription,
   getReadState,
-  getTheme,
   getVocab,
-  getWallpaper,
   initDatabase,
   insertAttachment,
   listPhotos,
@@ -66,9 +64,8 @@ import {
   setSourceLang,
   setTranscript,
   deleteGlossaryEntry,
-  getDisplayLangs,
   getExplanation,
-  getIdentity,
+  getProfileSettings,
   getWordLookup,
   saveWordLookup,
   listGlossary,
@@ -78,7 +75,6 @@ import {
   seedGlossary,
   setTranslationNote,
   getMessage,
-  getNativeLang,
   getRecentMessages,
   insertMessage,
   saveSettings,
@@ -124,22 +120,10 @@ function warnAboutDefaultPasscodes(): void {
 async function profileOf(userId: string): Promise<UserProfile> {
   const user = findUserById(userId);
   if (!user) throw new Error(`알 수 없는 사용자: ${userId}`);
-  const [nativeLang, displayLangs, wallpaper, theme, identity] = await Promise.all([
-    getNativeLang(userId, user.profile.nativeLang),
-    getDisplayLangs(userId, user.profile.displayLangs),
-    getWallpaper(userId),
-    getTheme(userId),
-    getIdentity(userId),
-  ]);
-  return {
-    ...user.profile,
-    nativeLang,
-    displayLangs,
-    // 앱에서 고른 것이 .env 의 기본값을 이긴다.
-    ...identity,
-    ...(wallpaper ? { wallpaper } : {}),
-    ...(theme ? { theme } : {}),
-  };
+  // 설정은 한 줄에 다 들어 있다. 한 번만 읽는다.
+  const saved = await getProfileSettings(userId, user.profile);
+  // 앱에서 고른 것이 .env 의 기본값을 이긴다.
+  return { ...user.profile, ...saved };
 }
 
 function bothProfiles(): Promise<UserProfile[]> {

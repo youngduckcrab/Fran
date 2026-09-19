@@ -54,9 +54,16 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
     }
   }, []);
 
+  /*
+   * 연결될 때마다 다시 센다.
+   *
+   * 화면이 뜨자마자 한 번 물어보는데, 서버가 자고 있었다면 그 요청은 그냥 실패한다.
+   * 그러면 홈의 숫자가 0 인 채로 남는다. 연결이 이어진 순간이 서버가 깨어난 순간이다.
+   */
   useEffect(() => {
+    if (chat.connection !== 'open') return;
     void refreshCounts();
-  }, [refreshCounts]);
+  }, [chat.connection, refreshCounts]);
 
   useEffect(() => saveBubbleView(bubbleView), [bubbleView]);
 

@@ -51,6 +51,11 @@ export function setActiveUser(userId: string | null): void {
 }
 
 /** 주소에 ?u= 가 없을 때 쓸, 마지막으로 로그인했던 사람. */
+/** 지금 이 탭이 누구의 앱인지. 사람마다 따로 두는 저장소의 열쇠로 쓴다. */
+export function activeUser(): string | null {
+  return activeUserId;
+}
+
 export function rememberedUser(): string | null {
   return readStorage(LAST_USER_KEY);
 }

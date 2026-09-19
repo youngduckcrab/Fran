@@ -604,27 +604,33 @@ async function settingsOf(userId: string): Promise<SettingsRow | null> {
   return rows[0] ?? null;
 }
 
-export async function getDisplayLangs(userId: string, fallback: LangCode[]): Promise<LangCode[]> {
-  const row = await settingsOf(userId);
-  if (!row) return fallback;
-  const langs = row.display_langs.split(',').filter(isLangCode);
-  return langs.length > 0 ? langs : fallback;
-}
-
-export async function getNativeLang(userId: string, fallback: LangCode): Promise<LangCode> {
-  const row = await settingsOf(userId);
-  return row && isLangCode(row.native_lang) ? row.native_lang : fallback;
-}
-
-/** 번역이 쓰는 나에 대한 정보. 고르지 않았으면 .env 의 값이 그대로 남는다. */
-export async function getIdentity(
+/**
+ * 한 사람의 설정을 한 번에 읽는다.
+ *
+ * 예전에는 쓰는 곳마다 따로 물어봤다. 프로필 하나를 만드는 데 같은 줄을 다섯 번 읽었고,
+ * 접속할 때마다 두 사람 것이니 열 번이었다. 로컬 DB 에서는 티가 안 나지만 멀리 있는
+ * DB 에서는 그대로 기다리는 시간이 되고, 연결 풀도 그만큼 잡아먹는다.
+ */
+export async function getProfileSettings(
   userId: string,
-): Promise<{ gender?: Gender; region?: string }> {
+  fallback: { nativeLang: LangCode; displayLangs: LangCode[] },
+): Promise<{
+  nativeLang: LangCode;
+  displayLangs: LangCode[];
+  wallpaper?: string;
+  theme?: ThemeId;
+  gender?: Gender;
+  region?: string;
+}> {
   const row = await settingsOf(userId);
-  if (!row) return {};
+  const langs = row?.display_langs.split(',').filter(isLangCode) ?? [];
   return {
-    ...(isGender(row.gender) ? { gender: row.gender } : {}),
-    ...(row.region?.trim() ? { region: row.region.trim() } : {}),
+    nativeLang: row && isLangCode(row.native_lang) ? row.native_lang : fallback.nativeLang,
+    displayLangs: langs.length > 0 ? langs : fallback.displayLangs,
+    ...(row?.wallpaper ? { wallpaper: row.wallpaper } : {}),
+    ...(isThemeId(row?.theme) ? { theme: row.theme } : {}),
+    ...(isGender(row?.gender) ? { gender: row.gender } : {}),
+    ...(row?.region?.trim() ? { region: row.region.trim() } : {}),
   };
 }
 
@@ -931,16 +937,6 @@ export async function deleteVocab(userId: string, id: string): Promise<void> {
 }
 
 /* ---------------------------- 배경화면 ---------------------------- */
-
-export async function getWallpaper(userId: string): Promise<string | undefined> {
-  const row = await settingsOf(userId);
-  return row?.wallpaper ?? undefined;
-}
-
-export async function getTheme(userId: string): Promise<ThemeId | undefined> {
-  const row = await settingsOf(userId);
-  return row?.theme && isThemeId(row.theme) ? row.theme : undefined;
-}
 
 export async function saveTheme(
   userId: string,
