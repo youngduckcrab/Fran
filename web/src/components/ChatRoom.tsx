@@ -67,10 +67,71 @@ export default function ChatRoom({
   const speaker = useSpeaker();
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  /**
+   * 옛 대화를 위에 붙이기 직전의 스크롤 자리.
+   *
+   * 위에 말풍선이 더 생기면 보고 있던 것이 아래로 밀려난다. 붙인 만큼 내려 줘야
+   * 읽던 자리에 그대로 남는다.
+   */
+  const pinned = useRef<{ height: number; top: number } | null>(null);
+  /** 맨 아래를 보고 있는지. 옛 대화를 읽는 중이면 새 메시지가 와도 끌어내리지 않는다. */
+  const atBottom = useRef(true);
+  /** 직전에 맨 위·맨 아래에 있던 말풍선. 어느 쪽이 늘었는지로 무엇을 할지 정한다. */
+  const edges = useRef<{ first: string | null; last: string | null }>({ first: null, last: null });
+
+  const firstId = chat.messages[0]?.id ?? null;
+  const lastId = chat.messages[chat.messages.length - 1]?.id ?? null;
+  const lastIsMine = chat.messages[chat.messages.length - 1]?.senderId === chat.me?.id;
 
   useLayoutEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [chat.messages, chat.peerTyping]);
+    const list = listRef.current;
+    const grewAtTop = firstId !== edges.current.first;
+    const grewAtBottom = lastId !== edges.current.last;
+    const firstRender = edges.current.last === null;
+    edges.current = { first: firstId, last: lastId };
+
+    // 위에만 늘었다 = 옛 대화를 붙였다. 보던 말풍선이 제자리에 남도록 그만큼 내린다.
+    if (grewAtTop && !grewAtBottom && pinned.current && list) {
+      const { top, height } = pinned.current;
+      pinned.current = null;
+      const keepPlace = () => {
+        list.scrollTop = top + (list.scrollHeight - height);
+      };
+      keepPlace();
+      // 사진과 음성은 한 박자 늦게 자리를 잡는다. 다음 프레임에 한 번 더 맞춘다.
+      requestAnimationFrame(keepPlace);
+      return;
+    }
+    pinned.current = null;
+
+    // 옛 대화를 읽는 중인데 새 메시지가 왔다고 끌어내리지 않는다. 내가 보낸 것은 예외다.
+    if (firstRender || atBottom.current || (grewAtBottom && lastIsMine)) {
+      bottomRef.current?.scrollIntoView({ block: 'end' });
+      atBottom.current = true;
+    }
+  }, [chat.messages, chat.peerTyping, firstId, lastId, lastIsMine]);
+
+  /*
+   * 맨 위 가까이 올라가면 그보다 옛날 대화를 가져온다.
+   * 끝에 닿고 나서가 아니라 조금 못 미쳤을 때 부른다 — 도착했을 때 이미 와 있어야
+   * 스크롤이 끊기지 않는다.
+   */
+  const { loadOlder, hasOlder } = chat;
+  const showOlder = () => {
+    const list = listRef.current;
+    // 이미 잡아 둔 자리가 있으면 가져오는 중이다. 덮어쓰면 붙인 뒤 엉뚱한 데로 간다.
+    if (!list || pinned.current || !hasOlder) return;
+    pinned.current = { height: list.scrollHeight, top: list.scrollTop };
+    void loadOlder();
+  };
+
+  const onScroll = () => {
+    const list = listRef.current;
+    if (!list) return;
+    atBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+    if (list.scrollTop <= 300) showOlder();
+  };
 
   /**
    * 대화를 보고 있으면 읽은 것으로 친다.
@@ -144,7 +205,22 @@ export default function ChatRoom({
         </div>
       </header>
 
-      <ul className="chat__messages">
+      <ul className="chat__messages" ref={listRef} onScroll={onScroll}>
+        {/* 맨 위. 더 있으면 가져오는 중이라고, 없으면 여기가 처음이라고 알려준다. */}
+        {chat.messages.length > 0 && (
+          <li className="chat__older">
+            {chat.loadingOlder ? (
+              t('chat.loadingOlder')
+            ) : chat.hasOlder ? (
+              <button type="button" className="chat__olderButton" onClick={() => void loadOlder()}>
+                {t('chat.loadOlder')}
+              </button>
+            ) : (
+              t('chat.beginning')
+            )}
+          </li>
+        )}
+
         {chat.messages.map((message) => (
           <MessageBubble
             key={message.id}

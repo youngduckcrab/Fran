@@ -7,7 +7,7 @@ import type {
   ServerEvent,
   UserProfile,
 } from '@fran/shared';
-import { activeUser, isTokenValid, websocketUrl } from './api';
+import { activeUser, fetchMessages, isTokenValid, websocketUrl } from './api';
 import { loadChat, saveChat } from './cache';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
@@ -23,7 +23,14 @@ export interface ChatState {
   peerTyping: boolean;
   error: string | null;
   glossary: GlossaryEntry[];
+  /** 더 위에 옛 대화가 남아 있는지. 끝까지 올라가면 false. */
+  hasOlder: boolean;
+  /** 지금 옛 대화를 가져오는 중인지. */
+  loadingOlder: boolean;
 }
+
+/** 위로 올렸을 때 한 번에 가져오는 개수. hello 가 주는 것과 같게 둔다. */
+const OLDER_PAGE = 50;
 
 const RECONNECT_BASE_MS = 1000;
 /**
@@ -60,6 +67,8 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   const attempts = useRef(0);
   /** 기다리는 타이머를 건너뛰고 지금 다시 연결한다. 연결 effect 가 채워 넣는다. */
   const reconnectNow = useRef<(() => void) | null>(null);
+  /** 옛 대화를 가져오는 중인지. 스크롤이 여러 번 울려도 한 번만 부르게 막는다. */
+  const fetchingOlder = useRef(false);
 
   /*
    * 마지막으로 본 대화를 먼저 그린다. 서버가 잠들어 있었다면 hello 가 오기까지
@@ -77,22 +86,37 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
       peerTyping: false,
       error: null,
       glossary: [],
+      // 서버에 물어보기 전에는 있다고 본다. 없으면 한 번 올라가 봤을 때 알게 된다.
+      hasOlder: true,
+      loadingOlder: false,
     };
   });
+
+  /** 콜백 안에서 지금 상태를 읽기 위한 거울. setState 갱신 함수는 나중에 돌기 때문이다. */
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const applyEvent = useCallback((event: ServerEvent) => {
     setState((previous) => {
       switch (event.type) {
-        case 'hello':
-          // 다시 이어졌으니 "연결하지 못했습니다" 는 치운다.
+        case 'hello': {
+          /*
+           * hello 는 마지막 50통만 준다. 끊겼다 이어진 것이라면 그 사이에 위로 올려서
+           * 불러온 옛 대화가 이미 화면에 있을 수 있는데, 그걸 버리면 읽던 자리가 날아간다.
+           * hello 가 준 것만 갈아 끼우고 그보다 오래된 것은 그대로 둔다.
+           */
+          const fresh = new Set(event.messages.map((m) => m.id));
+          const oldest = event.messages[0]?.createdAt ?? 0;
+          const kept = previous.messages.filter((m) => !fresh.has(m.id) && m.createdAt < oldest);
           return {
             ...previous,
             me: event.me,
             peer: event.peer,
-            messages: event.messages,
+            messages: [...kept, ...event.messages],
             readAt: event.readAt,
             error: previous.error === 'disconnected' ? null : previous.error,
           };
+        }
         case 'message':
           if (previous.messages.some((m) => m.id === event.message.id)) return previous;
           return { ...previous, messages: [...previous.messages, event.message], peerTyping: false };
@@ -317,6 +341,44 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     [emit],
   );
 
+  /**
+   * 지금 보이는 것보다 오래된 대화를 가져와 위에 붙인다.
+   *
+   * 대화를 열면 마지막 50통만 온다. 그보다 옛날 이야기를 찾아 올라가면 그때 가져온다 —
+   * 몇 달치를 미리 내려받아 두면 열 때마다 느려지고, 대개는 보지도 않는다.
+   */
+  const loadOlder = useCallback(async () => {
+    /*
+     * 지금 무엇을 갖고 있는지는 ref 로 본다. setState 의 갱신 함수는 나중에 돌기 때문에
+     * 그 안에서 값을 꺼내려 하면 여기서는 아직 비어 있다.
+     */
+    const { messages, hasOlder } = stateRef.current;
+    if (fetchingOlder.current || !hasOlder) return;
+    fetchingOlder.current = true;
+    const oldest = messages[0]?.createdAt;
+    setState((previous) => ({ ...previous, loadingOlder: true }));
+
+    try {
+      const older = await fetchMessages(oldest, OLDER_PAGE);
+      setState((previous) => {
+        const known = new Set(previous.messages.map((m) => m.id));
+        const fresh = older.filter((m) => !known.has(m.id));
+        return {
+          ...previous,
+          messages: [...fresh, ...previous.messages],
+          // 달라고 한 만큼 오지 않았다면 그 위로는 없다.
+          hasOlder: older.length >= OLDER_PAGE,
+          loadingOlder: false,
+        };
+      });
+    } catch {
+      // 못 가져와도 보던 대화는 그대로다. 다시 올리면 또 시도한다.
+      setState((previous) => ({ ...previous, loadingOlder: false }));
+    } finally {
+      fetchingOlder.current = false;
+    }
+  }, []);
+
   /** 보낸 글을 고친다. 서버가 번역을 다시 돌려서 update 로 돌려준다. */
   const editMessage = useCallback(
     (messageId: string, text: string) => emit({ type: 'edit', messageId, text }),
@@ -343,6 +405,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   return {
     ...state,
     sendMessage,
+    loadOlder,
     editMessage,
     markRead,
     react,

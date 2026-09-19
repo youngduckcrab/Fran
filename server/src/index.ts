@@ -423,7 +423,8 @@ app.get('/api/messages', async (c) => {
   const limit = Math.min(Number.parseInt(c.req.query('limit') ?? '50', 10) || 50, 200);
 
   const messages = await getRecentMessages(limit, Number.isFinite(before) ? before : undefined);
-  return c.json({ messages });
+  // 보낸 사람만 볼 수 있는 번역 지시를 떼고 내보낸다. WebSocket 쪽과 같은 규칙이다.
+  return c.json({ messages: messages.map((message) => messageFor(userId, message)) });
 });
 
 app.put('/api/settings', async (c) => {

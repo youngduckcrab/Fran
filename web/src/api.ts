@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  ChatMessage,
   Gender,
   GlossaryDraft,
   GlossaryEntry,
@@ -152,6 +153,18 @@ export async function lookUpWord(
   });
   if (!response.ok) await parseError(response);
   return ((await response.json()) as { lookup: WordLookup }).lookup;
+}
+
+/**
+ * 그보다 오래된 대화를 가져온다. `before` 는 지금 가진 것 중 가장 오래된 메시지의 시각.
+ * 받아온 것이 요청한 수보다 적으면 더 위에는 아무것도 없다는 뜻이다.
+ */
+export async function fetchMessages(before?: number, limit = 50): Promise<ChatMessage[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before !== undefined) params.set('before', String(before));
+  const response = await fetch(`/api/messages?${params}`, { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { messages: ChatMessage[] }).messages;
 }
 
 export async function fetchGlossary(): Promise<GlossaryEntry[]> {

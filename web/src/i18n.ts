@@ -34,6 +34,9 @@ const ko = {
   'chat.disconnected': '서버에 연결하지 못했습니다. 잠시 뒤 다시 연결됩니다.',
   'chat.sendFailed': '메시지를 처리하지 못했습니다.',
   'chat.tooLong': '메시지가 너무 깁니다.',
+  'chat.loadOlder': '이전 대화 보기',
+  'chat.loadingOlder': '이전 대화를 불러오는 중…',
+  'chat.beginning': '여기가 대화의 시작이에요',
 
   'note.placeholder': '이 메시지만: 어떻게 번역할지 (예: amor 로 해줘)',
   'note.hint': '상대에게는 보이지 않습니다. 보내고 나면 지워집니다.',
@@ -274,6 +277,9 @@ const es: Record<StringKey, string> = {
   'chat.disconnected': 'No se pudo conectar al servidor. Se reintentará en un momento.',
   'chat.sendFailed': 'No se pudo enviar el mensaje.',
   'chat.tooLong': 'El mensaje es demasiado largo.',
+  'chat.loadOlder': 'Ver mensajes anteriores',
+  'chat.loadingOlder': 'Cargando lo anterior…',
+  'chat.beginning': 'Aquí empieza la conversación',
 
   'note.placeholder': 'Solo este mensaje: cómo traducirlo (ej: usa "amor")',
   'note.hint': 'La otra persona no lo verá. Se borra al enviar.',
@@ -511,6 +517,9 @@ const en: Record<StringKey, string> = {
   'chat.disconnected': "Couldn't reach the server. Trying again shortly.",
   'chat.sendFailed': "Couldn't send that message.",
   'chat.tooLong': 'That message is too long.',
+  'chat.loadOlder': 'See older messages',
+  'chat.loadingOlder': 'Loading older messages…',
+  'chat.beginning': 'This is where it all started',
 
   'note.placeholder': 'Just this message: how to translate it (e.g. use "amor")',
   'note.hint': "The other person won't see this. It clears after you send.",
