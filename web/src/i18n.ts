@@ -239,6 +239,10 @@ const ko = {
   'settings.notifyDenied': '브라우저에서 알림이 막혀 있어요. 브라우저 설정에서 허용해 주세요.',
   'settings.notifyUnsupported': '이 브라우저에서는 알림을 쓸 수 없어요. 홈 화면에 추가하면 될 수도 있어요.',
   'settings.notifyFailed': '알림을 켜지 못했어요.',
+  'settings.notifyTest': '시험 알림 받아보기',
+  'settings.notifyTestSent': '보냈어요. 폰에 뜨는지 확인해 보세요. ({count}대)',
+  'settings.notifyTestNone': '보낼 기기가 없어요. 알림을 껐다 다시 켜 보세요.',
+  'settings.notifyBadge': '홈 화면에 추가한 앱이면 아이콘에도 안 읽은 개수가 붙어요.',
 
   'wall.default': '기본',
   'wall.night': '밤',
@@ -483,6 +487,10 @@ const es: Record<StringKey, string> = {
   'settings.notifyDenied': 'El navegador tiene los avisos bloqueados. Permítelos en los ajustes.',
   'settings.notifyUnsupported': 'Este navegador no puede avisarte. Prueba a añadir la app a la pantalla de inicio.',
   'settings.notifyFailed': 'No se pudieron activar los avisos.',
+  'settings.notifyTest': 'Mandarme un aviso de prueba',
+  'settings.notifyTestSent': 'Enviado. Mira si aparece en el teléfono. ({count})',
+  'settings.notifyTestNone': 'No hay ningún dispositivo. Apaga y vuelve a encender los avisos.',
+  'settings.notifyBadge': 'Si lo añadiste a la pantalla de inicio, el ícono muestra cuántos mensajes hay sin leer.',
 
   'wall.default': 'Normal',
   'wall.night': 'Noche',
@@ -723,6 +731,10 @@ const en: Record<StringKey, string> = {
   'settings.notifyDenied': 'Notifications are blocked in this browser. Allow them in its settings.',
   'settings.notifyUnsupported': "This browser can't notify you. Adding the app to your home screen may help.",
   'settings.notifyFailed': "Couldn't turn notifications on.",
+  'settings.notifyTest': 'Send me a test notification',
+  'settings.notifyTestSent': 'Sent. See if it shows up on your phone. ({count})',
+  'settings.notifyTestNone': 'No device registered. Turn notifications off and on again.',
+  'settings.notifyBadge': 'If you added it to your home screen, the icon shows how many are unread.',
 
   'wall.default': 'Default',
   'wall.night': 'Night',

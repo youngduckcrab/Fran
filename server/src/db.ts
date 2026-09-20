@@ -197,6 +197,8 @@ const SCHEMA = `
   ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS region    TEXT;
   -- 보낸 뒤 고친 메시지. 상대에게 "수정됨" 으로 보인다.
   ALTER TABLE messages      ADD COLUMN IF NOT EXISTS edited_at BIGINT;
+  -- 폰 알림을 이미 보낸 메시지. 예전에는 메모리에만 두어 서버가 꺼지면 잃었다.
+  ALTER TABLE messages      ADD COLUMN IF NOT EXISTS notified_at BIGINT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript        TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_lang   TEXT;
   ALTER TABLE attachments   ADD COLUMN IF NOT EXISTS transcript_status TEXT;
@@ -579,6 +581,21 @@ export async function editMessage(messageId: string, userId: string, text: strin
     `UPDATE messages SET source_text = $1, edited_at = $2
       WHERE id = $3 AND sender_id = $4 AND source_text <> $1`,
     [text, Date.now(), messageId, userId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/**
+ * 이 메시지의 알림을 "내가 보내겠다"고 찍는다. 이미 찍혀 있으면 false.
+ *
+ * 메모리에 들고 있던 것을 DB 로 옮겼다. 서버가 번역 도중에 꺼지면 그 메시지는 영영
+ * 알림이 가지 않았는데, 이제 다시 켜져 번역을 마칠 때 보낸다. 한 줄만 바뀌는
+ * UPDATE 이라 여러 곳에서 동시에 불러도 한 번만 통과한다.
+ */
+export async function claimNotify(messageId: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE messages SET notified_at = $1 WHERE id = $2 AND notified_at IS NULL`,
+    [Date.now(), messageId],
   );
   return (rowCount ?? 0) > 0;
 }

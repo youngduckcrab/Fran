@@ -80,3 +80,18 @@ export async function disablePush(): Promise<PushState> {
   await current.unsubscribe().catch(() => undefined);
   return 'off';
 }
+
+/**
+ * 지금 이 기기로 시험 알림을 한 통 받아 본다.
+ *
+ * "알림이 안 와요" 는 원인이 여럿이라(허용 안 함 / 홈 화면에 설치 안 함 / 등록 만료)
+ * 말로 따지는 것보다 한 번 눌러 보는 쪽이 빠르다. 돌려주는 값은 실제로 보낸 기기 수.
+ */
+export async function testPush(): Promise<number> {
+  const response = await fetch('/api/push/test', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${getToken() ?? ''}` },
+  });
+  if (!response.ok) throw new Error('시험 알림을 보내지 못했습니다.');
+  return ((await response.json()) as { sent: number }).sent;
+}

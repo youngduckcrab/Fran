@@ -29,6 +29,9 @@ export interface ChatState {
   loadingOlder: boolean;
 }
 
+/** 보고 있다고 서버에 다시 알리는 주기. 서버가 믿어 주는 기간(45초)보다 넉넉히 짧게. */
+const ATTENTION_EVERY_MS = 15_000;
+
 /** 위로 올렸을 때 한 번에 가져오는 개수. hello 가 주는 것과 같게 둔다. */
 const OLDER_PAGE = 50;
 
@@ -286,7 +289,18 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     tell();
     document.addEventListener('visibilitychange', tell);
     window.addEventListener('focus', tell);
+    /*
+     * 보고 있는 동안에는 계속 다시 알린다.
+     *
+     * 폰이 잠기거나 지하철에 들어가면 "안 보고 있다"는 말을 보낼 새도 없이 멈춘다.
+     * 서버 쪽에는 멀쩡한 연결이 남아서 보고 있는 사람으로 여겨지고, 그동안 폰 알림이
+     * 막힌다. 소식이 끊기면 서버가 알아서 아니라고 보도록, 살아 있는 동안 계속 말한다.
+     */
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') tell();
+    }, ATTENTION_EVERY_MS);
     return () => {
+      clearInterval(timer);
       document.removeEventListener('visibilitychange', tell);
       window.removeEventListener('focus', tell);
     };

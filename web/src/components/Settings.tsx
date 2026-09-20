@@ -12,7 +12,7 @@ import {
 } from '@fran/shared';
 import { changePasscode, saveSettings, saveTheme, saveWallpaper } from '../api';
 import { useT, type StringKey } from '../i18n';
-import { disablePush, enablePush, pushState, type PushState } from '../push';
+import { disablePush, enablePush, pushState, testPush, type PushState } from '../push';
 import { applyTheme } from '../theme';
 import Icon from './Icon';
 import { attachmentUrl, prepareImage, uploadAttachment } from '../media';
@@ -167,10 +167,28 @@ export default function Settings({
   const togglePush = async (want: boolean) => {
     setPushBusy(true);
     setError(null);
+    setTested(null);
     try {
       setPush(want ? await enablePush() : await disablePush());
     } catch {
       setError(t('settings.notifyFailed'));
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  /** 시험 알림 결과. 몇 대로 갔는지, 아니면 어디가 막혔는지. */
+  const [tested, setTested] = useState<string | null>(null);
+
+  const tryPush = async () => {
+    setPushBusy(true);
+    setTested(null);
+    try {
+      const sent = await testPush();
+      // 등록된 기기가 없으면 보낼 곳이 없다. 켜 두었는데도 0 이면 등록이 만료된 것이다.
+      setTested(sent > 0 ? t('settings.notifyTestSent', { count: String(sent) }) : t('settings.notifyTestNone'));
+    } catch {
+      setTested(t('settings.notifyFailed'));
     } finally {
       setPushBusy(false);
     }
@@ -414,6 +432,22 @@ export default function Settings({
                 {t('settings.notifyOn')}
               </label>
               <p className="sheet__hint">{t('settings.notifyHint')}</p>
+              <p className="sheet__hint">{t('settings.notifyBadge')}</p>
+
+              {/* 말로 따지는 것보다 한 번 받아 보는 쪽이 빠르다. */}
+              {push === 'on' && (
+                <>
+                  <button
+                    type="button"
+                    className="card__delete"
+                    disabled={pushBusy}
+                    onClick={() => void tryPush()}
+                  >
+                    {t('settings.notifyTest')}
+                  </button>
+                  {tested && <p className="sheet__hint">{tested}</p>}
+                </>
+              )}
             </>
           )}
         </section>

@@ -38,6 +38,7 @@ import { config, findUserById, peerOf } from './config.js';
 import {
   attachToMessage,
   clearTranslations,
+  claimNotify,
   countUnread,
   deleteSaved,
   deleteVocab,
@@ -141,7 +142,20 @@ const sockets = new Map<WebSocket, string>();
  * 연결돼 있다고 보고 있는 것은 아니다. 홈 화면에 두고 다른 앱을 보는 동안에도 연결은
  * 한동안 살아 있다. 보고 있는 사람에게는 앱 안에서 알리고, 그렇지 않으면 폰 알림을 보낸다.
  */
-const watching = new Set<WebSocket>();
+const watching = new Map<WebSocket, number>();
+
+/**
+ * "보고 있다"는 말을 믿어 주는 기간.
+ *
+ * 폰이 잠기거나 지하철에 들어가면 연결은 한동안 살아 있는 것처럼 보인다. 그동안
+ * "보고 있는 사람"으로 남아 있으면 폰 알림이 막혀서, 메시지가 와도 아무 일도
+ * 일어나지 않는다. 화면을 보고 있는 앱은 주기적으로 다시 알려 오므로, 그 소식이
+ * 끊기면 더는 보고 있지 않다고 본다.
+ */
+const WATCH_TTL_MS = 45_000;
+
+/** 죽은 연결을 걸러내는 주기. 답이 없으면 끊는다. */
+const HEARTBEAT_MS = 20_000;
 
 function send(socket: WebSocket, event: ServerEvent): void {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
@@ -187,10 +201,16 @@ function isOnline(userId: string): boolean {
   return false;
 }
 
-/** 이 사람이 지금 앱을 보고 있는지(화면이 켜져 있고 앱이 앞에 있는지). */
+/**
+ * 이 사람이 지금 앱을 보고 있는지(화면이 켜져 있고 앱이 앞에 있는지).
+ *
+ * 마지막으로 그렇게 말한 지 오래됐으면 아니라고 본다. 폰이 얼어붙거나 네트워크가
+ * 끊기면 "보고 있다"고 한 채로 연결만 남는데, 그걸 믿으면 알림이 영영 가지 않는다.
+ */
 function isWatching(userId: string): boolean {
+  const fresh = Date.now() - WATCH_TTL_MS;
   for (const [socket, id] of sockets.entries()) {
-    if (id === userId && watching.has(socket)) return true;
+    if (id === userId && (watching.get(socket) ?? 0) > fresh) return true;
   }
   return false;
 }
@@ -327,15 +347,24 @@ async function publishUpdate(messageId: string): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 /**
- * 아직 알림을 보내지 않은 새 메시지들.
+ * 번역을 기다려 주는 한계.
  *
- * 알림은 번역이 끝난 뒤에 보낸다. 받자마자 보내면 상대는 자기가 못 읽는 언어로 된
- * 알림을 받게 된다. 다시 번역(retranslate)일 때는 여기 들어 있지 않으므로 알림도 없다.
+ * 알림은 번역이 끝난 뒤에 보낸다. 받자마자 보내면 상대가 못 읽는 언어로 된 알림이
+ * 가기 때문이다. 그런데 모델이 붐비거나 서버가 막 깨어난 참이면 한참 걸리고, 그동안
+ * 상대는 메시지가 온 줄도 모른다. 이만큼 지나면 있는 그대로라도 보낸다 —
+ * 늦게 제대로 아는 것보다 지금 대충 아는 편이 낫다.
  */
-const awaitingNotify = new Set<string>();
+const NOTIFY_DEADLINE_MS = 8_000;
 
+/**
+ * 폰 알림을 보낸다. 한 메시지에 한 번만.
+ *
+ * "이미 보냈는지"는 DB 에 적는다(messages.notified_at). 예전에는 메모리에 들고 있어서
+ * 번역 도중 서버가 꺼지면 그 메시지는 영영 알림이 가지 않았다. 다시 번역을 돌릴 때
+ * 알림이 또 가지 않는 것도 같은 표시가 막아 준다.
+ */
 async function notifyNewMessage(messageId: string): Promise<void> {
-  if (!awaitingNotify.delete(messageId)) return;
+  if (!(await claimNotify(messageId))) return;
 
   const message = await getMessage(messageId);
   if (!message) return;
@@ -740,6 +769,36 @@ app.post('/api/push/subscribe', async (c) => {
   return ok ? c.json({ ok: true }) : c.json({ error: '알림 등록 정보가 올바르지 않습니다.' }, 400);
 });
 
+/**
+ * 지금 이 사람의 폰으로 시험 알림을 한 통 보낸다.
+ *
+ * "알림이 안 와요" 는 원인이 여럿이다 — 허용을 안 했거나, 홈 화면에 설치하지 않았거나,
+ * 등록이 만료됐거나. 눌러서 직접 확인할 수 있으면 어디가 막혔는지 바로 안다.
+ * 돌려주는 숫자는 실제로 보낸 기기 수다. 0 이면 이 사람의 등록이 하나도 없다는 뜻이다.
+ */
+app.post('/api/push/test', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const me = await profileOf(userId);
+  const lang = me.displayLangs[0] ?? me.nativeLang;
+  const sent = await notify(userId, {
+    title: 'Fran',
+    body: TEST_BODY[lang] ?? TEST_BODY.en,
+    url: `/?u=${encodeURIComponent(userId)}`,
+    messageId: 'test',
+  });
+  return c.json({ sent });
+});
+
+/** 시험 알림 문구. 받는 사람이 읽는 언어로. */
+const TEST_BODY: Record<LangCode, string> = {
+  ko: '알림이 잘 오고 있어요 ✅',
+  es: 'Los avisos funcionan ✅',
+  en: 'Notifications are working ✅',
+  zh: '通知正常 ✅',
+};
+
 app.post('/api/push/unsubscribe', async (c) => {
   if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
   const body = (await c.req.json().catch(() => null)) as { endpoint?: unknown } | null;
@@ -1010,8 +1069,13 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
 
       // 번역을 기다리지 않고 원문을 먼저 띄운다. 번역은 곧 update 로 따라붙는다.
       broadcastMessage('message', message, { socket, clientId: event.clientId });
-      awaitingNotify.add(message.id);
       enqueueTranslation(message.id);
+      // 번역이 늦어져도 알림은 간다. 둘 중 먼저 닿는 쪽이 보내고 나머지는 지나간다.
+      setTimeout(() => {
+        void notifyNewMessage(message.id).catch((error: unknown) => {
+          console.error('[push] 알림 실패:', error);
+        });
+      }, NOTIFY_DEADLINE_MS).unref();
       return;
     }
 
@@ -1062,7 +1126,8 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
     }
 
     case 'attention':
-      if (event.visible) watching.add(socket);
+      // 화면을 보고 있는 동안 앱이 주기적으로 다시 알려 온다. 그 시각을 적어 둔다.
+      if (event.visible) watching.set(socket, Date.now());
       else watching.delete(socket);
       return;
 
@@ -1144,10 +1209,36 @@ server.on('upgrade', (request, socket, head) => {
   });
 });
 
+/**
+ * 살아 있다고 답한 연결들.
+ *
+ * TCP 는 상대가 사라져도 한참 동안 알려주지 않는다. 지하철에 들어가거나 폰이 꺼지면
+ * 서버 쪽에는 멀쩡한 연결이 남아서, 그 사람을 "접속 중"으로 보이게 하고 알림도 막는다.
+ * 주기적으로 찔러 보고 답이 없으면 끊는다.
+ */
+const alive = new Set<WebSocket>();
+
+setInterval(() => {
+  for (const socket of sockets.keys()) {
+    if (!alive.has(socket)) {
+      socket.terminate();
+      continue;
+    }
+    alive.delete(socket);
+    try {
+      socket.ping();
+    } catch {
+      socket.terminate();
+    }
+  }
+}, HEARTBEAT_MS).unref();
+
 wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
   sockets.set(socket, userId);
   // 방금 연결했다면 보고 있는 것이다. 화면이 가려지면 곧 attention 이 와서 빠진다.
-  watching.add(socket);
+  watching.set(socket, Date.now());
+  alive.add(socket);
+  socket.on('pong', () => alive.add(socket));
 
   void (async () => {
     const [me, peer, recent, glossary, readAt] = await Promise.all([
@@ -1191,6 +1282,7 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
   socket.on('close', () => {
     sockets.delete(socket);
     watching.delete(socket);
+    alive.delete(socket);
     if (!isOnline(userId)) broadcast({ type: 'presence', userId, online: false });
   });
 });
