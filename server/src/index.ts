@@ -999,6 +999,12 @@ app.get('/manifest.webmanifest', async (c) => {
       description: '둘만 쓰는 번역 메신저',
       lang: viewer?.displayLangs[0] ?? 'ko',
       start_url: startUrl,
+      /*
+       * 이 앱이 누구인지. 적지 않으면 start_url 이 그 역할을 하는데, 나중에 start_url 을
+       * 건드리면 크롬이 다른 앱으로 보고 설치된 것을 버린다. 지금 값과 똑같이 적어 두어
+       * (지금은 아무것도 달라지지 않는다) 그런 일이 생기지 않게 못 박는다.
+       */
+      id: startUrl,
       scope: '/',
       display: 'standalone',
       background_color: '#17121f',
