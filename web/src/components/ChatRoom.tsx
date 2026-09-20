@@ -29,6 +29,8 @@ interface Props {
   onBack: () => void;
   onGlossary: () => void;
   onSettings: () => void;
+  /** 대화를 보면서 저장한 문장·단어장·사진첩을 열어본다. */
+  onLibrary: () => void;
 }
 
 export default function ChatRoom({
@@ -43,6 +45,7 @@ export default function ChatRoom({
   onBack,
   onGlossary,
   onSettings,
+  onLibrary,
 }: Props) {
   const t = useT();
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
@@ -196,6 +199,16 @@ export default function ChatRoom({
           </p>
         </div>
         <div className="chat__actions">
+          {/* 쓰던 말을 잃지 않고 보관함을 들여다본다. 닫으면 그대로 돌아온다. */}
+          <button
+            type="button"
+            className="chat__icon"
+            onClick={onLibrary}
+            aria-label={t('library.title')}
+            title={t('library.title')}
+          >
+            <Icon name="bookmark" size={19} />
+          </button>
           <button type="button" className="chat__settings" onClick={onGlossary}>
             {t('chat.glossary')}
           </button>

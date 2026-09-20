@@ -161,6 +161,7 @@ const ko = {
   'home.back': '홈',
   'home.items': '{count}개',
   'home.photos': '사진 {count}장',
+  'library.title': '보관함',
 
   'composer.more': '더 보내기',
   'composer.photo': '사진 보내기',
@@ -409,6 +410,7 @@ const es: Record<StringKey, string> = {
   'home.back': 'Inicio',
   'home.items': '{count}',
   'home.photos': '{count} fotos',
+  'library.title': 'Mis guardados',
 
   'composer.more': 'Más',
   'composer.photo': 'Enviar foto',
@@ -653,6 +655,7 @@ const en: Record<StringKey, string> = {
   'home.back': 'Home',
   'home.items': '{count}',
   'home.photos': '{count} photos',
+  'library.title': 'Saved things',
 
   'composer.more': 'More',
   'composer.photo': 'Send a photo',

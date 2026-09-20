@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getToken, rememberedUser, setActiveUser, setToken } from './api';
 import { clearChat } from './cache';
+import { clearCollections } from './collections';
 import Shell from './components/Shell';
 import Login from './components/Login';
 import { TranslateContext, browserUiLang, createTranslate, type UiLang } from './i18n';
@@ -40,8 +41,9 @@ export default function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
-    // 적어 둔 대화도 함께 지운다. 나간 사람의 말을 이 기기에 남겨 둘 이유가 없다.
+    // 적어 둔 대화와 보관함도 함께 지운다. 나간 사람의 것을 남겨 둘 이유가 없다.
     clearChat(userId);
+    clearCollections(userId);
     setToken(null);
     setTokenState(null);
   }, [userId]);

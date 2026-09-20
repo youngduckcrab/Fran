@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LangCode, SavedSentence } from '@fran/shared';
+import type { LangCode, SavedSentence, VocabEntry } from '@fran/shared';
 import { useChat } from '../useChat';
-import { fetchPhotos, fetchSaved, fetchVocab } from '../api';
+import { activeUser, fetchPhotos, fetchSaved, fetchVocab } from '../api';
 import { toUiLang, useT, type UiLang } from '../i18n';
 import { previewOf } from '../preview';
 import { plainText } from '../text';
@@ -13,6 +13,8 @@ import Glossary from './Glossary';
 import Home, { type View } from './Home';
 import SavedList from './SavedList';
 import Settings from './Settings';
+import Library from './Library';
+import { EMPTY, loadCollections, saveCollections, type Collections } from '../collections';
 import { loadBubbleView, saveBubbleView, type BubbleView } from '../view';
 import VocabList from './VocabList';
 
@@ -36,34 +38,54 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const [view, setView] = useState<View>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
+  /** 대화를 보면서 여는 보관함. 채팅에서만 연다. */
+  const [libraryOpen, setLibraryOpen] = useState(false);
   /** 말풍선에서 원문·번역 중 무엇을 크게 볼지. 화면 전환(view)과는 다른 것이다. */
   const [bubbleView, setBubbleView] = useState<BubbleView>(loadBubbleView);
 
-  /** 모아 보기 화면들의 개수. 홈에 숫자를 띄우고, 저장할 때마다 다시 센다. */
-  const [counts, setCounts] = useState({ saved: 0, vocab: 0, photos: 0 });
-/** 저장한 문장 목록. 화면마다 필요한 색인은 여기서 만든다. */
-  const [savedItems, setSavedItems] = useState<SavedSentence[]>([]);
+  /*
+   * 저장한 문장 · 단어장 · 사진첩.
+   *
+   * 예전에는 화면마다 자기 것을 따로 받아왔다. 그래서 단어장을 열면 빈 화면이 잠깐
+   * 있다가 목록이 나타났고, 홈의 숫자도 늦게 붙었다. 여기서 한 번 받아 나눠 주고,
+   * 받은 것은 이 기기에 적어 둔다 — 다음에 열면 기다릴 것 없이 바로 그려진다.
+   */
+  const [items, setItems] = useState<Collections>(() => loadCollections(activeUser()) ?? EMPTY);
+  const counts = useMemo(
+    () => ({ saved: items.saved.length, vocab: items.vocab.length, photos: items.photos.length }),
+    [items],
+  );
 
-  const refreshCounts = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
       const [saved, vocab, photos] = await Promise.all([fetchSaved(), fetchVocab(), fetchPhotos()]);
-      setCounts({ saved: saved.length, vocab: vocab.length, photos: photos.length });
-      setSavedItems(saved);
+      setItems({ saved, vocab, photos });
     } catch {
-      // 숫자는 있으면 좋은 것일 뿐이다. 실패해도 대화에는 영향이 없다.
+      // 못 받아와도 적어 둔 것이 그대로 보인다. 다음 연결 때 다시 받는다.
     }
   }, []);
 
+  /** 바뀐 것을 적어 둔다. 지우거나 담을 때마다 화면과 기록이 함께 움직인다. */
+  const update = useCallback((next: Collections | ((previous: Collections) => Collections)) => {
+    setItems((previous) => {
+      const value = typeof next === 'function' ? next(previous) : next;
+      saveCollections(activeUser(), value);
+      return value;
+    });
+  }, []);
+
+  useEffect(() => saveCollections(activeUser(), items), [items]);
+
   /*
-   * 연결될 때마다 다시 센다.
+   * 연결될 때마다 다시 받아온다.
    *
    * 화면이 뜨자마자 한 번 물어보는데, 서버가 자고 있었다면 그 요청은 그냥 실패한다.
-   * 그러면 홈의 숫자가 0 인 채로 남는다. 연결이 이어진 순간이 서버가 깨어난 순간이다.
+   * 연결이 이어진 순간이 서버가 깨어난 순간이다.
    */
   useEffect(() => {
     if (chat.connection !== 'open') return;
-    void refreshCounts();
-  }, [chat.connection, refreshCounts]);
+    void refresh();
+  }, [chat.connection, refresh]);
 
   useEffect(() => saveBubbleView(bubbleView), [bubbleView]);
 
@@ -157,37 +179,49 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const lastMessage = chat.messages[chat.messages.length - 1];
   const extraLangs = useMemo(() => chat.me?.displayLangs.slice(1) ?? [], [chat.me]);
 
-  const markSaved = useCallback((item: SavedSentence) => {
-    setSavedItems((previous) => [item, ...previous]);
-    setCounts((previous) => ({ ...previous, saved: previous.saved + 1 }));
-  }, []);
+  const markSaved = useCallback(
+    (item: SavedSentence) => update((previous) => ({ ...previous, saved: [item, ...previous.saved] })),
+    [update],
+  );
 
-  const unmarkSaved = useCallback((id: string) => {
-    setSavedItems((previous) => previous.filter((item) => item.id !== id));
-    setCounts((previous) => ({ ...previous, saved: Math.max(0, previous.saved - 1) }));
-  }, []);
+  const unmarkSaved = useCallback(
+    (id: string) =>
+      update((previous) => ({ ...previous, saved: previous.saved.filter((item) => item.id !== id) })),
+    [update],
+  );
+
+  /** 단어장이 바뀌었을 때(외움 표시, 예문, 지우기). 화면과 적어 둔 것이 함께 움직인다. */
+  const setVocab = useCallback(
+    (vocab: VocabEntry[]) => update((previous) => ({ ...previous, vocab })),
+    [update],
+  );
+
+  const setSaved = useCallback(
+    (saved: SavedSentence[]) => update((previous) => ({ ...previous, saved })),
+    [update],
+  );
 
   /** 대화의 말풍선용 색인: `<메시지 id>:<언어>` → 저장 항목 id. */
   const savedIds = useMemo(
     () =>
       new Map(
-        savedItems
+        items.saved
           .filter((item) => item.messageId)
           .map((item) => [`${item.messageId}:${item.lang}`, item.id]),
       ),
-    [savedItems],
+    [items.saved],
   );
 
   /** 단어장 예문용 색인: 문장 자체로 찾는다(예문에는 메시지가 없다). */
   const savedTexts = useMemo(
-    () => new Map(savedItems.map((item) => [`${item.lang}:${plainText(item.text)}`, item.id])),
-    [savedItems],
+    () => new Map(items.saved.map((item) => [`${item.lang}:${plainText(item.text)}`, item.id])),
+    [items.saved],
   );
 
   const backHome = useCallback(() => {
     setView('home');
-    void refreshCounts();
-  }, [refreshCounts]);
+    void refresh();
+  }, [refresh]);
 
   // 폰의 뒤로가기로 홈에 돌아오고, 열린 창을 닫는다. 앱이 그대로 꺼지지 않도록.
   useBackClose(view !== 'home', backHome);
@@ -234,17 +268,20 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           savedIds={savedIds}
           onSaved={markSaved}
           onUnsaved={unmarkSaved}
-          onVocabAdded={() => setCounts((p) => ({ ...p, vocab: p.vocab + 1 }))}
+          onVocabAdded={() => void refresh()}
           onBack={backHome}
           onGlossary={() => setGlossaryOpen(true)}
           onSettings={() => setSettingsOpen(true)}
+          onLibrary={() => setLibraryOpen(true)}
         />
       )}
 
-      {view === 'saved' && <SavedList onBack={backHome} />}
+      {view === 'saved' && <SavedList items={items.saved} onChanged={setSaved} onBack={backHome} />}
       {view === 'vocab' && (
         <VocabList
           onBack={backHome}
+          entries={items.vocab}
+          onChanged={setVocab}
           primaryLang={primaryLang}
           savedTexts={savedTexts}
           onSaved={markSaved}
@@ -252,7 +289,24 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
         />
       )}
       {view === 'album' && (
-        <Album onBack={backHome} me={chat.me} peer={chat.peer} />
+        <Album photos={items.photos} onBack={backHome} me={chat.me} peer={chat.peer} />
+      )}
+
+      {libraryOpen && (
+        <Library
+          saved={items.saved}
+          vocab={items.vocab}
+          photos={items.photos}
+          onSavedChanged={setSaved}
+          onVocabChanged={setVocab}
+          primaryLang={primaryLang}
+          savedTexts={savedTexts}
+          onSaved={markSaved}
+          onUnsaved={unmarkSaved}
+          me={chat.me}
+          peer={chat.peer}
+          onClose={() => setLibraryOpen(false)}
+        />
       )}
 
       {glossaryOpen && (

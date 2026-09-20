@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   LANGUAGE_NAMES,
   type LangCode,
@@ -8,7 +8,6 @@ import {
 import {
   deleteSaved,
   deleteVocab,
-  fetchVocab,
   makeVocabExample,
   saveSentence,
   setVocabLearned,
@@ -19,7 +18,10 @@ import { hasSpeech, useSpeaker, type Speaker } from '../speech';
 import { plainText } from '../text';
 
 interface Props {
-  onBack: () => void;
+  entries: VocabEntry[];
+  onChanged: (entries: VocabEntry[]) => void;
+  /** 한 화면으로 열렸을 때만. 채팅 위에 얹힐 때는 머리말이 필요 없다. */
+  onBack?: () => void;
   /** 내가 읽는 언어. 예문을 보관할 때 뜻을 함께 남기는 데 쓴다. */
   primaryLang: LangCode;
   /** 이미 보관함에 있는 문장들. `<언어>:<다듬은 문장>` → 저장 항목 id. */
@@ -30,19 +32,20 @@ interface Props {
 
 type Shelf = 'learning' | 'learned';
 
-export default function VocabList({ onBack, primaryLang, savedTexts, onSaved, onUnsaved }: Props) {
+export default function VocabList({
+  entries,
+  onChanged,
+  onBack,
+  primaryLang,
+  savedTexts,
+  onSaved,
+  onUnsaved,
+}: Props) {
   const t = useT();
-  const [entries, setEntries] = useState<VocabEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<LangCode | null>(null);
   const [shelf, setShelf] = useState<Shelf>('learning');
   const speaker = useSpeaker();
-
-  useEffect(() => {
-    fetchVocab()
-      .then(setEntries)
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
-  }, []);
 
   /**
    * 담은 언어들. 언어가 섞이면 찾기 어려워서 언어별로 나눠 둔다.
@@ -50,31 +53,24 @@ export default function VocabList({ onBack, primaryLang, savedTexts, onSaved, on
    */
   const langs = useMemo(() => {
     const counts = new Map<LangCode, number>();
-    for (const entry of entries ?? []) counts.set(entry.lang, (counts.get(entry.lang) ?? 0) + 1);
+    for (const entry of entries) counts.set(entry.lang, (counts.get(entry.lang) ?? 0) + 1);
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([code]) => code);
   }, [entries]);
   const current = lang && langs.includes(lang) ? lang : langs[0];
 
-  const ofLang = (entries ?? []).filter((entry) => entry.lang === current);
+  const ofLang = entries.filter((entry) => entry.lang === current);
   const shown = ofLang.filter((entry) => (shelf === 'learned' ? entry.learned : !entry.learned));
 
   const replace = (entry: VocabEntry) =>
-    setEntries((current) => current?.map((item) => (item.id === entry.id ? entry : item)) ?? null);
+    onChanged(entries.map((item) => (item.id === entry.id ? entry : item)));
 
   const remove = async (id: string) => {
-    setEntries((current) => current?.filter((entry) => entry.id !== id) ?? null);
+    onChanged(entries.filter((entry) => entry.id !== id));
     await deleteVocab(id).catch(() => undefined);
   };
 
-  return (
-    <div className="page">
-      <header className="page__header">
-        <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
-          <Icon name="back" size={22} />
-        </button>
-        <h1>{t('vocab.title')}</h1>
-      </header>
-
+  const body = (
+    <>
       {langs.length > 1 && (
         <div className="chips">
           {langs.map((item) => (
@@ -90,7 +86,7 @@ export default function VocabList({ onBack, primaryLang, savedTexts, onSaved, on
         </div>
       )}
 
-      {entries && entries.length > 0 && (
+      {entries.length > 0 && (
         <div className="shelves">
           {(['learning', 'learned'] as Shelf[]).map((item) => (
             <button
@@ -109,11 +105,11 @@ export default function VocabList({ onBack, primaryLang, savedTexts, onSaved, on
       )}
 
       {error && <p className="sheet__error">{error}</p>}
-      {entries && entries.length === 0 && <p className="page__empty">
+      {entries.length === 0 && <p className="page__empty">
           <Icon name="sparkle" size={34} className="page__emptyIcon" />
           {t('vocab.empty')}
         </p>}
-      {entries && entries.length > 0 && shown.length === 0 && (
+      {entries.length > 0 && shown.length === 0 && (
         <p className="page__empty">
           <Icon name="sparkle" size={34} className="page__emptyIcon" />
           {shelf === 'learned' ? t('vocab.emptyLearned') : t('vocab.empty')}
@@ -136,6 +132,20 @@ export default function VocabList({ onBack, primaryLang, savedTexts, onSaved, on
           />
         ))}
       </ul>
+    </>
+  );
+
+  if (!onBack) return body;
+
+  return (
+    <div className="page">
+      <header className="page__header">
+        <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
+          <Icon name="back" size={22} />
+        </button>
+        <h1>{t('vocab.title')}</h1>
+      </header>
+      {body}
     </div>
   );
 }

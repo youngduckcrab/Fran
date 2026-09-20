@@ -2333,3 +2333,50 @@ button:active:not(:disabled) {
   font-size: 12px;
   cursor: pointer;
 }
+
+/* ---------- 보관함 (채팅에서 열기) ---------- */
+
+/*
+ * 채팅 위에 얹히는 보관함. 목록이 길어서 시트를 높게 잡되, 안에서만 구른다 —
+ * 뒤의 대화가 같이 움직이면 어디를 보고 있었는지 잃는다.
+ */
+.library {
+  height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.library__tabs {
+  flex: 0 0 auto;
+  margin-bottom: 4px;
+}
+
+/* 몇 개 들어 있는지. 눌러 보기 전에 알면 헛걸음이 줄어든다. */
+.library__count {
+  margin-left: 6px;
+  opacity: 0.65;
+  font-size: 12px;
+}
+
+/* 머리말과 탭은 제자리에 두고 목록만 구른다. */
+.library > .cards,
+.library > .album,
+.library > .chips:not(.library__tabs),
+.library > .shelves,
+.library > .page__empty {
+  flex: 0 0 auto;
+}
+
+.chat__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+}

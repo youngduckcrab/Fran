@@ -1,27 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { LANGUAGE_NAMES, type LangCode, type SavedSentence } from '@fran/shared';
-import { deleteSaved, fetchSaved } from '../api';
+import { deleteSaved } from '../api';
 import { useT } from '../i18n';
 import Icon from './Icon';
 import { useSpeaker } from '../speech';
 
 interface Props {
-  onBack: () => void;
+  items: SavedSentence[];
+  onChanged: (items: SavedSentence[]) => void;
+  /** 한 화면으로 열렸을 때만. 채팅 위에 얹힐 때는 머리말이 필요 없다. */
+  onBack?: () => void;
 }
 
 /** 나중에 다시 보려고 저장해 둔 문장들. */
-export default function SavedList({ onBack }: Props) {
+export default function SavedList({ items, onChanged, onBack }: Props) {
   const t = useT();
-  const [items, setItems] = useState<SavedSentence[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<LangCode | null>(null);
   const speaker = useSpeaker();
-
-  useEffect(() => {
-    fetchSaved()
-      .then(setItems)
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
-  }, []);
 
   /**
    * 담은 언어들. 많이 담은 언어를 앞에 둔다 — 열자마자 보고 싶은 건 대개 그쪽이다.
@@ -29,26 +24,19 @@ export default function SavedList({ onBack }: Props) {
    */
   const langs = useMemo(() => {
     const counts = new Map<LangCode, number>();
-    for (const item of items ?? []) counts.set(item.lang, (counts.get(item.lang) ?? 0) + 1);
+    for (const item of items) counts.set(item.lang, (counts.get(item.lang) ?? 0) + 1);
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([code]) => code);
   }, [items]);
   const current = lang && langs.includes(lang) ? lang : langs[0];
-  const shown = (items ?? []).filter((item) => item.lang === current);
+  const shown = items.filter((item) => item.lang === current);
 
   const remove = async (id: string) => {
-    setItems((current) => current?.filter((item) => item.id !== id) ?? null);
+    onChanged(items.filter((item) => item.id !== id));
     await deleteSaved(id).catch(() => undefined);
   };
 
-  return (
-    <div className="page">
-      <header className="page__header">
-        <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
-          <Icon name="back" size={22} />
-        </button>
-        <h1>{t('saved.title')}</h1>
-      </header>
-
+  const body = (
+    <>
       {langs.length > 1 && (
         <div className="chips">
           {langs.map((item) => (
@@ -64,8 +52,7 @@ export default function SavedList({ onBack }: Props) {
         </div>
       )}
 
-      {error && <p className="sheet__error">{error}</p>}
-      {items && items.length === 0 && <p className="page__empty">
+      {items.length === 0 && <p className="page__empty">
           <Icon name="sparkle" size={34} className="page__emptyIcon" />
           {t('saved.empty')}
         </p>}
@@ -121,6 +108,20 @@ export default function SavedList({ onBack }: Props) {
           </li>
         ))}
       </ul>
+    </>
+  );
+
+  if (!onBack) return body;
+
+  return (
+    <div className="page">
+      <header className="page__header">
+        <button type="button" className="chat__back" onClick={onBack} aria-label={t('home.back')}>
+          <Icon name="back" size={22} />
+        </button>
+        <h1>{t('saved.title')}</h1>
+      </header>
+      {body}
     </div>
   );
 }
