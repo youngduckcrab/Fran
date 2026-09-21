@@ -584,6 +584,19 @@ export async function getMessagesAfter(
 }
 
 /**
+ * 악센트를 떼고 소문자로 맞춘 꼴. `Extraño` → `extrano`, `días` → `dias`.
+ *
+ * 스페인어를 칠 때 악센트까지 정확히 치는 사람은 드물고, 한국어 자판으로는 아예 못 친다.
+ * 찾는 쪽과 찾히는 쪽에 똑같이 씌워서 둘 다 민짜로 만든 다음 견준다.
+ *
+ * `unaccent` 확장을 쓰면 한 줄이지만, 확장을 깔 수 있는지가 호스팅마다 다르다.
+ * NFD 로 풀어헤치면 악센트가 뒤에 딸린 부호로 떨어져 나오므로, 그 부호만 지우면 된다
+ * (U+0300~U+036F). 한글과 한자는 이 구간에 걸리는 것이 없어 그대로 지나간다.
+ */
+const folded = (column: string) =>
+  `regexp_replace(normalize(lower(${column}), NFD), '[\\u0300-\\u036f]', '', 'g')`;
+
+/**
  * 대화에서 찾기.
  *
  * 원문만 뒤지면 반쪽이다. 한국어로 친 말을 스페인어로 기억하고 있을 수도 있고,
@@ -597,15 +610,22 @@ export async function searchMessages(
   limit: number,
   before?: number,
 ): Promise<ChatMessage[]> {
-  // ILIKE 의 특수문자를 글자 그대로 찾게 한다. "50%" 를 찾을 때 % 가 아무거나가 되면 곤란하다.
-  const needle = `%${query.replace(/([\\%_])/g, '\\$1')}%`;
+  // LIKE 의 특수문자를 글자 그대로 찾게 한다. "50%" 를 찾을 때 % 가 아무거나가 되면 곤란하다.
+  const needle = query.replace(/([\\%_])/g, '\\$1');
+  const pattern = `'%' || ${folded('$1')} || '%'`;
   const { rows } = await pool.query<MessageRow>(
     `SELECT m.* FROM messages m
       WHERE ($2::bigint IS NULL OR m.created_at < $2)
         AND (
-          m.source_text ILIKE $1
-          OR EXISTS (SELECT 1 FROM translations t WHERE t.message_id = m.id AND t.text ILIKE $1)
-          OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id AND a.transcript ILIKE $1)
+          ${folded('m.source_text')} LIKE ${pattern}
+          OR EXISTS (
+            SELECT 1 FROM translations t
+             WHERE t.message_id = m.id AND ${folded('t.text')} LIKE ${pattern}
+          )
+          OR EXISTS (
+            SELECT 1 FROM attachments a
+             WHERE a.message_id = m.id AND ${folded('a.transcript')} LIKE ${pattern}
+          )
         )
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT $3`,
