@@ -38,9 +38,11 @@ const ko = {
   'chat.loadingOlder': '이전 대화를 불러오는 중…',
   'chat.beginning': '여기가 대화의 시작이에요',
 
-  'note.placeholder': '이 메시지만: 어떻게 번역할지 (예: amor 로 해줘)',
-  'note.hint': '상대에게는 보이지 않습니다. 보내고 나면 지워집니다.',
-  'note.button': '이 메시지만 번역 지시',
+  'note.placeholder': '예: amor 로 해줘',
+  'note.hint': '이 메시지에만 적용돼요. 상대에게는 보이지 않고, 보내고 나면 지워집니다.',
+  'note.button': '번역 지시',
+  'note.title': '이 메시지만 이렇게 번역해 줘',
+  'note.close': '번역 지시 그만두기',
 
   'bubble.translating': '번역하는 중…',
   'bubble.retry': '다시 시도',
@@ -174,8 +176,8 @@ const ko = {
   'jump.toTail': '최근 대화로 ↓',
 
   'composer.more': '더 보내기',
-  'composer.photo': '사진 보내기',
-  'composer.record': '음성 녹음',
+  'composer.photo': '사진',
+  'composer.record': '음성',
   'composer.recording': '녹음 중 {time}',
   'composer.sendRecording': '멈추고 보내기',
   'composer.cancelRecording': '취소',
@@ -296,9 +298,11 @@ const es: Record<StringKey, string> = {
   'chat.loadingOlder': 'Cargando lo anterior…',
   'chat.beginning': 'Aquí empieza la conversación',
 
-  'note.placeholder': 'Solo este mensaje: cómo traducirlo (ej: usa "amor")',
-  'note.hint': 'La otra persona no lo verá. Se borra al enviar.',
-  'note.button': 'Instrucción solo para este mensaje',
+  'note.placeholder': 'ej: usa "amor"',
+  'note.hint': 'Solo para este mensaje. La otra persona no lo verá, y se borra al enviar.',
+  'note.button': 'Instrucción',
+  'note.title': 'Traduce este mensaje así',
+  'note.close': 'Quitar la instrucción',
 
   'bubble.translating': 'Traduciendo…',
   'bubble.retry': 'Reintentar',
@@ -433,8 +437,8 @@ const es: Record<StringKey, string> = {
   'jump.toTail': 'Ir a lo último ↓',
 
   'composer.more': 'Más',
-  'composer.photo': 'Enviar foto',
-  'composer.record': 'Grabar voz',
+  'composer.photo': 'Foto',
+  'composer.record': 'Voz',
   'composer.recording': 'Grabando {time}',
   'composer.sendRecording': 'Parar y enviar',
   'composer.cancelRecording': 'Cancelar',
@@ -551,9 +555,11 @@ const en: Record<StringKey, string> = {
   'chat.loadingOlder': 'Loading older messages…',
   'chat.beginning': 'This is where it all started',
 
-  'note.placeholder': 'Just this message: how to translate it (e.g. use "amor")',
-  'note.hint': "The other person won't see this. It clears after you send.",
-  'note.button': 'Instruction for this message only',
+  'note.placeholder': 'e.g. use "amor"',
+  'note.hint': "Just for this message. The other person won't see it, and it clears after you send.",
+  'note.button': 'Instruction',
+  'note.title': 'Translate this one like this',
+  'note.close': 'Drop the instruction',
 
   'bubble.translating': 'Translating…',
   'bubble.retry': 'Try again',
@@ -688,8 +694,8 @@ const en: Record<StringKey, string> = {
   'jump.toTail': 'Jump to the latest ↓',
 
   'composer.more': 'More',
-  'composer.photo': 'Send a photo',
-  'composer.record': 'Record voice',
+  'composer.photo': 'Photo',
+  'composer.record': 'Voice',
   'composer.recording': 'Recording {time}',
   'composer.sendRecording': 'Stop and send',
   'composer.cancelRecording': 'Cancel',

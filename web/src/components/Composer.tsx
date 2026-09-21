@@ -220,6 +220,20 @@ export default function Composer({
 
       {noteOpen && (
         <div className="note">
+          <div className="note__head">
+            <span>{t('note.title')}</span>
+            <button
+              type="button"
+              className="attachBar__remove"
+              onClick={() => {
+                setNote('');
+                setNoteOpen(false);
+              }}
+              aria-label={t('note.close')}
+            >
+              <Icon name="close" size={16} />
+            </button>
+          </div>
           <input
             className="note__input"
             value={note}
@@ -282,7 +296,9 @@ export default function Composer({
                 }}
                 disabled={busy}
               >
-                <Icon name="image" size={22} />
+                <span className="tray__icon">
+                  <Icon name="image" size={19} />
+                </span>
                 {t('composer.photo')}
               </button>
 
@@ -296,7 +312,9 @@ export default function Composer({
                   }}
                   disabled={busy}
                 >
-                  <Icon name="mic" size={22} />
+                  <span className="tray__icon">
+                    <Icon name="mic" size={19} />
+                  </span>
                   {t('composer.record')}
                 </button>
               )}
@@ -309,7 +327,9 @@ export default function Composer({
                   setNoteOpen((open) => !open);
                 }}
               >
-                <Icon name="pencil" size={22} />
+                <span className="tray__icon">
+                  <Icon name="pencil" size={19} />
+                </span>
                 {t('note.button')}
               </button>
             </div>

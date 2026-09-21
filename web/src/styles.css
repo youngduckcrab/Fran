@@ -754,16 +754,35 @@ button:active:not(:disabled) {
 }
 
 .note {
-  padding: 10px 16px 0;
-  background: var(--surface);
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-top: 1px solid var(--border);
+}
+
+/* 무엇을 적는 칸인지. 서랍의 이름을 짧게 줄인 대신 여기서 온전히 말한다. */
+.note__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 .note__input {
   width: 100%;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--accent);
-  background: var(--bg);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  /* 브라우저가 제 색으로 그리는 초점 테두리가 앱 색과 따로 놀았다. 우리 색으로 그린다. */
+  outline: none;
+}
+
+.note__input:focus {
+  border-color: var(--accent);
 }
 
 .note__hint {
@@ -1643,40 +1662,62 @@ button:active:not(:disabled) {
 }
 
 /* 입력칸 위로 펼쳐지는 서랍 (사진·녹음·번역 지시) */
+/*
+ * + 를 누르면 나오는 서랍.
+ *
+ * 예전에는 흰 판 세 장이 입력칸 위에 얹혀서 앱과 겉돌았고, 글자가 긴 항목 하나가
+ * 두 줄로 접히면서 칸마다 아이콘 높이가 달랐다. 입력칸과 한 덩어리로 보이게 붙이고,
+ * 글자는 접히지 않게 짧게 줄였다.
+ */
 .tray {
   display: flex;
   gap: 8px;
-  padding: 10px 12px 0;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-top: 1px solid var(--border);
   animation: tray-in 160ms ease-out;
 }
 
 .tray__item {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 6px;
+  gap: 6px;
+  padding: 10px 4px;
   border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--surface);
-  color: inherit;
+  border-radius: 16px;
+  background: var(--surface-raised);
+  /* 읽으라고 있는 글씨가 아니라 누르라고 있는 글씨다. 흐리게 두지 않는다. */
+  color: var(--text);
   font-size: 12px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.2;
   text-align: center;
-  word-break: keep-all;
+  /* 어느 언어로 옮겨도 두 줄로 접히지 않게. 접히면 칸마다 높이가 달라진다. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
-  box-shadow: var(--shadow-soft);
 }
 
-.tray__item span {
-  font-size: 20px;
+/* 아이콘은 동그란 자리에 담는다. 앱의 다른 아이콘 버튼들과 같은 결. */
+.tray__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .tray__item.is-on {
   border-color: var(--accent);
   background: var(--accent-soft);
+  color: var(--accent);
 }
 
 @keyframes tray-in {
