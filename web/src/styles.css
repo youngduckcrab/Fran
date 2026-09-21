@@ -2442,3 +2442,74 @@ button:active:not(:disabled) {
 .chat {
   position: relative;
 }
+
+/* ---------- 대화에서 찾기 ---------- */
+
+.search {
+  height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hits {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 한 건. 누르면 그 말이 오간 자리로 간다. */
+.hit {
+  width: 100%;
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hit__who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* 언제 한 말인지. 찾는 사람은 대개 시점을 함께 떠올린다. */
+.hit__when {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.hit__text {
+  font-size: 14px;
+  line-height: 1.5;
+  /* 두 줄까지만. 긴 말이 목록을 잡아먹지 않게. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 찾은 말. 목록에서 눈이 먼저 닿아야 하는 자리다. */
+.hit__text mark {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.search__more {
+  align-self: center;
+  margin-top: 12px;
+}

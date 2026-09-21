@@ -31,6 +31,8 @@ interface Props {
   onSettings: () => void;
   /** 대화를 보면서 저장한 문장·단어장·사진첩을 열어본다. */
   onLibrary: () => void;
+  /** 대화에서 찾기. */
+  onSearch: () => void;
   /** 보관함에서 "대화에서 보기" 로 건너온 메시지. 그 자리로 데려다 준다. */
   focusId: string | null;
   onFocused: () => void;
@@ -49,6 +51,7 @@ export default function ChatRoom({
   onGlossary,
   onSettings,
   onLibrary,
+  onSearch,
   focusId,
   onFocused,
 }: Props) {
@@ -269,6 +272,15 @@ export default function ChatRoom({
           </p>
         </div>
         <div className="chat__actions">
+          <button
+            type="button"
+            className="chat__icon"
+            onClick={onSearch}
+            aria-label={t('search.title')}
+            title={t('search.title')}
+          >
+            <Icon name="search" size={19} />
+          </button>
           {/* 쓰던 말을 잃지 않고 보관함을 들여다본다. 닫으면 그대로 돌아온다. */}
           <button
             type="button"

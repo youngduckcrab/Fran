@@ -82,6 +82,7 @@ import {
   insertMessage,
   saveSettings,
   saveTranslation,
+  searchMessages,
   setTranslationStatus,
 } from './db.js';
 import {
@@ -463,6 +464,41 @@ app.get('/api/messages', async (c) => {
 
   // 보낸 사람만 볼 수 있는 번역 지시를 떼고 내보낸다. WebSocket 쪽과 같은 규칙이다.
   return c.json({ messages: messages.map((message) => messageFor(userId, message)) });
+});
+
+/** 한 번에 돌려주는 검색 결과 수. 더 보고 싶으면 이어서 받아간다. */
+const SEARCH_PAGE = 30;
+/** 찾는 말의 최대 길이. 문장을 통째로 붙여 넣어도 여기까지만 본다. */
+const MAX_QUERY_LENGTH = 100;
+
+/**
+ * 대화에서 찾기.
+ *
+ * 원문·번역문·받아쓴 글을 함께 본다. 한국어로 친 말을 스페인어로 기억하고 있을 수도 있고,
+ * 음성 메시지는 아예 받아쓴 글에만 있기 때문이다.
+ */
+app.get('/api/search', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const query = (c.req.query('q') ?? '').trim().slice(0, MAX_QUERY_LENGTH);
+  // 한 글자로는 거의 모든 말이 걸린다. 찾았다고 하기 어렵다.
+  if (query.length < 2) return c.json({ messages: [], hasMore: false });
+
+  const beforeRaw = c.req.query('before');
+  const before = beforeRaw ? Number.parseInt(beforeRaw, 10) : undefined;
+
+  // 한 통 더 달라고 해서 더 있는지까지 알아낸다.
+  const found = await searchMessages(
+    query,
+    SEARCH_PAGE + 1,
+    Number.isFinite(before) ? before : undefined,
+  );
+  const messages = found.slice(0, SEARCH_PAGE);
+  return c.json({
+    messages: messages.map((message) => messageFor(userId, message)),
+    hasMore: found.length > SEARCH_PAGE,
+  });
 });
 
 /**

@@ -196,6 +196,21 @@ export async function fetchNewer(
   return ((await response.json()) as { messages: ChatMessage[] }).messages;
 }
 
+/**
+ * 대화에서 찾기. 원문·번역문·받아쓴 글을 함께 본다.
+ * `before` 를 주면 그보다 오래된 것만 — "더 보기" 로 이어서 받아올 때.
+ */
+export async function searchMessages(
+  query: string,
+  before?: number,
+): Promise<{ messages: ChatMessage[]; hasMore: boolean }> {
+  const params = new URLSearchParams({ q: query });
+  if (before !== undefined) params.set('before', String(before));
+  const response = await fetch(`/api/search?${params}`, { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return (await response.json()) as { messages: ChatMessage[]; hasMore: boolean };
+}
+
 export async function fetchGlossary(): Promise<GlossaryEntry[]> {
   const response = await fetch('/api/glossary', { headers: authHeaders() });
   if (!response.ok) await parseError(response);

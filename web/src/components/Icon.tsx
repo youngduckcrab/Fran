@@ -22,7 +22,8 @@ export type IconName =
   | 'sparkle'
   | 'check'
   | 'checks'
-  | 'download';
+  | 'download'
+  | 'search';
 
 interface Props {
   name: IconName;
@@ -77,6 +78,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="M5.5 12.5 10 17l8.5-9" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M15.8 15.8 20.5 20.5" />
+    </>
+  ),
   download: (
     <>
       <path d="M12 3.5v11m0 0 4-4m-4 4-4-4" />

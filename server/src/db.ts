@@ -583,6 +583,37 @@ export async function getMessagesAfter(
   return hydrate(rows);
 }
 
+/**
+ * 대화에서 찾기.
+ *
+ * 원문만 뒤지면 반쪽이다. 한국어로 친 말을 스페인어로 기억하고 있을 수도 있고,
+ * 음성 메시지는 아예 받아쓴 글에만 있다. 세 군데를 함께 본다 —
+ * 원문 · 번역문 · 받아쓴 글.
+ *
+ * `before` 를 주면 그보다 오래된 것만. "더 보기" 로 이어서 받아올 때 쓴다.
+ */
+export async function searchMessages(
+  query: string,
+  limit: number,
+  before?: number,
+): Promise<ChatMessage[]> {
+  // ILIKE 의 특수문자를 글자 그대로 찾게 한다. "50%" 를 찾을 때 % 가 아무거나가 되면 곤란하다.
+  const needle = `%${query.replace(/([\\%_])/g, '\\$1')}%`;
+  const { rows } = await pool.query<MessageRow>(
+    `SELECT m.* FROM messages m
+      WHERE ($2::bigint IS NULL OR m.created_at < $2)
+        AND (
+          m.source_text ILIKE $1
+          OR EXISTS (SELECT 1 FROM translations t WHERE t.message_id = m.id AND t.text ILIKE $1)
+          OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id AND a.transcript ILIKE $1)
+        )
+      ORDER BY m.created_at DESC, m.id DESC
+      LIMIT $3`,
+    [needle, before ?? null, limit],
+  );
+  return hydrate(rows);
+}
+
 export async function saveTranslation(messageId: string, translation: Translation): Promise<void> {
   await pool.query(
     `INSERT INTO translations (message_id, lang, text, notes, model, created_at)

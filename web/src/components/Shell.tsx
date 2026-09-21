@@ -14,6 +14,7 @@ import Home, { type View } from './Home';
 import SavedList from './SavedList';
 import Settings from './Settings';
 import Library from './Library';
+import Search from './Search';
 import { EMPTY, loadCollections, saveCollections, type Collections } from '../collections';
 import { loadBubbleView, saveBubbleView, type BubbleView } from '../view';
 import VocabList from './VocabList';
@@ -42,6 +43,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const [libraryOpen, setLibraryOpen] = useState(false);
   /** 보관함에서 "대화에서 보기" 로 고른 메시지. 채팅이 그 자리로 데려다 준다. */
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   /** 말풍선에서 원문·번역 중 무엇을 크게 볼지. 화면 전환(view)과는 다른 것이다. */
   const [bubbleView, setBubbleView] = useState<BubbleView>(loadBubbleView);
 
@@ -229,6 +231,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
    */
   const jumpTo = useCallback((messageId: string) => {
     setLibraryOpen(false);
+    setSearchOpen(false);
     setView('chat');
     setFocusId(messageId);
   }, []);
@@ -290,6 +293,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           onGlossary={() => setGlossaryOpen(true)}
           onSettings={() => setSettingsOpen(true)}
           onLibrary={() => setLibraryOpen(true)}
+          onSearch={() => setSearchOpen(true)}
           focusId={focusId}
           onFocused={clearFocus}
         />
@@ -312,6 +316,15 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
       )}
       {view === 'album' && (
         <Album photos={items.photos} onJump={jumpTo} onBack={backHome} me={chat.me} peer={chat.peer} />
+      )}
+
+      {searchOpen && (
+        <Search
+          me={chat.me}
+          peer={chat.peer}
+          onJump={jumpTo}
+          onClose={() => setSearchOpen(false)}
+        />
       )}
 
       {libraryOpen && (
