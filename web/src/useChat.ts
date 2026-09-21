@@ -7,7 +7,7 @@ import type {
   ServerEvent,
   UserProfile,
 } from '@fran/shared';
-import { activeUser, fetchMessages, isTokenValid, websocketUrl } from './api';
+import { activeUser, fetchAround, fetchMessages, fetchNewer, isTokenValid, websocketUrl } from './api';
 import { loadChat, saveChat } from './cache';
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';
@@ -27,6 +27,16 @@ export interface ChatState {
   hasOlder: boolean;
   /** 지금 옛 대화를 가져오는 중인지. */
   loadingOlder: boolean;
+  /**
+   * 지금 보고 있는 것이 대화의 끝(최신)인지.
+   *
+   * 보관함에서 찾아가면 몇 달 전 한 토막만 보고 있게 된다. 그동안 새 메시지를 그
+   * 아래에 붙이면 사이가 뚝 끊긴 채로 이어 붙는다. 끝을 보고 있지 않을 때는 붙이지
+   * 않고, 아래로 내려오거나 "최근 대화로" 를 누르면 다시 끝으로 돌아온다.
+   */
+  atTail: boolean;
+  /** 아래로 더 내려갈 것이 남아 있는지. 끝을 보고 있으면 false. */
+  hasNewer: boolean;
 }
 
 /** 보고 있다고 서버에 다시 알리는 주기. 서버가 믿어 주는 기간(45초)보다 넉넉히 짧게. */
@@ -34,15 +44,6 @@ const ATTENTION_EVERY_MS = 15_000;
 
 /** 위로 올렸을 때 한 번에 가져오는 개수. hello 가 주는 것과 같게 둔다. */
 const OLDER_PAGE = 50;
-
-/**
- * 찾는 말풍선까지 거슬러 올라갈 때는 한 번에 많이 가져온다.
- * 손으로 올릴 때와 달리 중간 것들을 보려는 게 아니라 목적지가 정해져 있어서,
- * 오가는 횟수를 줄이는 편이 낫다. (서버가 한 번에 주는 최대치)
- */
-const UNTIL_PAGE = 200;
-/** 그래도 못 찾으면 멈춘다. 없는 것을 끝까지 뒤지느라 앱이 굳으면 안 된다. */
-const UNTIL_MAX_PAGES = 10;
 
 const RECONNECT_BASE_MS = 1000;
 /**
@@ -81,6 +82,14 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   const reconnectNow = useRef<(() => void) | null>(null);
   /** 옛 대화를 가져오는 중인지. 스크롤이 여러 번 울려도 한 번만 부르게 막는다. */
   const fetchingOlder = useRef(false);
+  const fetchingNewer = useRef(false);
+  /**
+   * "최근 대화로" 를 누른 횟수.
+   *
+   * 끝으로 돌아가는 사이에 아래쪽을 받아오던 것이 늦게 도착하면, 애써 갈아 끼운 최신
+   * 목록 뒤에 옛 토막이 다시 이어 붙는다. 번호가 달라졌으면 늦게 온 것을 버린다.
+   */
+  const tailGen = useRef(0);
 
   /*
    * 마지막으로 본 대화를 먼저 그린다. 서버가 잠들어 있었다면 hello 가 오기까지
@@ -101,6 +110,8 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
       // 서버에 물어보기 전에는 있다고 본다. 없으면 한 번 올라가 봤을 때 알게 된다.
       hasOlder: true,
       loadingOlder: false,
+      atTail: true,
+      hasNewer: false,
     };
   });
 
@@ -112,6 +123,20 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     setState((previous) => {
       switch (event.type) {
         case 'hello': {
+          /*
+           * 과거 한 토막을 찾아가 보고 있는 중이라면 그대로 둔다. 여기에 최신 50통을
+           * 이어 붙이면 사이가 끊긴 목록이 된다. 끝으로 돌아올 때 새로 받아온다.
+           */
+          if (!previous.atTail) {
+            return {
+              ...previous,
+              me: event.me,
+              peer: event.peer,
+              readAt: event.readAt,
+              error: previous.error === 'disconnected' ? null : previous.error,
+            };
+          }
+
           /*
            * hello 는 마지막 50통만 준다. 끊겼다 이어진 것이라면 그 사이에 위로 올려서
            * 불러온 옛 대화가 이미 화면에 있을 수 있는데, 그걸 버리면 읽던 자리가 날아간다.
@@ -131,6 +156,8 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
         }
         case 'message':
           if (previous.messages.some((m) => m.id === event.message.id)) return previous;
+          // 과거를 보고 있으면 붙이지 않는다. 사이가 끊긴 목록이 되기 때문이다.
+          if (!previous.atTail) return { ...previous, hasNewer: true, peerTyping: false };
           return { ...previous, messages: [...previous.messages, event.message], peerTyping: false };
         case 'message_updated':
           return {
@@ -275,11 +302,12 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
    * 어차피 이 기록은 "다음에 열 때"만 쓰인다.
    */
   useEffect(() => {
-    if (!state.me || !state.peer) return;
+    // 과거 한 토막을 보고 있을 때 적어 두면, 다음에 열었을 때 그 토막이 뜬다.
+    if (!state.me || !state.peer || !state.atTail) return;
     const { me, peer, messages, readAt } = state;
     const timer = setTimeout(() => saveChat(activeUser(), { me, peer, messages, readAt }), 800);
     return () => clearTimeout(timer);
-  }, [state.me, state.peer, state.messages, state.readAt]);
+  }, [state.me, state.peer, state.messages, state.readAt, state.atTail]);
 
   const emit = useCallback((event: ClientEvent) => {
     const socket = socketRef.current;
@@ -403,37 +431,71 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
   }, []);
 
   /**
-   * 찾는 말풍선이 나올 때까지 거슬러 올라간다.
+   * 그 말풍선이 있는 자리로 간다.
    *
-   * 저장해 둔 문장에서 "대화에서 보기" 를 누르면 그 말이 오간 자리로 가야 하는데,
-   * 몇 달 전 것이면 화면에 올라와 있지 않다. 나올 때까지 옛 대화를 끌어온다.
-   * 한 번에 많이 가져와서 오가는 횟수를 줄이고, 끝까지 없으면 없는 대로 멈춘다.
+   * 거슬러 올라가지 않는다 — 그 둘레만 받아서 통째로 갈아 끼운다. 몇 달 전 것이든,
+   * 그 사이에 몇 통이 쌓여 있든 한 번이면 되고 화면에도 그만큼만 그린다.
+   * 돌려주는 값은 찾았는지다.
    */
-  const loadUntil = useCallback(async (messageId: string): Promise<boolean> => {
-    for (let page = 0; page < UNTIL_MAX_PAGES; page += 1) {
-      const { messages, hasOlder } = stateRef.current;
-      if (messages.some((message) => message.id === messageId)) return true;
-      if (!hasOlder) return false;
+  const jumpTo = useCallback(async (messageId: string): Promise<boolean> => {
+    const window = await fetchAround(messageId).catch(() => null);
+    if (!window) return false;
+    setState((previous) => ({
+      ...previous,
+      messages: window.messages,
+      hasOlder: window.hasOlder,
+      // 더 새로운 것이 없다면 여기가 곧 대화의 끝이다.
+      hasNewer: window.hasNewer,
+      atTail: !window.hasNewer,
+      loadingOlder: false,
+    }));
+    return true;
+  }, []);
 
-      const oldest = messages[0]?.createdAt;
-      const older = await fetchMessages(oldest, UNTIL_PAGE).catch(() => null);
-      if (!older) return false;
+  /** 찾아간 자리에서 아래로 내려올 때. 끝까지 오면 다시 실시간이 된다. */
+  const loadNewer = useCallback(async () => {
+    const { messages, hasNewer, atTail } = stateRef.current;
+    if (fetchingNewer.current || atTail || !hasNewer) return;
+    const last = messages[messages.length - 1];
+    if (!last) return;
 
-      // setState 의 갱신 함수는 나중에 돌기 때문에, 다음 바퀴에서 보려면 여기서도 기다린다.
-      await new Promise<void>((done) => {
-        setState((previous) => {
-          const known = new Set(previous.messages.map((m) => m.id));
-          const fresh = older.filter((m) => !known.has(m.id));
-          queueMicrotask(done);
-          return {
-            ...previous,
-            messages: [...fresh, ...previous.messages],
-            hasOlder: older.length >= UNTIL_PAGE,
-          };
-        });
+    fetchingNewer.current = true;
+    const gen = tailGen.current;
+    try {
+      const newer = await fetchNewer(last.createdAt, last.id, OLDER_PAGE);
+      if (gen !== tailGen.current) return; // 그 사이 끝으로 돌아갔다
+      setState((previous) => {
+        if (previous.atTail) return previous;
+        const known = new Set(previous.messages.map((m) => m.id));
+        const fresh = newer.filter((m) => !known.has(m.id));
+        const reachedEnd = newer.length < OLDER_PAGE;
+        return {
+          ...previous,
+          messages: [...previous.messages, ...fresh],
+          hasNewer: !reachedEnd,
+          atTail: reachedEnd,
+        };
       });
+    } catch {
+      // 못 가져와도 보던 자리는 그대로다.
+    } finally {
+      fetchingNewer.current = false;
     }
-    return stateRef.current.messages.some((message) => message.id === messageId);
+  }, []);
+
+  /** 한 번에 대화의 끝으로. 과거를 헤매다 돌아올 때. */
+  const backToTail = useCallback(async () => {
+    // 아래쪽을 받아오던 것이 있으면 버린다. 늦게 도착해서 최신 목록을 흐리지 않게.
+    tailGen.current += 1;
+    const latest = await fetchMessages(undefined, OLDER_PAGE).catch(() => null);
+    if (!latest) return;
+    setState((previous) => ({
+      ...previous,
+      messages: latest,
+      hasOlder: latest.length >= OLDER_PAGE,
+      hasNewer: false,
+      atTail: true,
+    }));
   }, []);
 
   /** 보낸 글을 고친다. 서버가 번역을 다시 돌려서 update 로 돌려준다. */
@@ -463,7 +525,9 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     ...state,
     sendMessage,
     loadOlder,
-    loadUntil,
+    loadNewer,
+    jumpTo,
+    backToTail,
     editMessage,
     markRead,
     react,

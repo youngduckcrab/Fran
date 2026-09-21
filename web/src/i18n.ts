@@ -164,6 +164,8 @@ const ko = {
   'library.title': '보관함',
   'jump.go': '대화에서 보기',
   'jump.gone': '그 대화를 찾지 못했어요.',
+  'jump.moreBelow': '아래로 내려가면 계속 이어져요',
+  'jump.toTail': '최근 대화로 ↓',
 
   'composer.more': '더 보내기',
   'composer.photo': '사진 보내기',
@@ -415,6 +417,8 @@ const es: Record<StringKey, string> = {
   'library.title': 'Mis guardados',
   'jump.go': 'Ver en la conversación',
   'jump.gone': 'No encontré esa conversación.',
+  'jump.moreBelow': 'Sigue hacia abajo',
+  'jump.toTail': 'Ir a lo último ↓',
 
   'composer.more': 'Más',
   'composer.photo': 'Enviar foto',
@@ -662,6 +666,8 @@ const en: Record<StringKey, string> = {
   'library.title': 'Saved things',
   'jump.go': 'See it in the chat',
   'jump.gone': "Couldn't find that conversation.",
+  'jump.moreBelow': 'Keep scrolling down for more',
+  'jump.toTail': 'Jump to the latest ↓',
 
   'composer.more': 'More',
   'composer.photo': 'Send a photo',

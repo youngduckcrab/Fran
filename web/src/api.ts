@@ -167,6 +167,35 @@ export async function fetchMessages(before?: number, limit = 50): Promise<ChatMe
   return ((await response.json()) as { messages: ChatMessage[] }).messages;
 }
 
+/**
+ * 그 메시지와 그 둘레.
+ *
+ * 몇 달 전 자리라도 한 번이면 된다 — 거슬러 올라가는 것과 달리 쌓인 양과 상관없다.
+ * `hasOlder` / `hasNewer` 는 그 너머에 더 있는지다.
+ */
+export async function fetchAround(
+  messageId: string,
+  span = 25,
+): Promise<{ messages: ChatMessage[]; hasOlder: boolean; hasNewer: boolean }> {
+  const response = await fetch(`/api/messages/${messageId}/around?span=${span}`, {
+    headers: authHeaders(),
+  });
+  if (!response.ok) await parseError(response);
+  return (await response.json()) as { messages: ChatMessage[]; hasOlder: boolean; hasNewer: boolean };
+}
+
+/** 이 자리보다 새로운 것들. 찾아간 자리에서 아래로 내려올 때. */
+export async function fetchNewer(
+  since: number,
+  sinceId: string,
+  limit = 50,
+): Promise<ChatMessage[]> {
+  const params = new URLSearchParams({ since: String(since), sinceId, limit: String(limit) });
+  const response = await fetch(`/api/messages?${params}`, { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { messages: ChatMessage[] }).messages;
+}
+
 export async function fetchGlossary(): Promise<GlossaryEntry[]> {
   const response = await fetch('/api/glossary', { headers: authHeaders() });
   if (!response.ok) await parseError(response);

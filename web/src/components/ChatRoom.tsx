@@ -87,9 +87,12 @@ export default function ChatRoom({
   const atBottom = useRef(true);
   /** 찾아가는 중. 그 사이에 맨 아래로 끌어내리면 애써 찾은 자리를 잃는다. */
   const seeking = useRef(false);
+  /** 이미 찾아간 자리. 같은 것을 두 번 받아오지 않는다. */
+  const sought = useRef<string | null>(null);
   /** 직전에 맨 위·맨 아래에 있던 말풍선. 어느 쪽이 늘었는지로 무엇을 할지 정한다. */
   const edges = useRef<{ first: string | null; last: string | null }>({ first: null, last: null });
 
+  const { atTail } = chat;
   const firstId = chat.messages[0]?.id ?? null;
   const lastId = chat.messages[chat.messages.length - 1]?.id ?? null;
   const lastIsMine = chat.messages[chat.messages.length - 1]?.senderId === chat.me?.id;
@@ -117,18 +120,24 @@ export default function ChatRoom({
 
     // 옛 대화를 읽는 중인데 새 메시지가 왔다고 끌어내리지 않는다. 내가 보낸 것은 예외다.
     if (seeking.current) return;
+    /*
+     * 과거 한 토막을 보고 있을 때는 아래에 이어 붙어도 끌어내리지 않는다.
+     * 끌어내리면 다시 맨 아래에 닿아서 또 받아오고, 그 꼬리를 물어 끝까지 달려간다.
+     * 사람이 실제로 내려온 만큼만 이어 붙어야 한다.
+     */
+    if (!atTail) return;
     if (firstRender || atBottom.current || (grewAtBottom && lastIsMine)) {
       bottomRef.current?.scrollIntoView({ block: 'end' });
       atBottom.current = true;
     }
-  }, [chat.messages, chat.peerTyping, firstId, lastId, lastIsMine]);
+  }, [chat.messages, chat.peerTyping, firstId, lastId, lastIsMine, atTail]);
 
   /*
    * 맨 위 가까이 올라가면 그보다 옛날 대화를 가져온다.
    * 끝에 닿고 나서가 아니라 조금 못 미쳤을 때 부른다 — 도착했을 때 이미 와 있어야
    * 스크롤이 끊기지 않는다.
    */
-  const { loadOlder, hasOlder } = chat;
+  const { loadOlder, hasOlder, loadNewer, hasNewer, backToTail } = chat;
   const showOlder = () => {
     const list = listRef.current;
     // 이미 잡아 둔 자리가 있으면 가져오는 중이다. 덮어쓰면 붙인 뒤 엉뚱한 데로 간다.
@@ -140,13 +149,16 @@ export default function ChatRoom({
   const onScroll = () => {
     const list = listRef.current;
     if (!list) return;
-    atBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+    const fromBottom = list.scrollHeight - list.scrollTop - list.clientHeight;
+    atBottom.current = fromBottom < 120;
     if (list.scrollTop <= 300) showOlder();
+    // 찾아간 자리에서 아래로 내려오면 현재까지 이어 붙는다.
+    if (fromBottom <= 120 && hasNewer && !seeking.current) void loadNewer();
   };
 
   /** 지금 반짝이고 있는 말풍선. 찾아간 자리를 눈으로 짚어 준다. */
   const [found, setFound] = useState<string | null>(null);
-  const { loadUntil } = chat;
+  const { jumpTo } = chat;
 
   /*
    * 보관함에서 건너왔을 때 그 말풍선으로 데려다 준다.
@@ -155,12 +167,18 @@ export default function ChatRoom({
    * 가운데에 놓고 잠깐 반짝여 준다 — 어느 것인지 눈으로 짚어 줘야 찾은 보람이 있다.
    */
   useEffect(() => {
-    if (!focusId) return;
+    // 같은 것을 다시 고르면 또 찾아가야 한다. 놓아줄 때 기억을 비운다.
+    if (!focusId) {
+      sought.current = null;
+      return;
+    }
+    if (sought.current === focusId) return;
+    sought.current = focusId;
     let cancelled = false;
     seeking.current = true;
 
     void (async () => {
-      const here = await loadUntil(focusId);
+      const here = await jumpTo(focusId);
       if (cancelled) return;
       // 화면에 그려질 때까지 한 박자 기다린다.
       requestAnimationFrame(() => {
@@ -179,7 +197,7 @@ export default function ChatRoom({
       cancelled = true;
       seeking.current = false;
     };
-  }, [focusId, loadUntil, onFocused, t]);
+  }, [focusId, jumpTo, onFocused, t]);
 
   // 반짝임은 잠깐이면 된다. 계속 켜 두면 무엇이 새 메시지인지 헷갈린다.
   useEffect(() => {
@@ -312,8 +330,29 @@ export default function ChatRoom({
             onOpenPhoto={setPhoto}
           />
         ))}
+        {/* 아래로 더 남았을 때만. 끝까지 내려오면 저절로 사라진다. */}
+        {hasNewer && (
+          <li className="chat__older">
+            {t('jump.moreBelow')}
+          </li>
+        )}
         <div ref={bottomRef} />
       </ul>
+
+      {/* 과거를 보고 있을 때. 헤매다 한 번에 돌아올 길을 둔다. */}
+      {!atTail && (
+        <button
+          type="button"
+          className="chat__toTail"
+          onClick={() => {
+            seeking.current = false;
+            atBottom.current = true;
+            void backToTail();
+          }}
+        >
+          {t('jump.toTail')}
+        </button>
+      )}
 
       {/* 연결이 끊겼을 때. 화면을 가리지 않게 한 줄로 띄우고, 이어지면 알아서 사라진다. */}
       {chat.connection !== 'open' && chat.error === 'disconnected' && (

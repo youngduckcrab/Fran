@@ -76,6 +76,8 @@ import {
   seedGlossary,
   setTranslationNote,
   getMessage,
+  getMessagesAfter,
+  getMessagesAround,
   getRecentMessages,
   insertMessage,
   saveSettings,
@@ -451,9 +453,38 @@ app.get('/api/messages', async (c) => {
   const before = beforeRaw ? Number.parseInt(beforeRaw, 10) : undefined;
   const limit = Math.min(Number.parseInt(c.req.query('limit') ?? '50', 10) || 50, 200);
 
-  const messages = await getRecentMessages(limit, Number.isFinite(before) ? before : undefined);
+  // since 가 있으면 그보다 새로운 쪽을 준다. 찾아간 자리에서 아래로 내려올 때.
+  const sinceRaw = c.req.query('since');
+  const since = sinceRaw ? Number.parseInt(sinceRaw, 10) : undefined;
+  const messages =
+    since !== undefined && Number.isFinite(since)
+      ? await getMessagesAfter(since, c.req.query('sinceId') ?? '', limit)
+      : await getRecentMessages(limit, Number.isFinite(before) ? before : undefined);
+
   // 보낸 사람만 볼 수 있는 번역 지시를 떼고 내보낸다. WebSocket 쪽과 같은 규칙이다.
   return c.json({ messages: messages.map((message) => messageFor(userId, message)) });
+});
+
+/**
+ * 이 메시지와 그 둘레.
+ *
+ * 보관함에서 "대화에서 보기" 를 누르면 몇 달 전 자리일 수 있다. 거기까지 거슬러
+ * 올라가며 수천 통을 끌어오는 대신 그 둘레만 잘라서 준다 — 몇 통이 쌓여 있든 한 번이면
+ * 되고, 화면에도 그만큼만 그린다.
+ */
+app.get('/api/messages/:id/around', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+
+  const span = Math.min(Math.max(Number.parseInt(c.req.query('span') ?? '25', 10) || 25, 5), 100);
+  const window = await getMessagesAround(c.req.param('id'), span, span);
+  if (!window) return c.json({ error: '메시지를 찾을 수 없습니다.' }, 404);
+
+  return c.json({
+    messages: window.messages.map((message) => messageFor(userId, message)),
+    hasOlder: window.hasOlder,
+    hasNewer: window.hasNewer,
+  });
 });
 
 app.put('/api/settings', async (c) => {

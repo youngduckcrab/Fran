@@ -233,6 +233,8 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
     setFocusId(messageId);
   }, []);
 
+  const clearFocus = useCallback(() => setFocusId(null), []);
+
   const backHome = useCallback(() => {
     setView('home');
     void refresh();
@@ -289,7 +291,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           onSettings={() => setSettingsOpen(true)}
           onLibrary={() => setLibraryOpen(true)}
           focusId={focusId}
-          onFocused={() => setFocusId(null)}
+          onFocused={clearFocus}
         />
       )}
 

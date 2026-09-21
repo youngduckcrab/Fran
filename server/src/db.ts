@@ -526,6 +526,63 @@ export async function getRecentMessages(limit: number, before?: number): Promise
   return (await hydrate(rows)).reverse();
 }
 
+/**
+ * 이 메시지와 그 둘레.
+ *
+ * 저장해 둔 문장에서 "대화에서 보기" 를 누르면 몇 달 전 자리일 수 있다. 거기까지
+ * 거슬러 올라가며 수천 통을 끌어오는 대신, 그 둘레만 딱 잘라서 준다 — 몇 통이
+ * 쌓여 있든 한 번이면 된다.
+ *
+ * 자리를 가릴 때 시각만 보면 같은 순간에 온 두 통을 가르지 못한다. 목록을 그리는
+ * 순서(created_at, id)와 같은 기준으로 자른다.
+ */
+export async function getMessagesAround(
+  id: string,
+  before: number,
+  after: number,
+): Promise<{ messages: ChatMessage[]; hasOlder: boolean; hasNewer: boolean } | null> {
+  const { rows: found } = await pool.query<{ created_at: number }>(
+    `SELECT created_at FROM messages WHERE id = $1`,
+    [id],
+  );
+  const at = found[0]?.created_at;
+  if (at === undefined) return null;
+
+  // 한 통씩 더 달라고 해서, 그 너머에 더 있는지까지 알아낸다.
+  const [{ rows: older }, { rows: newer }, { rows: self }] = await Promise.all([
+    pool.query<MessageRow>(
+      `SELECT * FROM messages WHERE (created_at, id) < ($1, $2)
+        ORDER BY created_at DESC, id DESC LIMIT $3`,
+      [at, id, before + 1],
+    ),
+    pool.query<MessageRow>(
+      `SELECT * FROM messages WHERE (created_at, id) > ($1, $2)
+        ORDER BY created_at ASC, id ASC LIMIT $3`,
+      [at, id, after + 1],
+    ),
+    pool.query<MessageRow>(`SELECT * FROM messages WHERE id = $1`, [id]),
+  ]);
+
+  const hasOlder = older.length > before;
+  const hasNewer = newer.length > after;
+  const rows = [...older.slice(0, before).reverse(), ...self, ...newer.slice(0, after)];
+  return { messages: await hydrate(rows), hasOlder, hasNewer };
+}
+
+/** 이 자리보다 새로운 것들. 찾아간 자리에서 아래로 내려올 때 쓴다. */
+export async function getMessagesAfter(
+  since: number,
+  sinceId: string,
+  limit: number,
+): Promise<ChatMessage[]> {
+  const { rows } = await pool.query<MessageRow>(
+    `SELECT * FROM messages WHERE (created_at, id) > ($1, $2)
+      ORDER BY created_at ASC, id ASC LIMIT $3`,
+    [since, sinceId, limit],
+  );
+  return hydrate(rows);
+}
+
 export async function saveTranslation(messageId: string, translation: Translation): Promise<void> {
   await pool.query(
     `INSERT INTO translations (message_id, lang, text, notes, model, created_at)

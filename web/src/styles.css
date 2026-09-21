@@ -2415,3 +2415,30 @@ button:active:not(:disabled) {
     border-radius: var(--radius);
   }
 }
+
+/*
+ * 과거를 보고 있을 때 뜨는 "최근 대화로".
+ *
+ * 몇 달 전 자리를 찾아가면 아래로 한참 내려와야 현재에 닿는다. 헤매지 않고
+ * 한 번에 돌아올 길을 입력칸 바로 위에 띄운다.
+ */
+.chat__toTail {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  padding: 9px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-grad);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  z-index: 3;
+}
+
+.chat {
+  position: relative;
+}
