@@ -17,6 +17,8 @@ interface Props {
   photos: Photo[];
   onSavedChanged: (items: SavedSentence[]) => void;
   onVocabChanged: (entries: VocabEntry[]) => void;
+  /** 그 말이 오간 자리로. 누르면 보관함을 닫고 대화로 데려간다. */
+  onJump: (messageId: string) => void;
   primaryLang: LangCode;
   savedTexts: Map<string, string>;
   onSaved: (item: SavedSentence) => void;
@@ -39,6 +41,7 @@ export default function Library({
   photos,
   onSavedChanged,
   onVocabChanged,
+  onJump,
   primaryLang,
   savedTexts,
   onSaved,
@@ -81,18 +84,19 @@ export default function Library({
           ))}
         </div>
 
-        {tab === 'saved' && <SavedList items={saved} onChanged={onSavedChanged} />}
+        {tab === 'saved' && <SavedList items={saved} onChanged={onSavedChanged} onJump={onJump} />}
         {tab === 'vocab' && (
           <VocabList
             entries={vocab}
             onChanged={onVocabChanged}
+            onJump={onJump}
             primaryLang={primaryLang}
             savedTexts={savedTexts}
             onSaved={onSaved}
             onUnsaved={onUnsaved}
           />
         )}
-        {tab === 'album' && <Album photos={photos} me={me} peer={peer} />}
+        {tab === 'album' && <Album photos={photos} onJump={onJump} me={me} peer={peer} />}
       </div>
     </div>
   );

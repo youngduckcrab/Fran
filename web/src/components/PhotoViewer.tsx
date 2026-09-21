@@ -9,6 +9,8 @@ interface Props {
   attachmentId: string;
   /** 누가 보낸 사진인지. 있으면 아래에 적는다. */
   who?: string;
+  /** 이 사진이 오간 자리로. 사진첩에서 열었을 때만 있다. */
+  onJump?: () => void;
   onClose: () => void;
 }
 
@@ -19,7 +21,7 @@ interface Props {
  * 제대로 열리지 않아서, 사진을 누르면 앱이 처음 화면으로 돌아가 버렸다.
  * 앱을 떠나지 않고 이 창에서 연다.
  */
-export default function PhotoViewer({ attachmentId, who, onClose }: Props) {
+export default function PhotoViewer({ attachmentId, who, onJump, onClose }: Props) {
   const t = useT();
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +63,12 @@ export default function PhotoViewer({ attachmentId, who, onClose }: Props) {
             <Icon name="download" size={16} />
             {t('photo.save')}
           </button>
+          {onJump && (
+            <button type="button" className="sheet__logout" onClick={onJump}>
+              <Icon name="chat" size={16} />
+              {t('jump.go')}
+            </button>
+          )}
           <button type="button" className="sheet__logout" onClick={onClose}>
             <Icon name="close" size={16} />
             {t('actions.close')}

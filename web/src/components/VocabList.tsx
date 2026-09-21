@@ -20,6 +20,8 @@ import { plainText } from '../text';
 interface Props {
   entries: VocabEntry[];
   onChanged: (entries: VocabEntry[]) => void;
+  /** 그 단어를 담았던 말풍선으로 간다. 대화에서 담은 것에만 있다. */
+  onJump?: (messageId: string) => void;
   /** 한 화면으로 열렸을 때만. 채팅 위에 얹힐 때는 머리말이 필요 없다. */
   onBack?: () => void;
   /** 내가 읽는 언어. 예문을 보관할 때 뜻을 함께 남기는 데 쓴다. */
@@ -35,6 +37,7 @@ type Shelf = 'learning' | 'learned';
 export default function VocabList({
   entries,
   onChanged,
+  onJump,
   onBack,
   primaryLang,
   savedTexts,
@@ -128,6 +131,9 @@ export default function VocabList({
             onUnsaved={onUnsaved}
             onChanged={replace}
             onDelete={() => void remove(entry.id)}
+            {...(onJump && entry.messageId
+              ? { onJump: () => onJump(entry.messageId as string) }
+              : {})}
             onError={setError}
           />
         ))}
@@ -158,6 +164,8 @@ interface CardProps {
   onSaved: (item: SavedSentence) => void;
   onUnsaved: (id: string) => void;
   onChanged: (entry: VocabEntry) => void;
+  /** 이 단어를 담았던 말풍선으로. 대화에서 담은 것에만 있다. */
+  onJump?: () => void;
   onDelete: () => void;
   onError: (message: string) => void;
 }
@@ -171,6 +179,7 @@ function VocabCard({
   onUnsaved,
   onChanged,
   onDelete,
+  onJump,
   onError,
 }: CardProps) {
   const t = useT();
@@ -308,6 +317,11 @@ function VocabCard({
               {entry.examples.length > 0
                 ? t('vocab.exampleCount', { count: String(entry.examples.length) })
                 : t('vocab.example')}
+            </button>
+          )}
+          {onJump && (
+            <button type="button" className="card__delete" onClick={onJump}>
+              {t('jump.go')}
             </button>
           )}
           <button type="button" className="card__delete" onClick={onDelete}>

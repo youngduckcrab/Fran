@@ -9,6 +9,8 @@ import { attachmentUrl } from '../media';
 
 interface Props {
   photos: Photo[];
+  /** 그 사진이 오간 자리로 간다. */
+  onJump?: (messageId: string) => void;
   me: UserProfile | null;
   peer: UserProfile | null;
   /** 한 화면으로 열렸을 때만. 채팅 위에 얹힐 때는 머리말이 필요 없다. */
@@ -16,7 +18,7 @@ interface Props {
 }
 
 /** 대화방에서 주고받은 사진들. */
-export default function Album({ photos, me, peer, onBack }: Props) {
+export default function Album({ photos, onJump, me, peer, onBack }: Props) {
   const t = useT();
   const [open, setOpen] = useState<Photo | null>(null);
 
@@ -40,7 +42,12 @@ export default function Album({ photos, me, peer, onBack }: Props) {
       </div>
 
       {open && (
-        <PhotoViewer attachmentId={open.id} who={who(open)} onClose={() => setOpen(null)} />
+        <PhotoViewer
+          attachmentId={open.id}
+          who={who(open)}
+          {...(onJump ? { onJump: () => onJump(open.messageId) } : {})}
+          onClose={() => setOpen(null)}
+        />
       )}
     </>
   );

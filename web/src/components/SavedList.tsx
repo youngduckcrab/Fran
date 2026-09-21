@@ -8,12 +8,14 @@ import { useSpeaker } from '../speech';
 interface Props {
   items: SavedSentence[];
   onChanged: (items: SavedSentence[]) => void;
+  /** 그 말이 오간 자리로 간다. 대화에서 저장한 문장에만 있다. */
+  onJump?: (messageId: string) => void;
   /** 한 화면으로 열렸을 때만. 채팅 위에 얹힐 때는 머리말이 필요 없다. */
   onBack?: () => void;
 }
 
 /** 나중에 다시 보려고 저장해 둔 문장들. */
-export default function SavedList({ items, onChanged, onBack }: Props) {
+export default function SavedList({ items, onChanged, onJump, onBack }: Props) {
   const t = useT();
   const [lang, setLang] = useState<LangCode | null>(null);
   const speaker = useSpeaker();
@@ -101,9 +103,21 @@ export default function SavedList({ items, onChanged, onBack }: Props) {
                 {item.vocabTerm ? `${item.vocabTerm} · ` : ''}
                 {new Date(item.createdAt).toLocaleDateString()}
               </span>
-              <button type="button" className="card__delete" onClick={() => void remove(item.id)}>
-                {t('saved.delete')}
-              </button>
+              <div className="card__tools">
+                {/* 단어장 예문에서 담은 것에는 오간 자리가 없다. 있을 때만 띄운다. */}
+                {onJump && item.messageId && (
+                  <button
+                    type="button"
+                    className="card__delete"
+                    onClick={() => onJump(item.messageId as string)}
+                  >
+                    {t('jump.go')}
+                  </button>
+                )}
+                <button type="button" className="card__delete" onClick={() => void remove(item.id)}>
+                  {t('saved.delete')}
+                </button>
+              </div>
             </div>
           </li>
         ))}

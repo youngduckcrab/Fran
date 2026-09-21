@@ -40,6 +40,8 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   /** 대화를 보면서 여는 보관함. 채팅에서만 연다. */
   const [libraryOpen, setLibraryOpen] = useState(false);
+  /** 보관함에서 "대화에서 보기" 로 고른 메시지. 채팅이 그 자리로 데려다 준다. */
+  const [focusId, setFocusId] = useState<string | null>(null);
   /** 말풍선에서 원문·번역 중 무엇을 크게 볼지. 화면 전환(view)과는 다른 것이다. */
   const [bubbleView, setBubbleView] = useState<BubbleView>(loadBubbleView);
 
@@ -218,6 +220,19 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
     [items.saved],
   );
 
+  /**
+   * 저장한 문장·단어·사진에서 그 말이 오간 자리로 간다.
+   *
+   * 어떤 얘기 끝에 나온 말인지, 언제 한 말인지는 보관함의 카드만 봐서는 알 수 없다.
+   * 채팅으로 넘기고 그 말풍선을 찾아가게 한다. 보관함이 열려 있었으면 닫는다 —
+   * 찾아간 자리를 가리고 있을 이유가 없다.
+   */
+  const jumpTo = useCallback((messageId: string) => {
+    setLibraryOpen(false);
+    setView('chat');
+    setFocusId(messageId);
+  }, []);
+
   const backHome = useCallback(() => {
     setView('home');
     void refresh();
@@ -273,15 +288,20 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           onGlossary={() => setGlossaryOpen(true)}
           onSettings={() => setSettingsOpen(true)}
           onLibrary={() => setLibraryOpen(true)}
+          focusId={focusId}
+          onFocused={() => setFocusId(null)}
         />
       )}
 
-      {view === 'saved' && <SavedList items={items.saved} onChanged={setSaved} onBack={backHome} />}
+      {view === 'saved' && (
+        <SavedList items={items.saved} onChanged={setSaved} onJump={jumpTo} onBack={backHome} />
+      )}
       {view === 'vocab' && (
         <VocabList
           onBack={backHome}
           entries={items.vocab}
           onChanged={setVocab}
+          onJump={jumpTo}
           primaryLang={primaryLang}
           savedTexts={savedTexts}
           onSaved={markSaved}
@@ -289,7 +309,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
         />
       )}
       {view === 'album' && (
-        <Album photos={items.photos} onBack={backHome} me={chat.me} peer={chat.peer} />
+        <Album photos={items.photos} onJump={jumpTo} onBack={backHome} me={chat.me} peer={chat.peer} />
       )}
 
       {libraryOpen && (
@@ -299,6 +319,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           photos={items.photos}
           onSavedChanged={setSaved}
           onVocabChanged={setVocab}
+          onJump={jumpTo}
           primaryLang={primaryLang}
           savedTexts={savedTexts}
           onSaved={markSaved}

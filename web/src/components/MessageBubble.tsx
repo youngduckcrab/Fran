@@ -25,6 +25,8 @@ interface Props {
   peerName: string;
   /** 원문·번역 중 무엇을 크게 볼지. 상대가 보낸 말에만 해당한다. */
   view: BubbleView;
+  /** 보관함에서 찾아온 말풍선. 잠깐 반짝여서 어느 것인지 짚어 준다. */
+  highlight?: boolean;
   /** 읽어주기. 브라우저가 못 하면 버튼을 띄우지 않는다. */
   speechSupported: boolean;
   speakingKey: string | null;
@@ -57,6 +59,7 @@ export default function MessageBubble({
   peerLang,
   peerName,
   view,
+  highlight,
   speechSupported,
   speakingKey,
   failedSpeechKey,
@@ -146,7 +149,10 @@ export default function MessageBubble({
   };
 
   return (
-    <li className={`bubble ${mine ? 'bubble--mine' : 'bubble--theirs'}`}>
+    <li
+      id={`m-${message.id}`}
+      className={`bubble ${mine ? 'bubble--mine' : 'bubble--theirs'} ${highlight ? 'is-found' : ''}`}
+    >
       {repliedTo && (
         <p className="bubble__reply">
           <span className="bubble__replyBar" aria-hidden="true" />

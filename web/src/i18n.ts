@@ -162,6 +162,8 @@ const ko = {
   'home.items': '{count}개',
   'home.photos': '사진 {count}장',
   'library.title': '보관함',
+  'jump.go': '대화에서 보기',
+  'jump.gone': '그 대화를 찾지 못했어요.',
 
   'composer.more': '더 보내기',
   'composer.photo': '사진 보내기',
@@ -411,6 +413,8 @@ const es: Record<StringKey, string> = {
   'home.items': '{count}',
   'home.photos': '{count} fotos',
   'library.title': 'Mis guardados',
+  'jump.go': 'Ver en la conversación',
+  'jump.gone': 'No encontré esa conversación.',
 
   'composer.more': 'Más',
   'composer.photo': 'Enviar foto',
@@ -656,6 +660,8 @@ const en: Record<StringKey, string> = {
   'home.items': '{count}',
   'home.photos': '{count} photos',
   'library.title': 'Saved things',
+  'jump.go': 'See it in the chat',
+  'jump.gone': "Couldn't find that conversation.",
 
   'composer.more': 'More',
   'composer.photo': 'Send a photo',

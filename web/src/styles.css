@@ -2380,3 +2380,38 @@ button:active:not(:disabled) {
   color: var(--accent);
   cursor: pointer;
 }
+
+/*
+ * 보관함에서 찾아온 말풍선.
+ *
+ * 화면 한가운데로 데려다 놓아도 어느 것인지 바로 눈에 들어오지 않는다.
+ * 잠깐 둘레를 밝혀서 짚어 준다. 계속 켜 두면 무엇이 새 메시지인지 헷갈리므로 곧 꺼진다.
+ */
+.bubble.is-found > .bubble__body,
+.bubble.is-found > .bubble__photo,
+.bubble.is-found {
+  animation: found 2.6s ease-out;
+}
+
+@keyframes found {
+  0%,
+  60% {
+    filter: drop-shadow(0 0 0 var(--accent));
+  }
+  10%,
+  45% {
+    filter: drop-shadow(0 0 10px var(--accent));
+  }
+  100% {
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble.is-found {
+    animation: none;
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: var(--radius);
+  }
+}

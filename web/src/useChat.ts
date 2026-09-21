@@ -35,6 +35,15 @@ const ATTENTION_EVERY_MS = 15_000;
 /** 위로 올렸을 때 한 번에 가져오는 개수. hello 가 주는 것과 같게 둔다. */
 const OLDER_PAGE = 50;
 
+/**
+ * 찾는 말풍선까지 거슬러 올라갈 때는 한 번에 많이 가져온다.
+ * 손으로 올릴 때와 달리 중간 것들을 보려는 게 아니라 목적지가 정해져 있어서,
+ * 오가는 횟수를 줄이는 편이 낫다. (서버가 한 번에 주는 최대치)
+ */
+const UNTIL_PAGE = 200;
+/** 그래도 못 찾으면 멈춘다. 없는 것을 끝까지 뒤지느라 앱이 굳으면 안 된다. */
+const UNTIL_MAX_PAGES = 10;
+
 const RECONNECT_BASE_MS = 1000;
 /**
  * 기다리는 시간의 상한.
@@ -393,6 +402,40 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     }
   }, []);
 
+  /**
+   * 찾는 말풍선이 나올 때까지 거슬러 올라간다.
+   *
+   * 저장해 둔 문장에서 "대화에서 보기" 를 누르면 그 말이 오간 자리로 가야 하는데,
+   * 몇 달 전 것이면 화면에 올라와 있지 않다. 나올 때까지 옛 대화를 끌어온다.
+   * 한 번에 많이 가져와서 오가는 횟수를 줄이고, 끝까지 없으면 없는 대로 멈춘다.
+   */
+  const loadUntil = useCallback(async (messageId: string): Promise<boolean> => {
+    for (let page = 0; page < UNTIL_MAX_PAGES; page += 1) {
+      const { messages, hasOlder } = stateRef.current;
+      if (messages.some((message) => message.id === messageId)) return true;
+      if (!hasOlder) return false;
+
+      const oldest = messages[0]?.createdAt;
+      const older = await fetchMessages(oldest, UNTIL_PAGE).catch(() => null);
+      if (!older) return false;
+
+      // setState 의 갱신 함수는 나중에 돌기 때문에, 다음 바퀴에서 보려면 여기서도 기다린다.
+      await new Promise<void>((done) => {
+        setState((previous) => {
+          const known = new Set(previous.messages.map((m) => m.id));
+          const fresh = older.filter((m) => !known.has(m.id));
+          queueMicrotask(done);
+          return {
+            ...previous,
+            messages: [...fresh, ...previous.messages],
+            hasOlder: older.length >= UNTIL_PAGE,
+          };
+        });
+      });
+    }
+    return stateRef.current.messages.some((message) => message.id === messageId);
+  }, []);
+
   /** 보낸 글을 고친다. 서버가 번역을 다시 돌려서 update 로 돌려준다. */
   const editMessage = useCallback(
     (messageId: string, text: string) => emit({ type: 'edit', messageId, text }),
@@ -420,6 +463,7 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     ...state,
     sendMessage,
     loadOlder,
+    loadUntil,
     editMessage,
     markRead,
     react,

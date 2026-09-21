@@ -31,6 +31,9 @@ interface Props {
   onSettings: () => void;
   /** 대화를 보면서 저장한 문장·단어장·사진첩을 열어본다. */
   onLibrary: () => void;
+  /** 보관함에서 "대화에서 보기" 로 건너온 메시지. 그 자리로 데려다 준다. */
+  focusId: string | null;
+  onFocused: () => void;
 }
 
 export default function ChatRoom({
@@ -46,6 +49,8 @@ export default function ChatRoom({
   onGlossary,
   onSettings,
   onLibrary,
+  focusId,
+  onFocused,
 }: Props) {
   const t = useT();
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
@@ -80,6 +85,8 @@ export default function ChatRoom({
   const pinned = useRef<{ height: number; top: number } | null>(null);
   /** 맨 아래를 보고 있는지. 옛 대화를 읽는 중이면 새 메시지가 와도 끌어내리지 않는다. */
   const atBottom = useRef(true);
+  /** 찾아가는 중. 그 사이에 맨 아래로 끌어내리면 애써 찾은 자리를 잃는다. */
+  const seeking = useRef(false);
   /** 직전에 맨 위·맨 아래에 있던 말풍선. 어느 쪽이 늘었는지로 무엇을 할지 정한다. */
   const edges = useRef<{ first: string | null; last: string | null }>({ first: null, last: null });
 
@@ -109,6 +116,7 @@ export default function ChatRoom({
     pinned.current = null;
 
     // 옛 대화를 읽는 중인데 새 메시지가 왔다고 끌어내리지 않는다. 내가 보낸 것은 예외다.
+    if (seeking.current) return;
     if (firstRender || atBottom.current || (grewAtBottom && lastIsMine)) {
       bottomRef.current?.scrollIntoView({ block: 'end' });
       atBottom.current = true;
@@ -135,6 +143,50 @@ export default function ChatRoom({
     atBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
     if (list.scrollTop <= 300) showOlder();
   };
+
+  /** 지금 반짝이고 있는 말풍선. 찾아간 자리를 눈으로 짚어 준다. */
+  const [found, setFound] = useState<string | null>(null);
+  const { loadUntil } = chat;
+
+  /*
+   * 보관함에서 건너왔을 때 그 말풍선으로 데려다 준다.
+   *
+   * 몇 달 전 것이면 아직 화면에 올라와 있지 않다. 나올 때까지 옛 대화를 끌어온 뒤,
+   * 가운데에 놓고 잠깐 반짝여 준다 — 어느 것인지 눈으로 짚어 줘야 찾은 보람이 있다.
+   */
+  useEffect(() => {
+    if (!focusId) return;
+    let cancelled = false;
+    seeking.current = true;
+
+    void (async () => {
+      const here = await loadUntil(focusId);
+      if (cancelled) return;
+      // 화면에 그려질 때까지 한 박자 기다린다.
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        const node = document.getElementById(`m-${focusId}`);
+        node?.scrollIntoView({ block: 'center' });
+        seeking.current = false;
+        atBottom.current = false;
+        setFound(here && node ? focusId : null);
+        if (!here || !node) say(t('jump.gone'));
+        onFocused();
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      seeking.current = false;
+    };
+  }, [focusId, loadUntil, onFocused, t]);
+
+  // 반짝임은 잠깐이면 된다. 계속 켜 두면 무엇이 새 메시지인지 헷갈린다.
+  useEffect(() => {
+    if (!found) return;
+    const timer = setTimeout(() => setFound(null), 2600);
+    return () => clearTimeout(timer);
+  }, [found]);
 
   /**
    * 대화를 보고 있으면 읽은 것으로 친다.
@@ -238,6 +290,7 @@ export default function ChatRoom({
           <MessageBubble
             key={message.id}
             message={message}
+            highlight={found === message.id}
             mine={message.senderId === chat.me?.id}
             primaryLang={message.senderId === chat.me?.id ? message.sourceLang : primaryLang}
             extraLangs={extraLangs}
