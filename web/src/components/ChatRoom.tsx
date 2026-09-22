@@ -9,7 +9,7 @@ import type { Chat } from "../useChat";
 import { useT, useUiLang } from "../i18n";
 import Icon from "./Icon";
 import { useBackClose } from "../backstack";
-import { formatDay, startsNewDay } from "../day";
+import { dayKey, formatDay, startsNewDay } from "../day";
 import { clearDelivered } from "../notifications";
 import { useSpeaker } from "../speech";
 import { wallpaperProps } from "../wallpaper";
@@ -352,11 +352,8 @@ export default function ChatRoom({
               chat.messages[index - 1]?.createdAt,
             ) && (
               <li className="chat__day">
-                <time
-                  dateTime={new Date(message.createdAt)
-                    .toISOString()
-                    .slice(0, 10)}
-                >
+                {/* 여기 적는 날짜도 보는 사람의 달력으로. toISOString 은 UTC 라 어긋난다. */}
+                <time dateTime={dayKey(message.createdAt)}>
                   {formatDay(message.createdAt, t, uiLang)}
                 </time>
               </li>
