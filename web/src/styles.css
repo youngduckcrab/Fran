@@ -2375,6 +2375,42 @@ button:active:not(:disabled) {
   cursor: pointer;
 }
 
+/*
+ * 날짜 구분선. 말풍선에는 시각만 있어서 이 선이 하루의 경계다.
+ * 배경화면을 깔아도 읽히게 알약 하나를 얹고, 양옆으로 선을 뽑는다.
+ */
+.chat__day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: stretch;
+  margin: 10px 0 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chat__day::before,
+.chat__day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.chat__day time {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  white-space: nowrap;
+}
+
+/* 대화의 맨 첫 날이면 위쪽 여백이 겹친다. */
+.chat__older + .chat__day {
+  margin-top: 0;
+}
+
 /* ---------- 보관함 (채팅에서 열기) ---------- */
 
 /*

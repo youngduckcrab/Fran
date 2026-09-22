@@ -1,14 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getToken, rememberedUser, setActiveUser, setToken } from './api';
-import { clearChat } from './cache';
-import { clearCollections } from './collections';
-import Shell from './components/Shell';
-import Login from './components/Login';
-import { TranslateContext, browserUiLang, createTranslate, type UiLang } from './i18n';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getToken, rememberedUser, setActiveUser, setToken } from "./api";
+import { clearChat } from "./cache";
+import { clearCollections } from "./collections";
+import Shell from "./components/Shell";
+import Login from "./components/Login";
+import {
+  LangContext,
+  TranslateContext,
+  browserUiLang,
+  createTranslate,
+  type UiLang,
+} from "./i18n";
 
 /** 주소가 누구 것인지 알려준다. 예: ?u=fran → Fran 의 앱으로 열린다. */
 function presetUserId(): string | undefined {
-  return new URLSearchParams(location.search).get('u') ?? undefined;
+  return new URLSearchParams(location.search).get("u") ?? undefined;
 }
 
 /**
@@ -17,8 +23,13 @@ function presetUserId(): string | undefined {
  */
 function useOwnManifest(userId: string | null): void {
   useEffect(() => {
-    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-    if (link) link.href = userId ? `/manifest.webmanifest?u=${encodeURIComponent(userId)}` : '/manifest.webmanifest';
+    const link = document.querySelector<HTMLLinkElement>(
+      'link[rel="manifest"]',
+    );
+    if (link)
+      link.href = userId
+        ? `/manifest.webmanifest?u=${encodeURIComponent(userId)}`
+        : "/manifest.webmanifest";
   }, [userId]);
 }
 
@@ -29,7 +40,9 @@ export default function App() {
     setActiveUser(chosen);
     return chosen;
   });
-  const [token, setTokenState] = useState<string | null>(() => getToken(userId));
+  const [token, setTokenState] = useState<string | null>(() =>
+    getToken(userId),
+  );
   useOwnManifest(userId);
   const [uiLang, setUiLang] = useState<UiLang>(browserUiLang);
   const t = useMemo(() => createTranslate(uiLang), [uiLang]);
@@ -49,26 +62,28 @@ export default function App() {
   }, [userId]);
 
   return (
-    <TranslateContext.Provider value={t}>
-      {token ? (
-        <Shell
-          token={token}
-          onLogout={handleLogout}
-          onUiLang={setUiLang}
-          onToken={(next) => {
-            // 비밀번호를 바꾸면 서버가 새 토큰을 준다. 갈아 끼워야 이 기기가 로그인을 유지한다.
-            setToken(next, userId);
-            setTokenState(next);
-          }}
-        />
-      ) : (
-        <Login
-          onLogin={handleLogin}
-          presetUserId={userId ?? undefined}
-          uiLang={uiLang}
-          onUiLang={setUiLang}
-        />
-      )}
-    </TranslateContext.Provider>
+    <LangContext.Provider value={uiLang}>
+      <TranslateContext.Provider value={t}>
+        {token ? (
+          <Shell
+            token={token}
+            onLogout={handleLogout}
+            onUiLang={setUiLang}
+            onToken={(next) => {
+              // 비밀번호를 바꾸면 서버가 새 토큰을 준다. 갈아 끼워야 이 기기가 로그인을 유지한다.
+              setToken(next, userId);
+              setTokenState(next);
+            }}
+          />
+        ) : (
+          <Login
+            onLogin={handleLogin}
+            presetUserId={userId ?? undefined}
+            uiLang={uiLang}
+            onUiLang={setUiLang}
+          />
+        )}
+      </TranslateContext.Provider>
+    </LangContext.Provider>
   );
 }
