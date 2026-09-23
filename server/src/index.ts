@@ -401,13 +401,82 @@ async function notifyNewMessage(messageId: string): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/* 준비                                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * DB 준비가 끝나기 전에 포트부터 연다.
+ *
+ * 무료 호스팅은 한동안 아무도 안 들어오면 서버를 재운다. 다시 깨우는 데 걸리는
+ * 컨테이너 시간은 우리가 어쩔 수 없지만, 그 뒤에 DB 를 붙이고 스키마를 맞추고
+ * 밀린 일을 치우는 동안까지 포트를 닫아 두면 그만큼 첫 화면이 더 늦는다.
+ * 원격 DB 도 같이 잠들어 있으면 이 시간이 몇 초씩 된다.
+ *
+ * 화면은 캐시로 그릴 수 있으니 정적 파일부터 내주고, 데이터가 필요한 길목
+ * (API·소켓)만 준비될 때까지 기다리게 한다.
+ */
+let ready = false;
+
+async function boot(): Promise<void> {
+  try {
+    await initDatabase();
+    // 파일로 관리하던 용어집을 DB 로 옮긴다. 비어 있을 때 한 번만 옮겨 담는다.
+    await seedGlossary(config.glossary);
+
+    // 앱에서 바꾼 비밀번호를 읽어 둔다. 없으면 .env 값을 그대로 쓴다.
+    await initAuth();
+    warnAboutDefaultPasscodes();
+
+    // 알림 서명 키. 없으면 이때 한 번 만들어 DB 에 넣는다.
+    await initPush();
+
+    ready = true;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`\n✗ 데이터베이스에 연결하지 못했습니다: ${reason}`);
+    console.error('  DATABASE_URL 을 확인해 주세요. 예: postgresql://user:pass@host/db\n');
+    process.exit(1);
+  }
+
+  // 여기서부터는 첫 접속을 막을 이유가 없는 뒷정리. 실패해도 서비스는 돈다.
+  try {
+    // 고르기만 하고 보내지 않은 사진·음성. 아무도 못 보는 데이터라 치운다.
+    const orphans = await purgeOrphanAttachments();
+    if (orphans > 0) console.log(`보내지 않은 첨부 ${orphans}건을 정리했습니다.`);
+
+    // 번역 도중 서버가 꺼졌던 메시지들. 그냥 두면 영원히 "번역하는 중…" 으로 남는다.
+    const stuck = await pendingMessageIds();
+    if (stuck.length > 0) {
+      console.log(`번역이 끊겼던 메시지 ${stuck.length}건을 다시 시도합니다.`);
+      for (const id of stuck) enqueueTranslation(id);
+    }
+  } catch (error) {
+    console.warn('시작 뒷정리를 건너뜁니다:', error instanceof Error ? error.message : error);
+  }
+}
+
+const whenReady = boot();
+
+/** 데이터를 건드리기 전에 부르면 된다. 준비된 뒤에는 값이 들지 않는다. */
+async function waitForReady(): Promise<void> {
+  if (!ready) await whenReady;
+}
+
+/* ------------------------------------------------------------------ */
 /* HTTP                                                                */
 /* ------------------------------------------------------------------ */
 
 const app = new Hono();
 app.use('/api/*', cors());
 
-app.get('/healthz', (c) => c.json({ ok: true }));
+// DB 를 읽는 길목만 준비를 기다린다. 화면(정적 파일)은 기다리지 않고 바로 나간다.
+app.use('/api/*', async (_c, next) => {
+  await waitForReady();
+  await next();
+});
+
+// 호스팅의 생존 확인용. 프로세스가 떴으면 답한다 — DB 를 기다리면 재시작 판정이 늦어진다.
+app.get('/healthz', (c) => c.json({ ok: true, ready }));
 
 app.post('/api/login', async (c) => {
   const body = await c.req.json().catch(() => null);
@@ -1099,6 +1168,9 @@ if (fs.existsSync(config.webDist)) {
 /* ------------------------------------------------------------------ */
 
 async function handleClientEvent(userId: string, socket: WebSocket, event: ClientEvent): Promise<void> {
+  // 깨어나는 중에 보낸 메시지도 잃지 않는다. 준비되면 그대로 이어서 처리한다.
+  await waitForReady();
+
   switch (event.type) {
     case 'send': {
       const text = event.text.trim();
@@ -1218,36 +1290,6 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
   }
 }
 
-// DB 가 준비되기 전에 요청을 받으면 첫 메시지가 통째로 실패한다. 먼저 연결하고 연다.
-try {
-  await initDatabase();
-  // 파일로 관리하던 용어집을 DB 로 옮긴다. 비어 있을 때 한 번만 옮겨 담는다.
-  await seedGlossary(config.glossary);
-
-  // 앱에서 바꾼 비밀번호를 읽어 둔다. 없으면 .env 값을 그대로 쓴다.
-  await initAuth();
-  warnAboutDefaultPasscodes();
-
-  // 알림 서명 키. 없으면 이때 한 번 만들어 DB 에 넣는다.
-  await initPush();
-
-  // 고르기만 하고 보내지 않은 사진·음성. 아무도 못 보는 데이터라 치운다.
-  const orphans = await purgeOrphanAttachments();
-  if (orphans > 0) console.log(`보내지 않은 첨부 ${orphans}건을 정리했습니다.`);
-
-  // 번역 도중 서버가 꺼졌던 메시지들. 그냥 두면 영원히 "번역하는 중…" 으로 남는다.
-  const stuck = await pendingMessageIds();
-  if (stuck.length > 0) {
-    console.log(`번역이 끊겼던 메시지 ${stuck.length}건을 다시 시도합니다.`);
-    for (const id of stuck) enqueueTranslation(id);
-  }
-} catch (error) {
-  const reason = error instanceof Error ? error.message : String(error);
-  console.error(`\n✗ 데이터베이스에 연결하지 못했습니다: ${reason}`);
-  console.error('  DATABASE_URL 을 확인해 주세요. 예: postgresql://user:pass@host/db\n');
-  process.exit(1);
-}
-
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`Fran 서버가 http://localhost:${info.port} 에서 실행 중입니다.`);
   // 번역 설정 문제는 첫 메시지가 아니라 지금 알려준다.
@@ -1314,6 +1356,10 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
   socket.on('pong', () => alive.add(socket));
 
   void (async () => {
+    // 소켓은 먼저 열어 두고, 첫 데이터만 DB 가 준비된 뒤에 보낸다.
+    await waitForReady();
+    if (socket.readyState !== socket.OPEN) return;
+
     const [me, peer, recent, glossary, readAt] = await Promise.all([
       profileOf(userId),
       profileOf(peerOf(userId).profile.id),

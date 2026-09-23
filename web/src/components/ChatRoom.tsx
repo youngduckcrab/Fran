@@ -9,6 +9,7 @@ import type { Chat } from "../useChat";
 import { useT, useUiLang } from "../i18n";
 import Icon from "./Icon";
 import { useBackClose } from "../backstack";
+import { useWaking } from "../waking";
 import { dayKey, formatDay, startsNewDay } from "../day";
 import { clearDelivered } from "../notifications";
 import { useSpeaker } from "../speech";
@@ -63,6 +64,7 @@ export default function ChatRoom({
 }: Props) {
   const t = useT();
   const uiLang = useUiLang();
+  const waking = useWaking(chat.connection);
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
   const [picked, setPicked] = useState<ChatMessage | null>(null);
   const [explaining, setExplaining] = useState<ChatMessage | null>(null);
@@ -284,7 +286,9 @@ export default function ChatRoom({
           </h1>
           <p className="chat__status">
             {chat.connection !== "open"
-              ? t("chat.reconnectingShort")
+              ? waking
+                ? t("chat.waking")
+                : t("chat.reconnectingShort")
               : chat.peerTyping
                 ? t("chat.typing")
                 : chat.peerOnline
@@ -410,11 +414,12 @@ export default function ChatRoom({
       )}
 
       {/* 연결이 끊겼을 때. 화면을 가리지 않게 한 줄로 띄우고, 이어지면 알아서 사라진다. */}
-      {chat.connection !== "open" && chat.error === "disconnected" && (
-        <p className="chat__toast chat__toast--muted">
-          {t("chat.disconnected")}
-        </p>
-      )}
+      {chat.connection !== "open" &&
+        (chat.error === "disconnected" || waking) && (
+          <p className="chat__toast chat__toast--muted">
+            {waking ? t("chat.wakingHint") : t("chat.disconnected")}
+          </p>
+        )}
       {chat.error && chat.error !== "disconnected" && (
         <p className="chat__toast" onClick={chat.dismissError}>
           {chat.error}

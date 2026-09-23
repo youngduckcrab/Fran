@@ -10,6 +10,8 @@ interface Props {
   me: UserProfile | null;
   peer: UserProfile | null;
   connecting: boolean;
+  /** 서버가 잠들어 있어 깨우는 중. 오래 기다리는 이유를 알려 준다. */
+  waking: boolean;
   peerOnline: boolean;
   lastMessage: ChatMessage | undefined;
   primaryLang: LangCode;
@@ -23,6 +25,7 @@ export default function Home({
   me,
   peer,
   connecting,
+  waking,
   peerOnline,
   lastMessage,
   primaryLang,
@@ -43,7 +46,13 @@ export default function Home({
             <Icon name="heart" size={18} className="home__heart" />
           </h1>
           <p className="home__status">
-            {connecting ? t('chat.reconnectingShort') : peerOnline ? t('chat.online') : t('chat.offline')}
+            {connecting
+              ? waking
+                ? t('chat.waking')
+                : t('chat.reconnectingShort')
+              : peerOnline
+                ? t('chat.online')
+                : t('chat.offline')}
           </p>
         </div>
         <button type="button" className="chat__settings" onClick={onSettings} disabled={!me}>

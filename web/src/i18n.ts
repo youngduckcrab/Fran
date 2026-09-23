@@ -284,6 +284,9 @@ const ko = {
   "wall.photo": "사진",
 
   "chat.reconnectingShort": "연결 중…",
+  "chat.waking": "깨우는 중…",
+  "chat.wakingHint":
+    "한동안 안 쓰면 서버가 잠들어요. 깨어나는 데 30초쯤 걸려요.",
 
   "error.unknown": "번역하지 못했습니다.",
 } as const;
@@ -570,6 +573,9 @@ const es: Record<StringKey, string> = {
   "wall.photo": "Foto",
 
   "chat.reconnectingShort": "Conectando…",
+  "chat.waking": "Despertando…",
+  "chat.wakingHint":
+    "El servidor se duerme si nadie entra por un rato. Tarda unos 30 segundos en despertar.",
 };
 
 const en: Record<StringKey, string> = {
@@ -846,6 +852,9 @@ const en: Record<StringKey, string> = {
   "wall.photo": "Photo",
 
   "chat.reconnectingShort": "Connecting…",
+  "chat.waking": "Waking up…",
+  "chat.wakingHint":
+    "The server sleeps when nobody uses it for a while. It takes about 30 seconds to wake.",
 };
 
 const STRINGS: Record<UiLang, Record<StringKey, string>> = { ko, es, en };

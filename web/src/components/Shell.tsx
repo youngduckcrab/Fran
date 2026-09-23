@@ -3,6 +3,7 @@ import type { LangCode, SavedSentence, VocabEntry } from '@fran/shared';
 import { useChat } from '../useChat';
 import { activeUser, fetchPhotos, fetchSaved, fetchVocab } from '../api';
 import { toUiLang, useT, type UiLang } from '../i18n';
+import { useWaking } from '../waking';
 import { previewOf } from '../preview';
 import { plainText } from '../text';
 import { useBackClose } from '../backstack';
@@ -36,6 +37,7 @@ interface Props {
 export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const t = useT();
   const chat = useChat(token, onLogout);
+  const waking = useWaking(chat.connection);
   const [view, setView] = useState<View>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -269,6 +271,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
           me={chat.me}
           peer={chat.peer}
           connecting={chat.connection !== 'open'}
+          waking={waking}
           peerOnline={chat.peerOnline}
           lastMessage={lastMessage}
           primaryLang={primaryLang}
