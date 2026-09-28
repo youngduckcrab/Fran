@@ -2604,6 +2604,14 @@ button:active:not(:disabled) {
   text-align: right;
 }
 
+/*
+ * 아직 말하는 중인 줄. 받아쓰기가 말이 이어질수록 앞 글자까지 고쳐 놓기 때문에,
+ * 지금 읽는 것이 바뀔 수 있다는 걸 눈으로 알려 준다.
+ */
+.caption--saying .caption__said {
+  opacity: 0.6;
+}
+
 .caption__said {
   display: block;
   font-size: 16px;

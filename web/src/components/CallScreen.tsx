@@ -54,7 +54,12 @@ export default function CallScreen({ call, peerName }: Props) {
       {call.captionsOn && call.captions.length > 0 && (
         <div className="call__captions" aria-live="polite">
           {call.captions.map((line) => (
-            <p key={line.id} className={`caption ${line.mine ? 'caption--mine' : ''}`}>
+            <p
+              key={line.id}
+              className={`caption ${line.mine ? 'caption--mine' : ''} ${
+                line.final ? '' : 'caption--saying'
+              }`}
+            >
               <span className="caption__said">{line.text}</span>
               {line.translated && <span className="caption__meaning">{line.translated}</span>}
             </p>

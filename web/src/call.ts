@@ -25,6 +25,14 @@ const ENDED_LINGER_MS = 2500;
 /** 화면에 남겨 두는 자막 줄 수. 지나간 말을 조금 되짚을 만큼만. */
 const CAPTION_KEEP = 6;
 
+/**
+ * 말하는 도중의 자막을 상대에게 보내는 간격.
+ *
+ * 받아쓰기는 1초에도 여러 번 고쳐 준다. 그대로 흘리면 소켓이 시끄럽고 글자가
+ * 튄다. 이 정도면 말하는 속도를 따라가면서도 읽을 만하다.
+ */
+const INTERIM_EVERY_MS = 250;
+
 /** 자막을 켤지 말지. 한 번 정하면 다음 통화에도 그대로 간다. */
 const CAPTION_KEY = 'fran.captions';
 
@@ -305,24 +313,48 @@ export function useCall(
   /**
    * 통화가 붙어 있는 동안 내 말을 받아쓴다.
    *
-   * 확정된 줄만 서버로 보내 번역하고, 말하는 도중의 것은 내 화면에만 띄운다.
-   * 한 글자 늘 때마다 모델을 부르면 값도 값이고 자막이 덜덜 떨린다.
+   * 말하는 도중의 것도 상대에게 보낸다. 다 말할 때까지 기다리면 그동안 상대
+   * 화면이 비어 있어서, 듣고는 있는데 아무것도 안 뜨는 몇 초가 생긴다.
+   * 번역만 다 말한 뒤에 한 번 한다 — 한 글자 늘 때마다 모델을 부르면 값도
+   * 값이고 번역문이 덜덜 떨린다.
    */
   useEffect(() => {
     const id = callId.current;
     const live = state.phase === 'connected' || state.phase === 'connecting';
     if (!live || !captionsOn || !canListen() || !id) return;
 
+    /** 지금 말하고 있는 한 줄의 id. 도중이든 끝이든 같은 id 라야 한 줄로 이어진다. */
+    let lineId = crypto.randomUUID();
+    let sentAt = 0;
+    let sentText = '';
+
     const ear_ = listen({
       lang: myLang,
       onLine: (text, final) => {
-        // 말하는 도중의 줄은 하나로 덮어쓴다. 확정되면 그때 제 id 를 받는다.
-        const lineId = final ? crypto.randomUUID() : `${id}:draft`;
-        setCaptions((previous) => merge(previous, { id: lineId, mine: true, text, final }));
+        /*
+         * 지금 이 줄의 id 를 값으로 붙잡아 둔다.
+         *
+         * setCaptions 의 갱신 함수는 나중에 돈다. lineId 를 그대로 읽게 두면 그
+         * 사이에 다음 줄 id 로 바뀌어 있어서, 보낸 id 와 화면의 id 가 어긋나고
+         * 같은 말이 두 줄로 남는다.
+         */
+        const current = lineId;
+        setCaptions((previous) => merge(previous, { id: current, mine: true, text, final }));
+
         if (final) {
-          setCaptions((previous) => previous.filter((line) => line.id !== `${id}:draft`));
-          emit({ type: 'caption', callId: id, id: lineId, text, final: true });
+          emit({ type: 'caption', callId: id, id: current, text, final: true });
+          lineId = crypto.randomUUID();
+          sentAt = 0;
+          sentText = '';
+          return;
         }
+
+        // 받아쓰기는 1초에도 여러 번 고쳐 준다. 그대로 흘리면 소켓만 시끄럽다.
+        const now = Date.now();
+        if (text === sentText || now - sentAt < INTERIM_EVERY_MS) return;
+        sentAt = now;
+        sentText = text;
+        emit({ type: 'caption', callId: id, id: current, text, final: false });
       },
     });
     ear.current = ear_;
