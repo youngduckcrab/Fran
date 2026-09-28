@@ -4,7 +4,7 @@ import { previewOf } from '../preview';
 import Icon from './Icon';
 import NotifyPrompt from './NotifyPrompt';
 
-export type View = 'home' | 'chat' | 'saved' | 'vocab' | 'album';
+export type View = 'home' | 'chat' | 'saved' | 'vocab' | 'album' | 'calls';
 
 interface Props {
   me: UserProfile | null;
@@ -92,6 +92,12 @@ export default function Home({
           <span className="tile__icon"><Icon name="image" size={24} /></span>
           <span className="tile__title">{t('home.album')}</span>
           <span className="tile__count">{t('home.items', { count: String(counts.photos) })}</span>
+        </button>
+
+        {/* 통화에서 나눈 말. 채팅과 섞지 않고 여기 따로 쌓인다. */}
+        <button type="button" className="tile" onClick={() => onOpen('calls')}>
+          <span className="tile__icon"><Icon name="phone" size={24} /></span>
+          <span className="tile__title">{t('calls.title')}</span>
         </button>
       </div>
     </div>

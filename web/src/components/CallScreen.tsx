@@ -50,6 +50,18 @@ export default function CallScreen({ call, peerName }: Props) {
         {call.error === 'nomic' && <p className="call__hint">{t('call.nomic')}</p>}
       </div>
 
+      {/* 오간 말. 상대 말이 크게, 내 말은 작게 — 내 것은 마이크가 잡히는지 보는 용도다. */}
+      {call.captionsOn && call.captions.length > 0 && (
+        <div className="call__captions" aria-live="polite">
+          {call.captions.map((line) => (
+            <p key={line.id} className={`caption ${line.mine ? 'caption--mine' : ''}`}>
+              <span className="caption__said">{line.text}</span>
+              {line.translated && <span className="caption__meaning">{line.translated}</span>}
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="call__keys">
         {call.phase === 'ringing' ? (
           <>
@@ -89,6 +101,17 @@ export default function CallScreen({ call, peerName }: Props) {
             >
               <Icon name="phoneOff" size={26} />
             </button>
+            {call.canCaption && (
+              <button
+                type="button"
+                className={`call__key call__key--caption ${call.captionsOn ? 'is-on' : ''}`}
+                onClick={call.toggleCaptions}
+                aria-label={t(call.captionsOn ? 'call.captionsOff' : 'call.captionsOn')}
+                aria-pressed={call.captionsOn}
+              >
+                <Icon name="captions" size={24} />
+              </button>
+            )}
           </>
         )}
       </div>

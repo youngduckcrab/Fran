@@ -2564,6 +2564,195 @@ button:active:not(:disabled) {
   }
 }
 
+/* ---------- 통화 자막 ---------- */
+
+/*
+ * 오간 말. 통화 화면 가운데를 차지하되 단추 자리는 건드리지 않는다.
+ * 새 줄이 아래로 쌓이므로 아래쪽에 붙여 둔다.
+ */
+.call__captions {
+  flex: 1;
+  width: 100%;
+  max-width: 520px;
+  /* 아래쪽을 넉넉히 비운다. 마지막 줄이 단추에 붙으면 둘 다 읽기 어렵다. */
+  margin: 24px 0 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.caption {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  animation: caption-in 180ms ease-out;
+}
+
+/*
+ * 내 말. 마이크가 잡히는지 보는 용도이기도 하지만, 내가 한 말이 상대에게 어떻게
+ * 건너갔는지 보는 자리이기도 하다 — 둘 다 상대 말을 공부하는 중이다.
+ * 그래서 작게 두되 읽을 수 있게 둔다.
+ */
+.caption--mine {
+  align-self: flex-end;
+  max-width: 82%;
+  background: transparent;
+  padding: 2px 4px;
+  text-align: right;
+}
+
+.caption__said {
+  display: block;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.caption--mine .caption__said {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* 뜻이 본문이다. 원문보다 눈에 먼저 들어와야 한다. */
+.caption__meaning {
+  display: block;
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--accent);
+}
+
+.caption--mine .caption__meaning {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+@keyframes caption-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.call__key--caption.is-on {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caption {
+    animation: none;
+  }
+}
+
+/* ---------- 통화 기록 ---------- */
+
+.calls {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.calls__item {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.calls__head {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calls__when {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.calls__meta {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.calls__lines {
+  list-style: none;
+  margin: 0;
+  padding: 4px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.calls__line.is-mine {
+  /* 내 말과 상대 말을 들여쓰기로 가른다. 색을 더 쓰면 시끄럽다. */
+  padding-left: 20px;
+}
+
+.calls__who {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.calls__said {
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.calls__meaning {
+  margin: 3px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--accent);
+}
+
+.calls__loading {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+}
+
+.calls__delete {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--danger, #ff3b30);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.screen__hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* ---------- 보관함 (채팅에서 열기) ---------- */
 
 /*

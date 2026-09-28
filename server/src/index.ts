@@ -45,6 +45,13 @@ import {
   deleteSaved,
   deleteVocab,
   editMessage,
+  addCallLine,
+  addCallTranslation,
+  startCall,
+  endCall as finishCall,
+  listCalls,
+  getCallLines,
+  deleteCall,
   getAttachmentBytes,
   getAudioForTranscription,
   getReadState,
@@ -95,6 +102,7 @@ import {
   makeExample,
   transcribeAudio,
   translateMessage,
+  translateCaption,
 } from './translation/index.js';
 import { toModelAudio } from './audio.js';
 import { initPush, kindLabel, notify, publicKey, subscribe, unsubscribe } from './push.js';
@@ -103,6 +111,9 @@ const MAX_MESSAGE_LENGTH = 4000;
 /** 사는 곳. "Santiago, Chile" 정도면 충분하다. 주소를 적는 칸이 아니다. */
 const MAX_REGION_LENGTH = 60;
 const MAX_NOTE_LENGTH = 500;
+
+/** 자막 한 줄의 한계. 한 호흡에 이보다 길게 말하지 않는다. */
+const MAX_CAPTION_LENGTH = 1000;
 /** 첨부 한 건의 최대 크기. 사진은 화면에서 미리 줄여서 올라온다. */
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
@@ -433,6 +444,7 @@ function endCall(callId: string, reason: CallEndReason): void {
   if (!ringing || ringing.callId !== callId) return;
   const { from, to } = ringing;
   stopRinging();
+  void finishCall(callId).catch(() => {});
   sendToUser(from, { type: 'call_end', callId, reason });
   sendToUser(to, { type: 'call_end', callId, reason });
 }
@@ -557,6 +569,27 @@ app.get('/healthz', (c) => c.json({ ok: true, ready }));
  */
 const STUN_ONLY = [{ urls: 'stun:stun.cloudflare.com:3478' }];
 const TURN_TTL_SECONDS = 2 * 60 * 60;
+
+/* --- 통화 기록 --- */
+
+app.get('/api/calls', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  const beforeRaw = c.req.query('before');
+  const before = beforeRaw ? Number.parseInt(beforeRaw, 10) : undefined;
+  const calls = await listCalls(50, Number.isFinite(before) ? before : undefined);
+  return c.json({ calls });
+});
+
+app.get('/api/calls/:id', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  return c.json({ lines: await getCallLines(c.req.param('id')) });
+});
+
+app.delete('/api/calls/:id', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  await deleteCall(c.req.param('id'));
+  return c.json({ ok: true });
+});
 
 app.get('/api/turn', async (c) => {
   if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
@@ -1293,6 +1326,8 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
       };
       sendToUser(to, { type: 'call', callId: event.callId, from: userId, offer: event.offer });
       void notifyIncomingCall(userId, to);
+      // 기록은 통화를 걸 때 연다. 자막 한 줄이라도 남아야 목록에 뜬다.
+      void startCall(event.callId, userId).catch(() => {});
       return;
     }
     case 'call_answer': {
@@ -1305,6 +1340,62 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         callId: event.callId,
         answer: event.answer,
       });
+      return;
+    }
+    case 'caption': {
+      const text = event.text.trim();
+      if (!text || text.length > MAX_CAPTION_LENGTH) return;
+
+      const peer = peerOf(userId).profile.id;
+      const me = await profileOf(userId);
+      const lang = me.nativeLang;
+
+      // 말하는 도중에도 곧바로 띄운다. 번역은 다 말한 뒤에만 한다 —
+      // 한 글자 늘 때마다 모델을 부르면 값도 값이고 자막이 덜덜 떨린다.
+      sendToUser(peer, {
+        type: 'caption',
+        callId: event.callId,
+        id: event.id,
+        from: userId,
+        lang,
+        text,
+        final: event.final,
+      });
+      if (!event.final) return;
+
+      const line = { id: event.id, speakerId: userId, lang, text, createdAt: Date.now() };
+      void addCallLine(event.callId, line).catch(() => {});
+
+      // 상대가 읽는 말로 옮겨서 양쪽에 보낸다. 말한 사람도 자기 말이 어떻게
+      // 건너갔는지 볼 수 있어야 한다 — 그게 이 앱을 쓰는 이유다.
+      void (async () => {
+        const peerProfile = await profileOf(peer);
+        const targetLang = peerProfile.displayLangs[0] ?? peerProfile.nativeLang;
+        if (targetLang === lang) return;
+        try {
+          const translated = await translateCaption({
+            text,
+            speaker: me,
+            participants: [me, peerProfile],
+            targetLang,
+          });
+          await addCallTranslation(event.id, targetLang, translated);
+          const done: ServerEvent = {
+            type: 'caption',
+            callId: event.callId,
+            id: event.id,
+            from: userId,
+            lang,
+            text,
+            final: true,
+            translated,
+          };
+          sendToUser(peer, done);
+          sendToUser(userId, done);
+        } catch (error) {
+          console.warn('자막 번역 실패:', error instanceof Error ? error.message : error);
+        }
+      })();
       return;
     }
     case 'call_ice': {
@@ -1322,6 +1413,7 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         endCall(event.callId, reason);
       } else {
         // 이미 붙은 통화를 끊는 경우. 울림 상태는 진작 지워졌다.
+        void finishCall(event.callId).catch(() => {});
         sendToUser(peerOf(userId).profile.id, { type: 'call_end', callId: event.callId, reason });
       }
       return;

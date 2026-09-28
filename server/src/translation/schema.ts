@@ -163,3 +163,21 @@ export const wordSchema = z.object({
 });
 
 export type WordResult = z.infer<typeof wordSchema>;
+
+/**
+ * 통화 자막 한 줄.
+ *
+ * 자막은 빨리 나와야 읽을 수 있다. 말투 분석도 학습 노트도 없이 옮긴 말만 받는다.
+ */
+export const CAPTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    text: { type: 'string' },
+  },
+  required: ['text'],
+  additionalProperties: false,
+} as const;
+
+export const captionSchema = z.object({
+  text: z.string(),
+});

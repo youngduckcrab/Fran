@@ -12,6 +12,8 @@ import {
   buildUserPrompt,
   buildWordSystemPrompt,
   buildWordUserPrompt,
+  buildCaptionSystemPrompt,
+  buildCaptionUserPrompt,
 } from './prompt.js';
 import {
   EXAMPLE_SCHEMA,
@@ -19,6 +21,8 @@ import {
   OUTPUT_SCHEMA,
   TRANSCRIPT_SCHEMA,
   WORD_SCHEMA,
+  CAPTION_SCHEMA,
+  captionSchema,
   exampleSchema,
   explanationSchema,
   resultSchema,
@@ -382,4 +386,49 @@ export async function lookUpWord({
     throw new TranslationError(`단어 풀이 응답이 스키마와 맞지 않습니다: ${parsed.error.message}`);
   }
   return { result: parsed.data, model: provider.model };
+}
+
+/* ------------------------------------------------------------------ */
+/* 통화 자막                                                            */
+/* ------------------------------------------------------------------ */
+
+export interface CaptionArgs {
+  /** 받아쓴 말 한 줄. */
+  text: string;
+  speaker: UserProfile;
+  participants: UserProfile[];
+  targetLang: LangCode;
+}
+
+/**
+ * 자막 한 줄을 옮긴다.
+ *
+ * 대화 번역과 달리 맥락을 넣지 않는다. 자막은 빨리 떠야 읽히고, 말은 이미
+ * 지나가 버린 뒤라 몇 초를 더 들여 다듬을 값어치가 없다.
+ */
+export async function translateCaption({
+  text,
+  speaker,
+  participants,
+  targetLang,
+}: CaptionArgs): Promise<string> {
+  const provider = getProvider();
+
+  const startedAt = Date.now();
+  const response = await completeWithRetry(provider, {
+    systemPrompt: buildCaptionSystemPrompt(participants, await listGlossary(), targetLang),
+    userPrompt: buildCaptionUserPrompt(text, speaker),
+    schema: CAPTION_SCHEMA,
+  });
+  recordUsage(provider, response.usage, Date.now() - startedAt);
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(response.json);
+  } catch {
+    throw new TranslationError(`모델이 JSON 이 아닌 응답을 돌려줬습니다: ${response.json.slice(0, 120)}`);
+  }
+  const parsed = captionSchema.safeParse(raw);
+  if (!parsed.success) throw new TranslationError('자막 번역 응답이 스키마와 맞지 않습니다.');
+  return parsed.data.text;
 }

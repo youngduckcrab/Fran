@@ -155,6 +155,31 @@ const SCHEMA = `
   -- 같은 단어를 두 번 담아도 줄이 늘지 않게 한다.
   CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_unique ON vocab (user_id, lang, LOWER(term));
 
+  -- 통화 한 건. 자막을 켜고 한 통화만 줄이 남는다.
+  CREATE TABLE IF NOT EXISTS calls (
+    id         TEXT   PRIMARY KEY,
+    caller_id  TEXT   NOT NULL,
+    started_at BIGINT NOT NULL,
+    ended_at   BIGINT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_calls_time ON calls (started_at DESC);
+
+  -- 통화 중에 오간 말 한 줄. 대화(messages)와 섞지 않는다 —
+  -- 통화는 통화대로 따로 들춰 보는 것이지 채팅 흐름에 낄 것이 아니다.
+  CREATE TABLE IF NOT EXISTS call_lines (
+    id           TEXT   PRIMARY KEY,
+    call_id      TEXT   NOT NULL REFERENCES calls (id) ON DELETE CASCADE,
+    speaker_id   TEXT   NOT NULL,
+    lang         TEXT   NOT NULL,
+    text         TEXT   NOT NULL,
+    -- 언어 코드 -> 번역문. 통화 자막은 한두 언어뿐이라 따로 표를 만들 값이 아니다.
+    translations JSONB  NOT NULL DEFAULT '{}'::jsonb,
+    created_at   BIGINT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_call_lines ON call_lines (call_id, created_at);
+
   CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint   TEXT   PRIMARY KEY,
     user_id    TEXT   NOT NULL,
@@ -1316,4 +1341,111 @@ export async function countUnread(userId: string, since: number): Promise<number
     [userId, since],
   );
   return rows[0]?.count ?? 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* 통화 기록                                                            */
+/* ------------------------------------------------------------------ */
+
+export interface CallLineRow {
+  id: string;
+  speakerId: string;
+  lang: string;
+  text: string;
+  translations: Record<string, string>;
+  createdAt: number;
+}
+
+export interface CallRow {
+  id: string;
+  callerId: string;
+  startedAt: number;
+  endedAt: number | null;
+  /** 오간 말이 몇 줄인지. 목록에서 빈 통화를 가려내는 데 쓴다. */
+  lines: number;
+}
+
+/** 통화를 시작한다. 같은 id 로 두 번 불려도 한 줄만 남는다. */
+export async function startCall(id: string, callerId: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO calls (id, caller_id, started_at) VALUES ($1, $2, $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [id, callerId, Date.now()],
+  );
+}
+
+export async function endCall(id: string): Promise<void> {
+  await pool.query(`UPDATE calls SET ended_at = $1 WHERE id = $2 AND ended_at IS NULL`, [
+    Date.now(),
+    id,
+  ]);
+}
+
+/**
+ * 오간 말 한 줄을 남긴다.
+ *
+ * 받아쓰기는 말하는 도중에도 계속 고쳐지므로, 다 말한 줄만 여기 들어온다.
+ */
+export async function addCallLine(
+  callId: string,
+  line: { id: string; speakerId: string; lang: string; text: string; createdAt: number },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO call_lines (id, call_id, speaker_id, lang, text, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
+    [line.id, callId, line.speakerId, line.lang, line.text, line.createdAt],
+  );
+}
+
+/** 번역이 늦게 따라온다. 줄은 이미 남아 있고 여기에 얹는다. */
+export async function addCallTranslation(
+  lineId: string,
+  lang: string,
+  text: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE call_lines SET translations = translations || $2::jsonb WHERE id = $1`,
+    [lineId, JSON.stringify({ [lang]: text })],
+  );
+}
+
+/** 통화 목록. 말 한마디 없이 끝난 통화는 보여 줄 것이 없어 뺀다. */
+export async function listCalls(limit = 50, before?: number): Promise<CallRow[]> {
+  const { rows } = await pool.query(
+    `SELECT c.id, c.caller_id, c.started_at, c.ended_at, COUNT(l.id)::int AS lines
+       FROM calls c
+       JOIN call_lines l ON l.call_id = c.id
+      WHERE ($2::bigint IS NULL OR c.started_at < $2)
+      GROUP BY c.id
+      ORDER BY c.started_at DESC
+      LIMIT $1`,
+    [limit, before ?? null],
+  );
+  return rows.map((row) => ({
+    id: row.id as string,
+    callerId: row.caller_id as string,
+    startedAt: Number(row.started_at),
+    endedAt: row.ended_at === null ? null : Number(row.ended_at),
+    lines: row.lines as number,
+  }));
+}
+
+export async function getCallLines(callId: string): Promise<CallLineRow[]> {
+  const { rows } = await pool.query(
+    `SELECT id, speaker_id, lang, text, translations, created_at
+       FROM call_lines WHERE call_id = $1 ORDER BY created_at ASC, id ASC`,
+    [callId],
+  );
+  return rows.map((row) => ({
+    id: row.id as string,
+    speakerId: row.speaker_id as string,
+    lang: row.lang as string,
+    text: row.text as string,
+    translations: (row.translations ?? {}) as Record<string, string>,
+    createdAt: Number(row.created_at),
+  }));
+}
+
+export async function deleteCall(id: string): Promise<void> {
+  await pool.query(`DELETE FROM calls WHERE id = $1`, [id]);
 }

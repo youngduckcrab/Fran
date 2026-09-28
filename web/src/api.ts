@@ -1,5 +1,7 @@
 import type {
   Attachment,
+  CallLine,
+  CallRecord,
   ChatMessage,
   Gender,
   GlossaryDraft,
@@ -394,4 +396,28 @@ export async function fetchIceServers(): Promise<RTCIceServer[]> {
   } catch {
     return [{ urls: 'stun:stun.cloudflare.com:3478' }];
   }
+}
+
+/* --- 통화 기록 --- */
+
+export async function fetchCalls(before?: number): Promise<CallRecord[]> {
+  const params = new URLSearchParams();
+  if (before !== undefined) params.set('before', String(before));
+  const response = await fetch(`/api/calls?${params}`, { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { calls: CallRecord[] }).calls;
+}
+
+export async function fetchCallLines(callId: string): Promise<CallLine[]> {
+  const response = await fetch(`/api/calls/${callId}`, { headers: authHeaders() });
+  if (!response.ok) await parseError(response);
+  return ((await response.json()) as { lines: CallLine[] }).lines;
+}
+
+export async function deleteCall(callId: string): Promise<void> {
+  const response = await fetch(`/api/calls/${callId}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!response.ok) await parseError(response);
 }

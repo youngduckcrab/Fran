@@ -26,7 +26,8 @@ export type IconName =
   | 'search'
   | 'phone'
   | 'phoneOff'
-  | 'micOff';
+  | 'micOff'
+  | 'captions';
 
 interface Props {
   name: IconName;
@@ -81,6 +82,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="M5.5 12.5 10 17l8.5-9" />,
+  // 자막. 네모 안에 글줄 둘.
+  captions: (
+    <>
+      <rect x="3" y="5.5" width="18" height="13" rx="3" />
+      <path d="M7 11h4M7 14.5h8M14 11h3" />
+    </>
+  ),
   // 수화기. 통화를 걸고 받는 자리에.
   phone: (
     <path d="M6.2 3.8h3l1.5 3.8-2 1.4a12 12 0 0 0 6.3 6.3l1.4-2 3.8 1.5v3a1.7 1.7 0 0 1-1.9 1.7A16.6 16.6 0 0 1 4.5 5.7a1.7 1.7 0 0 1 1.7-1.9Z" />

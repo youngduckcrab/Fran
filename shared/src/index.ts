@@ -340,6 +340,27 @@ export function isWallpaperId(value: unknown): value is WallpaperId {
  * 통화가 끝난 이유. 화면에 뭐라고 적을지가 이걸로 갈린다.
  * 'declined' 는 상대가 거절, 'missed' 는 울리다 시간이 다 된 것.
  */
+/** 통화 중에 오간 말 한 줄. 통화 기록에서 쓴다. */
+export interface CallLine {
+  id: string;
+  speakerId: string;
+  lang: LangCode;
+  text: string;
+  /** 언어 코드 -> 번역문. */
+  translations: Record<string, string>;
+  createdAt: number;
+}
+
+/** 통화 한 건. 자막을 켜고 말을 나눈 통화만 남는다. */
+export interface CallRecord {
+  id: string;
+  callerId: string;
+  startedAt: number;
+  endedAt: number | null;
+  /** 오간 말이 몇 줄인지. 목록에서 미리 보여 준다. */
+  lines: number;
+}
+
 export const CALL_END_REASONS = ['hangup', 'declined', 'missed', 'failed'] as const;
 export type CallEndReason = (typeof CALL_END_REASONS)[number];
 
@@ -386,7 +407,14 @@ export type ClientEvent =
   | { type: 'call_answer'; callId: string; answer: string }
   | { type: 'call_ice'; callId: string; candidate: string }
   /** 거절·끊기·못 받음. 어느 쪽이 보내도 통화는 거기서 끝난다. */
-  | { type: 'call_end'; callId: string; reason: CallEndReason };
+  | { type: 'call_end'; callId: string; reason: CallEndReason }
+  /**
+   * 통화 자막. 내 폰이 내 말을 받아쓴 것을 보낸다.
+   *
+   * 말하는 도중에는 계속 고쳐지므로(final=false) 그때는 화면에만 띄우고 흘려보낸다.
+   * 다 말한 줄(final=true)만 번역하고 기록에 남긴다.
+   */
+  | { type: 'caption'; callId: string; id: string; text: string; final: boolean };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */
@@ -418,4 +446,16 @@ export type ServerEvent =
    * 내 다른 기기가 먼저 받았다. 이 기기는 그만 울리면 된다.
    * 폰과 노트북에 같이 로그인해 두면 양쪽이 다 울리기 때문에 필요하다.
    */
-  | { type: 'call_taken'; callId: string };
+  | { type: 'call_taken'; callId: string }
+  /** 통화 자막 한 줄. translated 는 받는 사람이 읽는 말로 옮긴 것이다. */
+  | {
+      type: 'caption';
+      callId: string;
+      id: string;
+      from: string;
+      lang: LangCode;
+      text: string;
+      final: boolean;
+      /** 번역은 늦게 따라온다. 없으면 아직 오는 중이다. */
+      translated?: string;
+    };

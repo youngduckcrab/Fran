@@ -6,6 +6,7 @@ import { toUiLang, useT, type UiLang } from '../i18n';
 import { useWaking } from '../waking';
 import { useCall } from '../call';
 import CallScreen from './CallScreen';
+import CallLog from './CallLog';
 import { previewOf } from '../preview';
 import { plainText } from '../text';
 import { useBackClose } from '../backstack';
@@ -40,7 +41,8 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const t = useT();
   const chat = useChat(token, onLogout);
   const waking = useWaking(chat.connection);
-  const call = useCall(chat.emit, chat.onCallEvent);
+  // 받아쓰기는 내가 실제로 입 밖에 내는 말로 들어야 한다. 화면 언어가 아니라 모국어다.
+  const call = useCall(chat.emit, chat.onCallEvent, chat.me?.nativeLang ?? 'ko', chat.me?.id ?? '');
   const [view, setView] = useState<View>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -311,6 +313,14 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
         />
       )}
 
+      {view === 'calls' && (
+        <CallLog
+          myId={chat.me?.id ?? ''}
+          myName={chat.me?.name ?? ''}
+          peerName={chat.peer?.name ?? ''}
+          onBack={backHome}
+        />
+      )}
       {view === 'saved' && (
         <SavedList items={items.saved} onChanged={setSaved} onJump={jumpTo} onBack={backHome} />
       )}
