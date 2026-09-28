@@ -158,7 +158,7 @@ const ko = {
   "ask.later": "나중에",
   "ask.installTitle": "홈 화면에 추가하면 알림을 받을 수 있어요",
   "ask.installBody":
-    "아이폰은 홈 화면에 추가한 앱에서만 알림이 와요. 공유 버튼 → 홈 화면에 추가.",
+    "아이폰·아이패드는 홈 화면에 추가한 앱에서만 알림이 와요. 사파리의 공유 버튼(□↑) → 홈 화면에 추가.",
   "ask.deniedTitle": "알림이 막혀 있어요",
 
   "home.chat": "채팅",
@@ -480,7 +480,7 @@ const es: Record<StringKey, string> = {
   "ask.later": "Ahora no",
   "ask.installTitle": "Añádela a la pantalla de inicio",
   "ask.installBody":
-    "En iPhone los avisos solo llegan si añades la app a la pantalla de inicio. Botón compartir → Añadir a inicio.",
+    "En iPhone y iPad los avisos solo llegan si añades la app a la pantalla de inicio. Botón compartir (□↑) → Añadir a inicio.",
   "ask.deniedTitle": "Los avisos están bloqueados",
 
   "home.chat": "Chat",
@@ -796,7 +796,7 @@ const en: Record<StringKey, string> = {
   "ask.later": "Not now",
   "ask.installTitle": "Add it to your home screen",
   "ask.installBody":
-    "On iPhone, notifications only arrive from an app added to the home screen. Share button → Add to Home Screen.",
+    "On iPhone and iPad, notifications only arrive from an app added to the home screen. Share button (□↑) → Add to Home Screen.",
   "ask.deniedTitle": "Notifications are blocked",
 
   "home.chat": "Chat",

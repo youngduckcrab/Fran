@@ -12,12 +12,19 @@ function dismissKey(userId: string): string {
   return `fran.askedPush.${userId}`;
 }
 
-/** 아이폰은 홈 화면에 추가한 앱에서만 알림을 받을 수 있다. */
-function isIosBrowser(): boolean {
+/**
+ * 아이폰·아이패드는 홈 화면에 추가한 앱에서만 알림을 받을 수 있다.
+ *
+ * 브라우저가 알림 기능을 갖고 있다고 말해도(PushManager 가 있어도) 탭에서는 켤 수
+ * 없다. 그래서 "켤 수 있나"가 아니라 "설치했나"로 가른다 — 아니면 눌러도 되지 않는
+ * 켜기 단추를 보여 주게 된다.
+ */
+function needsInstall(): boolean {
   const ua = navigator.userAgent;
-  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
-  const installed = window.matchMedia('(display-mode: standalone)').matches;
-  return ios && !installed;
+  const apple = /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  const standalone = (navigator as { standalone?: boolean }).standalone === true;
+  const installed = standalone || window.matchMedia('(display-mode: standalone)').matches;
+  return apple && !installed;
 }
 
 /**
@@ -66,10 +73,13 @@ export default function NotifyPrompt({ userId }: Props) {
     }
   };
 
+  // 이미 알림이 오고 있으면 할 말이 없다. 설치한 뒤 사파리 탭으로 들어온 경우가 그렇다.
   if (dismissed || state === null || state === 'on') return null;
-  if (state === 'unsupported' && !isIosBrowser()) return null;
 
-  const install = state === 'unsupported';
+  // 애플 기기는 설치해야만 켤 수 있다. 눌러도 되지 않는 켜기 단추 대신 설치하는 길을 준다.
+  const install = needsInstall() || state === 'unsupported';
+  if (state === 'unsupported' && !install) return null;
+
   const denied = state === 'denied';
 
   return (
