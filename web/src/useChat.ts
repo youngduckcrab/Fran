@@ -181,6 +181,9 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
           return { ...previous, glossary: event.entries };
         case 'error':
           return { ...previous, error: event.message };
+        default:
+          // 통화 신호는 여기 오기 전에 걸러진다. 대화 상태는 그대로 둔다.
+          return previous;
       }
     });
   }, []);
@@ -214,6 +217,11 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
         if (event.type === 'hello') {
           authenticated.current = true;
           attempts.current = 0;
+        }
+        // 통화 신호는 대화 상태와 아무 상관이 없다. 통화 쪽으로 바로 넘긴다.
+        if (event.type.startsWith('call')) {
+          callListener.current?.(event);
+          return;
         }
         applyEvent(event);
       };
@@ -308,6 +316,15 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     const timer = setTimeout(() => saveChat(activeUser(), { me, peer, messages, readAt }), 800);
     return () => clearTimeout(timer);
   }, [state.me, state.peer, state.messages, state.readAt, state.atTail]);
+
+  /**
+   * 통화 신호를 받아 갈 곳. useCall 이 등록한다.
+   * 대화 상태와 섞을 이유가 없어서 따로 뺀다 — 오갈 때마다 메시지 목록을 다시 그릴 일은 없다.
+   */
+  const callListener = useRef<((event: ServerEvent) => void) | null>(null);
+  const onCallEvent = useCallback((listener: ((event: ServerEvent) => void) | null) => {
+    callListener.current = listener;
+  }, []);
 
   const emit = useCallback((event: ClientEvent) => {
     const socket = socketRef.current;
@@ -536,6 +553,9 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     setProfile,
     setGlossary,
     dismissError,
+    /* 통화가 쓴다 — 신호를 보낼 통로와 받을 통로. */
+    emit,
+    onCallEvent,
   };
 }
 

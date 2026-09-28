@@ -8,6 +8,7 @@ import { cors } from 'hono/cors';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
   cleanTerm,
+  isCallEndReason,
   isGender,
   isLangCode,
   sameSentence,
@@ -15,6 +16,7 @@ import {
   isWallpaperId,
   messageText,
   type Attachment,
+  type CallEndReason,
   type AttachmentKind,
   type ChatMessage,
   type ClientEvent,
@@ -401,6 +403,72 @@ async function notifyNewMessage(messageId: string): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/* 통화                                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 울리다 이만큼 지나면 못 받은 것으로 친다.
+ *
+ * 받는 쪽이 폰을 안 보고 있으면 아무도 끊어 주지 않는다. 그대로 두면 거는 쪽
+ * 화면이 영영 "전화 거는 중" 으로 남는다.
+ */
+const RING_TIMEOUT_MS = Number(process.env.RING_TIMEOUT_MS ?? 45_000);
+
+/** 지금 울리고 있는 전화. 둘만 쓰는 앱이라 한 번에 하나면 충분하다. */
+let ringing: { callId: string; from: string; to: string; timer: NodeJS.Timeout } | null = null;
+
+function stopRinging(): void {
+  if (ringing) clearTimeout(ringing.timer);
+  ringing = null;
+}
+
+/** 그 사람의 모든 기기로 보낸다. 폰과 노트북에 같이 로그인해 둘 수 있다. */
+function sendToUser(userId: string, event: ServerEvent, skip?: WebSocket): void {
+  for (const [socket, id] of sockets.entries()) {
+    if (id === userId && socket !== skip) send(socket, event);
+  }
+}
+
+function endCall(callId: string, reason: CallEndReason): void {
+  if (!ringing || ringing.callId !== callId) return;
+  const { from, to } = ringing;
+  stopRinging();
+  sendToUser(from, { type: 'call_end', callId, reason });
+  sendToUser(to, { type: 'call_end', callId, reason });
+}
+
+/**
+ * 전화가 왔다고 폰에 알린다.
+ *
+ * 웹앱은 카톡처럼 벨을 울릴 수 없다. 알림을 띄우고 그걸 누르게 하는 것이 최선이다.
+ * 앱을 보고 있는 사람에게는 보내지 않는다 — 화면에서 이미 울리고 있다.
+ */
+async function notifyIncomingCall(from: string, to: string): Promise<void> {
+  if (isWatching(to)) return;
+  const [caller, receiver] = await Promise.all([profileOf(from), profileOf(to)]);
+  const lang = receiver.displayLangs[0] ?? receiver.nativeLang;
+  await notify(to, {
+    title: caller.name,
+    body: callNotice(lang),
+    url: `/?u=${encodeURIComponent(to)}`,
+    // 통화는 메시지가 아니라 따로 묶는다. 알림이 메시지 알림을 덮어쓰지 않게.
+    messageId: `call:${from}`,
+  });
+}
+
+/** 알림 본문. 받는 사람이 읽는 말로. 모르는 말이면 영어로 적는다. */
+const CALL_NOTICE: Record<string, string> = {
+  ko: '전화가 왔어요',
+  es: 'Te está llamando',
+  en: 'is calling you',
+  zh: '来电',
+};
+
+function callNotice(lang: string): string {
+  return CALL_NOTICE[lang] ?? CALL_NOTICE.en!;
+}
+
+/* ------------------------------------------------------------------ */
 /* 준비                                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -477,6 +545,45 @@ app.use('/api/*', async (_c, next) => {
 
 // 호스팅의 생존 확인용. 프로세스가 떴으면 답한다 — DB 를 기다리면 재시작 판정이 늦어진다.
 app.get('/healthz', (c) => c.json({ ok: true, ready }));
+
+/**
+ * 통화에 쓸 서버 목록.
+ *
+ * STUN 은 "내 공인 주소가 뭐지" 를 알려 주는 것뿐이라 공짜다. TURN 은 직접 못 붙을 때
+ * 목소리를 대신 날라 주는 곳이라 돈이 든다 — 열쇠가 없으면 STUN 만 주고, 직접 붙는
+ * 경우에만 통화가 된다.
+ *
+ * 열쇠는 절대로 브라우저에 내려보내지 않는다. 그걸로 짧게 사는 자격증명만 찍어 준다.
+ */
+const STUN_ONLY = [{ urls: 'stun:stun.cloudflare.com:3478' }];
+const TURN_TTL_SECONDS = 2 * 60 * 60;
+
+app.get('/api/turn', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+
+  const { keyId, apiToken } = config.turn;
+  if (!keyId || !apiToken) return c.json({ iceServers: STUN_ONLY });
+
+  try {
+    const res = await fetch(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`,
+      {
+        method: 'POST',
+        headers: { authorization: `Bearer ${apiToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ ttl: TURN_TTL_SECONDS }),
+      },
+    );
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const body = (await res.json()) as { iceServers?: unknown };
+    // 한 개만 오면 객체, 여러 개면 배열로 온다. 둘 다 받아 준다.
+    const servers = Array.isArray(body.iceServers) ? body.iceServers : [body.iceServers];
+    return c.json({ iceServers: servers.filter(Boolean) });
+  } catch (error) {
+    // 중계를 못 얻어도 통화 자체는 시도해 본다. 직접 붙으면 그걸로 된다.
+    console.warn('TURN 자격증명을 받지 못했습니다:', error instanceof Error ? error.message : error);
+    return c.json({ iceServers: STUN_ONLY });
+  }
+});
 
 app.post('/api/login', async (c) => {
   const body = await c.req.json().catch(() => null);
@@ -1172,6 +1279,54 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
   await waitForReady();
 
   switch (event.type) {
+    /* --- 통화 --- */
+    // 서버는 내용을 들여다보지 않고 상대에게 그대로 넘긴다.
+    case 'call': {
+      const to = peerOf(userId).profile.id;
+      // 앞 전화가 아직 울리고 있으면 그걸 먼저 정리한다. 둘이 동시에 걸 수도 있다.
+      if (ringing) endCall(ringing.callId, 'failed');
+      ringing = {
+        callId: event.callId,
+        from: userId,
+        to,
+        timer: setTimeout(() => endCall(event.callId, 'missed'), RING_TIMEOUT_MS),
+      };
+      sendToUser(to, { type: 'call', callId: event.callId, from: userId, offer: event.offer });
+      void notifyIncomingCall(userId, to);
+      return;
+    }
+    case 'call_answer': {
+      if (!ringing || ringing.callId !== event.callId) return;
+      // 받았으니 더 울릴 이유가 없다. 내 다른 기기들도 멈춘다.
+      clearTimeout(ringing.timer);
+      sendToUser(userId, { type: 'call_taken', callId: event.callId }, socket);
+      sendToUser(peerOf(userId).profile.id, {
+        type: 'call_answer',
+        callId: event.callId,
+        answer: event.answer,
+      });
+      return;
+    }
+    case 'call_ice': {
+      // 붙는 길을 찾는 후보들. 통화 내내 계속 오간다.
+      sendToUser(peerOf(userId).profile.id, {
+        type: 'call_ice',
+        callId: event.callId,
+        candidate: event.candidate,
+      });
+      return;
+    }
+    case 'call_end': {
+      const reason = isCallEndReason(event.reason) ? event.reason : 'hangup';
+      if (ringing?.callId === event.callId) {
+        endCall(event.callId, reason);
+      } else {
+        // 이미 붙은 통화를 끊는 경우. 울림 상태는 진작 지워졌다.
+        sendToUser(peerOf(userId).profile.id, { type: 'call_end', callId: event.callId, reason });
+      }
+      return;
+    }
+
     case 'send': {
       const text = event.text.trim();
       // 사진이나 음성만 보낼 수도 있다. 둘 다 없으면 보낼 게 없는 것이다.
@@ -1402,6 +1557,12 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
     sockets.delete(socket);
     watching.delete(socket);
     alive.delete(socket);
-    if (!isOnline(userId)) broadcast({ type: 'presence', userId, online: false });
+    if (!isOnline(userId)) {
+      broadcast({ type: 'presence', userId, online: false });
+      // 통화 중에 폰이 꺼지거나 지하철에 들어가면 상대 화면만 계속 통화 중으로 남는다.
+      if (ringing && (ringing.from === userId || ringing.to === userId)) {
+        endCall(ringing.callId, 'failed');
+      }
+    }
   });
 });

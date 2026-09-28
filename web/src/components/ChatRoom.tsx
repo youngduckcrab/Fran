@@ -22,9 +22,12 @@ import PhotoViewer from "./PhotoViewer";
 import SaveSheet from "./SaveSheet";
 import WordPicker from "./WordPicker";
 import Composer from "./Composer";
+import type { Call } from "../call";
 
 interface Props {
   chat: Chat;
+  /** 통화. 거는 단추가 여기 머리말에 있고, 화면은 이 위를 덮는다. */
+  call: Call;
   primaryLang: LangCode;
   extraLangs: LangCode[];
   view: BubbleView;
@@ -47,6 +50,7 @@ interface Props {
 
 export default function ChatRoom({
   chat,
+  call,
   primaryLang,
   extraLangs,
   view,
@@ -297,6 +301,17 @@ export default function ChatRoom({
           </p>
         </div>
         <div className="chat__actions">
+          {/* 전화. 상대가 접속해 있지 않으면 걸어 봐야 울리지도 않는다. */}
+          <button
+            type="button"
+            className="chat__icon"
+            onClick={() => void call.start()}
+            disabled={chat.connection !== "open"}
+            title={t("call.call")}
+            aria-label={t("call.call")}
+          >
+            <Icon name="phone" size={18} />
+          </button>
           <button
             type="button"
             className="chat__icon"

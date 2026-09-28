@@ -4,6 +4,8 @@ import { useChat } from '../useChat';
 import { activeUser, fetchPhotos, fetchSaved, fetchVocab } from '../api';
 import { toUiLang, useT, type UiLang } from '../i18n';
 import { useWaking } from '../waking';
+import { useCall } from '../call';
+import CallScreen from './CallScreen';
 import { previewOf } from '../preview';
 import { plainText } from '../text';
 import { useBackClose } from '../backstack';
@@ -38,6 +40,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const t = useT();
   const chat = useChat(token, onLogout);
   const waking = useWaking(chat.connection);
+  const call = useCall(chat.emit, chat.onCallEvent);
   const [view, setView] = useState<View>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -250,8 +253,13 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   useBackClose(settingsOpen, () => setSettingsOpen(false));
   useBackClose(glossaryOpen, () => setGlossaryOpen(false));
 
+  // 전화가 오면 어느 화면을 보고 있든 덮는다. 받을지 말지가 지금 할 일의 전부다.
+  useBackClose(call.phase === 'ringing', call.decline);
+
   return (
     <>
+      <CallScreen call={call} peerName={chat.peer?.name ?? ''} />
+
       {alerted && (
         <button
           type="button"
@@ -285,6 +293,7 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
       {view === 'chat' && (
         <ChatRoom
           chat={chat}
+          call={call}
           primaryLang={primaryLang}
           extraLangs={extraLangs}
           view={bubbleView}

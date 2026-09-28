@@ -336,6 +336,17 @@ export function isWallpaperId(value: unknown): value is WallpaperId {
 
 /* ---------- WebSocket 프로토콜 ---------- */
 
+/**
+ * 통화가 끝난 이유. 화면에 뭐라고 적을지가 이걸로 갈린다.
+ * 'declined' 는 상대가 거절, 'missed' 는 울리다 시간이 다 된 것.
+ */
+export const CALL_END_REASONS = ['hangup', 'declined', 'missed', 'failed'] as const;
+export type CallEndReason = (typeof CALL_END_REASONS)[number];
+
+export function isCallEndReason(value: unknown): value is CallEndReason {
+  return typeof value === 'string' && (CALL_END_REASONS as readonly string[]).includes(value);
+}
+
 export type ClientEvent =
   | {
       type: 'send';
@@ -362,7 +373,20 @@ export type ClientEvent =
    * 지금 이 앱을 보고 있는지. 화면이 가려지면 false.
    * 서버는 이걸 보고 폰 알림을 보낼지 정한다 — 보고 있는 사람에게는 앱 안에서 알린다.
    */
-  | { type: 'attention'; visible: boolean };
+  | { type: 'attention'; visible: boolean }
+  /* --- 통화 --- */
+  /**
+   * 통화 신호. 서버는 내용을 들여다보지 않고 상대에게 그대로 넘긴다.
+   *
+   * 목소리는 서버를 거치지 않고 폰끼리 직접 간다. 서버가 하는 일은 "내 주소는
+   * 이거야" 를 대신 전해 주는 것뿐이다. 둘만 쓰는 앱이라 방 개념이 필요 없고,
+   * callId 하나로 지난 통화의 신호가 새 통화에 섞이는 것만 막으면 된다.
+   */
+  | { type: 'call'; callId: string; offer: string }
+  | { type: 'call_answer'; callId: string; answer: string }
+  | { type: 'call_ice'; callId: string; candidate: string }
+  /** 거절·끊기·못 받음. 어느 쪽이 보내도 통화는 거기서 끝난다. */
+  | { type: 'call_end'; callId: string; reason: CallEndReason };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */
@@ -383,4 +407,15 @@ export type ServerEvent =
   | { type: 'read'; userId: string; at: number }
   | { type: 'error'; message: string }
   /** 용어집이 바뀌었다. 양쪽 화면을 맞춘다. */
-  | { type: 'glossary'; entries: GlossaryEntry[] };
+  | { type: 'glossary'; entries: GlossaryEntry[] }
+  /* --- 통화 --- */
+  /** 상대가 건 전화. */
+  | { type: 'call'; callId: string; from: string; offer: string }
+  | { type: 'call_answer'; callId: string; answer: string }
+  | { type: 'call_ice'; callId: string; candidate: string }
+  | { type: 'call_end'; callId: string; reason: CallEndReason }
+  /**
+   * 내 다른 기기가 먼저 받았다. 이 기기는 그만 울리면 된다.
+   * 폰과 노트북에 같이 로그인해 두면 양쪽이 다 울리기 때문에 필요하다.
+   */
+  | { type: 'call_taken'; callId: string };

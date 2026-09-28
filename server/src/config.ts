@@ -126,6 +126,19 @@ export const config = {
   /** 빌드된 웹. 있으면 서버가 같이 서빙한다. */
   webDist: fromRoot(process.env.WEB_DIST ?? './web/dist'),
   authSecret: required('AUTH_SECRET'),
+  /**
+   * 통화 중계 서버(TURN).
+   *
+   * 목소리는 원래 폰끼리 직접 간다. 그런데 통신사 망에 따라 직접 못 붙는 경우가
+   * 있고(특히 데이터망), 그때는 중계를 거쳐야 통화가 된다. 비워 두면 무료 STUN
+   * 으로만 시도하므로, 붙을 때는 붙고 안 붙을 때는 안 붙는다.
+   *
+   * 열쇠는 서버에만 둔다. 이걸로 통화할 때마다 짧게 사는 자격증명을 찍어 준다.
+   */
+  turn: {
+    keyId: process.env.CLOUDFLARE_TURN_KEY_ID,
+    apiToken: process.env.CLOUDFLARE_TURN_API_TOKEN,
+  },
   /** 로그인 토큰 유효기간. 둘만 쓰는 앱이라 길게 잡는다. */
   tokenTtlMs: 1000 * 60 * 60 * 24 * 90,
   translation: {

@@ -23,7 +23,10 @@ export type IconName =
   | 'check'
   | 'checks'
   | 'download'
-  | 'search';
+  | 'search'
+  | 'phone'
+  | 'phoneOff'
+  | 'micOff';
 
 interface Props {
   name: IconName;
@@ -78,6 +81,24 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="M5.5 12.5 10 17l8.5-9" />,
+  // 수화기. 통화를 걸고 받는 자리에.
+  phone: (
+    <path d="M6.2 3.8h3l1.5 3.8-2 1.4a12 12 0 0 0 6.3 6.3l1.4-2 3.8 1.5v3a1.7 1.7 0 0 1-1.9 1.7A16.6 16.6 0 0 1 4.5 5.7a1.7 1.7 0 0 1 1.7-1.9Z" />
+  ),
+  // 끊기. 같은 수화기를 눕혀 둔다.
+  phoneOff: (
+    <>
+      <path d="M6.2 3.8h3l1.5 3.8-2 1.4a12 12 0 0 0 6.3 6.3l1.4-2 3.8 1.5v3a1.7 1.7 0 0 1-1.9 1.7A16.6 16.6 0 0 1 4.5 5.7a1.7 1.7 0 0 1 1.7-1.9Z" />
+      <path d="M4 20 20 4" />
+    </>
+  ),
+  micOff: (
+    <>
+      <path d="M9.5 5.5a2.5 2.5 0 0 1 5 0v4m0 3.2a2.5 2.5 0 0 1-5-1.2" />
+      <path d="M6 11a6 6 0 0 0 9.3 5M18 11v.8M12 18.5V21" />
+      <path d="M4 20 20 4" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="6.5" />

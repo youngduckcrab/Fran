@@ -2411,6 +2411,159 @@ button:active:not(:disabled) {
   margin-top: 0;
 }
 
+/* ---------- 통화 ---------- */
+
+/*
+ * 통화 화면은 모든 것을 덮는다. 전화가 와 있는 동안 할 수 있는 일은 받거나 마는
+ * 것뿐이라, 뒤의 대화를 비춰 둘 이유가 없다.
+ */
+.call {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(64px, env(safe-area-inset-top)) 24px max(48px, env(safe-area-inset-bottom));
+  background: linear-gradient(160deg, var(--accent-soft) 0%, var(--surface) 70%);
+  animation: call-in 200ms ease-out;
+}
+
+.call__who {
+  margin-top: 12vh;
+  text-align: center;
+}
+
+/* 이름 첫 글자. 얼굴 사진을 둘 자리가 없어서 이걸로 대신한다. */
+.call__face {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-soft);
+  color: var(--accent);
+  font-size: 40px;
+  font-weight: 700;
+  /* 한글 이름은 글자가 커서 원 안에서 조금 내려앉아 보인다. */
+  line-height: 1;
+}
+
+.call__name {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.call__line {
+  margin: 10px 0 0;
+  font-size: 16px;
+  color: var(--text-muted);
+  /* 통화 시간이 1:09 → 1:10 으로 넘어갈 때 글자가 들썩이지 않게. */
+  font-variant-numeric: tabular-nums;
+}
+
+.call__hint {
+  margin: 14px auto 0;
+  max-width: 280px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.call__keys {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+/* 통화 중에 잘못 누르면 말이 끊긴다. 손가락보다 넉넉하게. */
+.call__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  /* 테두리가 없으면 옅은 배경에 묻혀서 단추로 보이지 않는다. */
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+/* 받기·끊기는 색이 이미 말해 준다. 테두리까지 두르면 지저분하다. */
+.call__key--accept,
+.call__key--hangup {
+  border-color: transparent;
+}
+
+.call__key--accept {
+  background: #34c759;
+  color: #fff;
+}
+
+.call__key--hangup {
+  background: #ff3b30;
+  color: #fff;
+}
+
+.call__key--mute.is-on {
+  background: var(--accent);
+  color: #fff;
+}
+
+@keyframes call-in {
+  from {
+    opacity: 0;
+    transform: scale(1.03);
+  }
+}
+
+/*
+ * 전화가 왔을 때. 받으라고 조용히 알린다.
+ *
+ * 단추 자체를 키우면 누르려는 순간 과녁이 움직인다. 뒤에 고리 하나를 깔고
+ * 그것만 퍼지게 한다 — 눈에는 띄고 손가락에는 가만히 있다.
+ */
+.call__key--accept {
+  position: relative;
+}
+
+.call__key--accept::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid #34c759;
+  animation: call-pulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes call-pulse {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call,
+  .call__key--accept::after {
+    animation: none;
+  }
+}
+
 /* ---------- 보관함 (채팅에서 열기) ---------- */
 
 /*

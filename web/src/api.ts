@@ -378,3 +378,20 @@ export async function changePasscode(current: string, next: string): Promise<str
   }
   return ((await response.json()) as { token: string }).token;
 }
+
+/**
+ * 통화에 쓸 서버 목록.
+ *
+ * 목소리는 폰끼리 직접 가는 게 원칙이지만, 통신사 망에 따라 직접 못 붙는 경우가 있다.
+ * 그때 대신 날라 줄 중계(TURN)의 자격증명을 서버가 짧게 찍어 준다. 못 받아도 통화는
+ * 시도한다 — 직접 붙으면 그걸로 된다.
+ */
+export async function fetchIceServers(): Promise<RTCIceServer[]> {
+  try {
+    const response = await fetch('/api/turn', { headers: authHeaders() });
+    if (!response.ok) throw new Error(String(response.status));
+    return ((await response.json()) as { iceServers: RTCIceServer[] }).iceServers ?? [];
+  } catch {
+    return [{ urls: 'stun:stun.cloudflare.com:3478' }];
+  }
+}
