@@ -455,13 +455,13 @@ function endCall(callId: string, reason: CallEndReason): void {
  * 웹앱은 카톡처럼 벨을 울릴 수 없다. 알림을 띄우고 그걸 누르게 하는 것이 최선이다.
  * 앱을 보고 있는 사람에게는 보내지 않는다 — 화면에서 이미 울리고 있다.
  */
-async function notifyIncomingCall(from: string, to: string): Promise<void> {
+async function notifyIncomingCall(from: string, to: string, video: boolean): Promise<void> {
   if (isWatching(to)) return;
   const [caller, receiver] = await Promise.all([profileOf(from), profileOf(to)]);
   const lang = receiver.displayLangs[0] ?? receiver.nativeLang;
   await notify(to, {
     title: caller.name,
-    body: callNotice(lang),
+    body: video ? videoNotice(lang) : callNotice(lang),
     url: `/?u=${encodeURIComponent(to)}`,
     // 통화는 메시지가 아니라 따로 묶는다. 알림이 메시지 알림을 덮어쓰지 않게.
     messageId: `call:${from}`,
@@ -478,6 +478,17 @@ const CALL_NOTICE: Record<string, string> = {
 
 function callNotice(lang: string): string {
   return CALL_NOTICE[lang] ?? CALL_NOTICE.en!;
+}
+
+const VIDEO_NOTICE: Record<string, string> = {
+  ko: '영상통화가 왔어요',
+  es: 'Videollamada',
+  en: 'is video calling you',
+  zh: '视频通话',
+};
+
+function videoNotice(lang: string): string {
+  return VIDEO_NOTICE[lang] ?? VIDEO_NOTICE.en!;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1324,8 +1335,14 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         to,
         timer: setTimeout(() => endCall(event.callId, 'missed'), RING_TIMEOUT_MS),
       };
-      sendToUser(to, { type: 'call', callId: event.callId, from: userId, offer: event.offer });
-      void notifyIncomingCall(userId, to);
+      sendToUser(to, {
+        type: 'call',
+        callId: event.callId,
+        from: userId,
+        offer: event.offer,
+        video: event.video,
+      });
+      void notifyIncomingCall(userId, to, event.video);
       // 기록은 통화를 걸 때 연다. 자막 한 줄이라도 남아야 목록에 뜬다.
       void startCall(event.callId, userId).catch(() => {});
       return;
@@ -1396,6 +1413,15 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
           console.warn('자막 번역 실패:', error instanceof Error ? error.message : error);
         }
       })();
+      return;
+    }
+    case 'call_camera': {
+      sendToUser(peerOf(userId).profile.id, {
+        type: 'call_camera',
+        callId: event.callId,
+        from: userId,
+        on: event.on,
+      });
       return;
     }
     case 'call_ice': {

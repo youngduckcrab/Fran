@@ -54,9 +54,23 @@ function captionsWanted(): boolean {
 }
 
 /** 마이크 설정. 통화라서 에코와 잡음을 브라우저가 걸러 주게 둔다. */
-const MIC: MediaStreamConstraints = {
-  audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  video: false,
+const AUDIO: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
+/**
+ * 카메라 설정.
+ *
+ * 지구 반대편까지 보내는 그림이다. 해상도를 욕심내면 느린 망에서 먼저 무너지는
+ * 쪽은 소리라, 얼굴이 보일 만큼만 잡는다. 브라우저가 망을 보고 더 줄이기도 한다.
+ */
+const VIDEO: MediaTrackConstraints = {
+  width: { ideal: 640 },
+  height: { ideal: 480 },
+  frameRate: { ideal: 24, max: 30 },
+  facingMode: 'user',
 };
 
 export function useCall(
@@ -72,12 +86,20 @@ export function useCall(
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [captionsOn, setCaptionsOn] = useState(captionsWanted);
   const ear = useRef<Listener | null>(null);
+  /** 이번 통화가 영상인지. 걸 때 정해지고 통화 내내 바뀌지 않는다. */
+  const [video, setVideo] = useState(false);
+  const [cameraOn, setCameraOn] = useState(true);
+  /** 상대가 자기 카메라를 켜 두었는지. 껐으면 검은 화면 대신 이름을 보여 준다. */
+  const [peerCamera, setPeerCamera] = useState(true);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  /** 앞뒤 카메라. 바꿀 때 트랙만 갈아 끼운다. */
+  const facing = useRef<'user' | 'environment'>('user');
   /** 통화가 붙은 시각. 화면의 시계가 이걸 센다. */
   const [since, setSince] = useState<number | null>(null);
 
   const pc = useRef<RTCPeerConnection | null>(null);
   const mic = useRef<MediaStream | null>(null);
-  const speaker = useRef<HTMLAudioElement | null>(null);
   const callId = useRef<string | null>(null);
   /** 상대가 건 전화의 offer. 받기를 누를 때까지 들고 있는다. */
   const pendingOffer = useRef<string | null>(null);
@@ -96,18 +118,20 @@ export function useCall(
     setCaptions([]);
     pc.current?.close();
     pc.current = null;
+    // 놓아 주지 않으면 통화가 끝나도 폰에 카메라·마이크 표시가 남는다.
     mic.current?.getTracks().forEach((track) => track.stop());
     mic.current = null;
-    if (speaker.current) {
-      speaker.current.srcObject = null;
-      speaker.current.remove();
-      speaker.current = null;
-    }
     callId.current = null;
     pendingOffer.current = null;
     earlyIce.current = [];
+    facing.current = 'user';
     setSince(null);
     setMuted(false);
+    setVideo(false);
+    setCameraOn(true);
+    setPeerCamera(true);
+    setLocalStream(null);
+    setRemoteStream(null);
   }, []);
 
   const finish = useCallback(
@@ -125,30 +149,22 @@ export function useCall(
     return () => clearTimeout(timer);
   }, [state.phase]);
 
-  /** 상대 목소리가 나올 곳. 화면에 붙이지 않고 소리만 낸다. */
-  const ensureSpeaker = useCallback(() => {
-    if (speaker.current) return speaker.current;
-    const element = document.createElement('audio');
-    element.autoplay = true;
-    // iOS 는 이게 없으면 소리를 전체화면 재생기로 가로챈다.
-    element.setAttribute('playsinline', '');
-    document.body.append(element);
-    speaker.current = element;
-    return element;
-  }, []);
-
   const build = useCallback(
-    async (id: string) => {
+    async (id: string, wantsVideo: boolean) => {
       const iceServers = await fetchIceServers();
       const connection = new RTCPeerConnection({ iceServers });
 
-      const stream = await navigator.mediaDevices.getUserMedia(MIC);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: AUDIO,
+        video: wantsVideo ? VIDEO : false,
+      });
       mic.current = stream;
+      setLocalStream(stream);
       for (const track of stream.getTracks()) connection.addTrack(track, stream);
 
       connection.ontrack = (event) => {
         const [remote] = event.streams;
-        if (remote) ensureSpeaker().srcObject = remote;
+        if (remote) setRemoteStream(remote);
       };
 
       connection.onicecandidate = (event) => {
@@ -171,7 +187,7 @@ export function useCall(
       pc.current = connection;
       return connection;
     },
-    [emit, ensureSpeaker, finish],
+    [emit, finish],
   );
 
   /** 들고 있던 후보들을 이제 넣는다. */
@@ -185,20 +201,29 @@ export function useCall(
 
   /* --- 사람이 누르는 것들 --- */
 
-  const start = useCallback(async () => {
-    if (state.phase !== 'idle' && state.phase !== 'ended') return;
-    const id = crypto.randomUUID();
-    callId.current = id;
-    setState({ phase: 'calling' });
-    try {
-      const connection = await build(id);
-      const offer = await connection.createOffer();
-      await connection.setLocalDescription(offer);
-      emit({ type: 'call', callId: id, offer: JSON.stringify(connection.localDescription) });
-    } catch (error) {
-      finish('failed', micTrouble(error));
-    }
-  }, [build, emit, finish, state.phase]);
+  const start = useCallback(
+    async (withVideo = false) => {
+      if (state.phase !== 'idle' && state.phase !== 'ended') return;
+      const id = crypto.randomUUID();
+      callId.current = id;
+      setVideo(withVideo);
+      setState({ phase: 'calling' });
+      try {
+        const connection = await build(id, withVideo);
+        const offer = await connection.createOffer();
+        await connection.setLocalDescription(offer);
+        emit({
+          type: 'call',
+          callId: id,
+          offer: JSON.stringify(connection.localDescription),
+          video: withVideo,
+        });
+      } catch (error) {
+        finish('failed', micTrouble(error));
+      }
+    },
+    [build, emit, finish, state.phase],
+  );
 
   const accept = useCallback(async () => {
     const id = callId.current;
@@ -206,7 +231,7 @@ export function useCall(
     if (!id || !offer) return;
     setState({ phase: 'connecting' });
     try {
-      const connection = await build(id);
+      const connection = await build(id, video);
       await connection.setRemoteDescription(JSON.parse(offer) as RTCSessionDescriptionInit);
       await drainIce(connection);
       const answer = await connection.createAnswer();
@@ -216,7 +241,7 @@ export function useCall(
       emit({ type: 'call_end', callId: id, reason: 'failed' });
       finish('failed', micTrouble(error));
     }
-  }, [build, drainIce, emit, finish]);
+  }, [build, drainIce, emit, finish, video]);
 
   const decline = useCallback(() => {
     const id = callId.current;
@@ -229,6 +254,58 @@ export function useCall(
     if (id) emit({ type: 'call_end', callId: id, reason: 'hangup' });
     finish('hangup');
   }, [emit, finish]);
+
+  /**
+   * 카메라를 껐다 켠다.
+   *
+   * 트랙만 끄면 상대에게는 검은 화면이 간다. 끊긴 것인지 끈 것인지 알 수 없으니
+   * 따로 알려 준다.
+   */
+  const toggleCamera = useCallback(() => {
+    const id = callId.current;
+    const tracks = mic.current?.getVideoTracks() ?? [];
+    if (tracks.length === 0) return;
+    const next = !cameraOn;
+    for (const track of tracks) track.enabled = next;
+    setCameraOn(next);
+    if (id) emit({ type: 'call_camera', callId: id, on: next });
+  }, [cameraOn, emit]);
+
+  /**
+   * 앞뒤 카메라를 바꾼다.
+   *
+   * 연결을 다시 맺지 않는다. 보내고 있는 트랙만 갈아 끼우면 상대 화면은
+   * 끊기지 않고 그림만 바뀐다.
+   */
+  const flipCamera = useCallback(async () => {
+    const connection = pc.current;
+    const stream = mic.current;
+    if (!connection || !stream) return;
+
+    const next = facing.current === 'user' ? 'environment' : 'user';
+    try {
+      const fresh = await navigator.mediaDevices.getUserMedia({
+        video: { ...VIDEO, facingMode: next },
+      });
+      const track = fresh.getVideoTracks()[0];
+      if (!track) return;
+
+      const sender = connection.getSenders().find((s) => s.track?.kind === 'video');
+      await sender?.replaceTrack(track);
+
+      for (const old of stream.getVideoTracks()) {
+        stream.removeTrack(old);
+        old.stop();
+      }
+      stream.addTrack(track);
+      track.enabled = cameraOn;
+      facing.current = next;
+      // 미리보기가 새 트랙을 잡도록 같은 스트림을 새 객체로 넘긴다.
+      setLocalStream(new MediaStream(stream.getTracks()));
+    } catch {
+      // 카메라가 하나뿐인 기기. 그대로 둔다.
+    }
+  }, [cameraOn]);
 
   const toggleMute = useCallback(() => {
     const tracks = mic.current?.getAudioTracks() ?? [];
@@ -251,6 +328,7 @@ export function useCall(
             }
             callId.current = event.callId;
             pendingOffer.current = event.offer;
+            setVideo(event.video);
             setState({ phase: 'ringing' });
             return;
           }
@@ -287,6 +365,11 @@ export function useCall(
               ...(event.translated ? { translated: event.translated } : {}),
               final: event.final,
             }));
+            return;
+          }
+          case 'call_camera': {
+            if (callId.current !== event.callId) return;
+            setPeerCamera(event.on);
             return;
           }
           case 'call_taken': {
@@ -390,6 +473,11 @@ export function useCall(
     ...state,
     muted,
     since,
+    video,
+    cameraOn,
+    peerCamera,
+    localStream,
+    remoteStream,
     captions,
     captionsOn,
     /** 이 기기에서 받아쓰기를 쓸 수 있는지. 못 쓰면 켜는 단추를 보여 줄 이유가 없다. */
@@ -399,6 +487,8 @@ export function useCall(
     decline,
     hangup,
     toggleMute,
+    toggleCamera,
+    flipCamera,
     toggleCaptions,
   };
 }

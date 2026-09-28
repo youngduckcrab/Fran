@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Call } from '../call';
 import { useT } from '../i18n';
 import Icon from './Icon';
@@ -11,21 +11,23 @@ interface Props {
 /**
  * 통화 화면.
  *
- * 걸 때도 받을 때도 같은 화면이고, 아래 단추만 달라진다. 통화 중에는 화면을
- * 덮는다 — 이때 할 일은 하나뿐이라 대화를 뒤에 비춰 둘 이유가 없다.
+ * 걸 때도 받을 때도 같은 화면이고, 아래 단추와 뒤에 깔리는 것만 달라진다.
+ * 통화 중에는 화면을 덮는다 — 이때 할 일은 하나뿐이라 대화를 뒤에 비춰 둘
+ * 이유가 없다.
  */
 export default function CallScreen({ call, peerName }: Props) {
   const t = useT();
   const elapsed = useElapsed(call.since);
+  const showRemoteVideo = call.video && call.peerCamera && call.phase === 'connected';
 
   if (call.phase === 'idle') return null;
 
   const line = () => {
     switch (call.phase) {
       case 'calling':
-        return t('call.calling');
+        return t(call.video ? 'call.callingVideo' : 'call.calling');
       case 'ringing':
-        return t('call.incoming');
+        return t(call.video ? 'call.incomingVideo' : 'call.incoming');
       case 'connecting':
         return t('call.connecting');
       case 'connected':
@@ -38,17 +40,36 @@ export default function CallScreen({ call, peerName }: Props) {
   };
 
   return (
-    <div className="call" role="dialog" aria-label={t('call.title')}>
+    <div
+      className={`call ${call.video ? 'call--video' : ''} ${showRemoteVideo ? 'is-showing' : ''}`}
+      role="dialog"
+      aria-label={t('call.title')}
+    >
+      {/*
+        상대 화면. 영상통화가 아니어도 이 자리에 붙여 둔다 — 소리가 여기서 나온다.
+        엘리먼트를 없애면 상대 목소리가 아예 들리지 않는다.
+      */}
+      <Media stream={call.remoteStream} className="call__remote" />
+
       <div className="call__who">
-        {/* 얼굴 사진이 없으니 이름 첫 글자로. 빈 화면을 덜 허전하게. */}
-        <div className="call__face" aria-hidden="true">
-          {[...peerName][0] ?? ''}
-        </div>
+        {!showRemoteVideo && (
+          <div className="call__face" aria-hidden="true">
+            {[...peerName][0] ?? ''}
+          </div>
+        )}
         <p className="call__name">{peerName}</p>
         <p className="call__line">{line()}</p>
+        {call.video && !call.peerCamera && call.phase === 'connected' && (
+          <p className="call__hint">{t('call.peerCameraOff')}</p>
+        )}
         {call.error === 'denied' && <p className="call__hint">{t('call.denied')}</p>}
         {call.error === 'nomic' && <p className="call__hint">{t('call.nomic')}</p>}
       </div>
+
+      {/* 내 화면. 작게 얹어 둔다 — 내가 어떻게 보이는지만 알면 된다. */}
+      {call.video && call.cameraOn && call.phase !== 'ended' && (
+        <Media stream={call.localStream} className="call__me" muted />
+      )}
 
       {/* 오간 말. 상대 말이 크게, 내 말은 작게 — 내 것은 마이크가 잡히는지 보는 용도다. */}
       {call.captionsOn && call.captions.length > 0 && (
@@ -84,7 +105,7 @@ export default function CallScreen({ call, peerName }: Props) {
               onClick={() => void call.accept()}
               aria-label={t('call.accept')}
             >
-              <Icon name="phone" size={26} />
+              <Icon name={call.video ? 'video' : 'phone'} size={26} />
             </button>
           </>
         ) : call.phase === 'ended' ? null : (
@@ -98,6 +119,19 @@ export default function CallScreen({ call, peerName }: Props) {
             >
               <Icon name={call.muted ? 'micOff' : 'mic'} size={24} />
             </button>
+
+            {call.video && (
+              <button
+                type="button"
+                className={`call__key ${call.cameraOn ? '' : 'is-on'}`}
+                onClick={call.toggleCamera}
+                aria-label={t(call.cameraOn ? 'call.cameraOff' : 'call.cameraOn')}
+                aria-pressed={!call.cameraOn}
+              >
+                <Icon name={call.cameraOn ? 'video' : 'videoOff'} size={24} />
+              </button>
+            )}
+
             <button
               type="button"
               className="call__key call__key--hangup"
@@ -106,6 +140,18 @@ export default function CallScreen({ call, peerName }: Props) {
             >
               <Icon name="phoneOff" size={26} />
             </button>
+
+            {call.video && (
+              <button
+                type="button"
+                className="call__key"
+                onClick={() => void call.flipCamera()}
+                aria-label={t('call.flip')}
+              >
+                <Icon name="flip" size={24} />
+              </button>
+            )}
+
             {call.canCaption && (
               <button
                 type="button"
@@ -121,6 +167,41 @@ export default function CallScreen({ call, peerName }: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 오가는 소리·그림을 트는 곳.
+ *
+ * srcObject 는 속성으로 못 넣는다. React 가 그려 준 뒤에 직접 꽂아야 한다.
+ */
+function Media({
+  stream,
+  className,
+  muted,
+}: {
+  stream: MediaStream | null;
+  className: string;
+  muted?: boolean;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || element.srcObject === stream) return;
+    element.srcObject = stream;
+    // 자동 재생이 막히는 경우가 있다. 막혀도 통화는 이어지므로 조용히 넘어간다.
+    void element.play().catch(() => {});
+  }, [stream]);
+
+  return (
+    <video
+      ref={ref}
+      className={className}
+      autoPlay
+      playsInline
+      {...(muted ? { muted: true } : {})}
+    />
   );
 }
 

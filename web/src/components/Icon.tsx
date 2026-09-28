@@ -27,7 +27,10 @@ export type IconName =
   | 'phone'
   | 'phoneOff'
   | 'micOff'
-  | 'captions';
+  | 'captions'
+  | 'video'
+  | 'videoOff'
+  | 'flip';
 
 interface Props {
   name: IconName;
@@ -82,6 +85,28 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   check: <path d="M5.5 12.5 10 17l8.5-9" />,
+  // 캠코더. 영상통화를 걸고 받는 자리에.
+  video: (
+    <>
+      <rect x="3" y="6.5" width="12.5" height="11" rx="3" />
+      <path d="M15.5 11l5-3v8l-5-3z" />
+    </>
+  ),
+  videoOff: (
+    <>
+      <rect x="3" y="6.5" width="12.5" height="11" rx="3" />
+      <path d="M15.5 11l5-3v8l-5-3z" />
+      <path d="M4 20 20 4" />
+    </>
+  ),
+  // 앞뒤 카메라 바꾸기. 돌아가는 화살표 둘.
+  flip: (
+    <>
+      <path d="M4 9a8 8 0 0 1 13.5-3.5L20 8" />
+      <path d="M20 15a8 8 0 0 1-13.5 3.5L4 16" />
+      <path d="M20 4.5V8h-3.5M4 19.5V16h3.5" />
+    </>
+  ),
   // 자막. 네모 안에 글줄 둘.
   captions: (
     <>

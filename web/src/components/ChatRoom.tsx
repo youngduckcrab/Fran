@@ -315,6 +315,16 @@ export default function ChatRoom({
           <button
             type="button"
             className="chat__icon"
+            onClick={() => void call.start(true)}
+            disabled={chat.connection !== "open"}
+            title={t("call.video")}
+            aria-label={t("call.video")}
+          >
+            <Icon name="video" size={18} />
+          </button>
+          <button
+            type="button"
+            className="chat__icon"
             onClick={onSearch}
             aria-label={t("search.title")}
             title={t("search.title")}

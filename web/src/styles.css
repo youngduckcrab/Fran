@@ -2564,6 +2564,108 @@ button:active:not(:disabled) {
   }
 }
 
+/* ---------- 영상통화 ---------- */
+
+/*
+ * 상대 화면. 음성통화일 때도 이 엘리먼트는 남는다 — 소리가 여기서 나온다.
+ * 그림이 없을 때는 자리만 차지하지 않게 접어 둔다.
+ */
+.call__remote {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #101418;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.call--video.is-showing .call__remote {
+  opacity: 1;
+}
+
+/*
+ * 그림 위에 얹히는 것들.
+ *
+ * .call__remote 는 자리를 잡은(positioned) 요소라, 그냥 둔 형제들보다 위에 그려진다.
+ * 자리를 잡아 주지 않으면 단추가 영상 뒤로 숨어서 끊을 수조차 없다.
+ */
+.call--video .call__who,
+.call--video .call__keys,
+.call--video .call__captions {
+  position: relative;
+  z-index: 2;
+}
+
+/* 얼굴 위에 글씨를 얹으므로, 어두운 그림에서도 읽히게 그림자를 깐다. */
+.call--video.is-showing .call__who,
+.call--video.is-showing .call__line,
+.call--video.is-showing .call__name {
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
+}
+
+.call--video.is-showing .call__line {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/*
+ * 내 화면. 거울처럼 좌우를 뒤집는다 — 안 뒤집으면 손을 드는 방향이 반대로 보여
+ * 자기 모습인데도 낯설다.
+ */
+.call__me {
+  position: absolute;
+  top: max(72px, calc(env(safe-area-inset-top) + 16px));
+  right: 16px;
+  width: 104px;
+  height: 148px;
+  border-radius: 16px;
+  object-fit: cover;
+  background: #101418;
+  transform: scaleX(-1);
+  box-shadow: var(--shadow-soft);
+  z-index: 2;
+}
+
+/* 영상통화에서는 단추가 다섯까지 늘어난다. 한 줄에 다 들어가게 좁힌다. */
+.call--video .call__keys {
+  gap: 14px;
+}
+
+.call--video .call__key {
+  width: 56px;
+  height: 56px;
+}
+
+.call--video.is-showing .call__key {
+  /* 그림 위에 얹히므로 반투명한 검정이 낫다. 흰 단추는 얼굴을 가린다. */
+  background: rgba(20, 24, 28, 0.55);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.call--video.is-showing .call__key--hangup {
+  background: #ff3b30;
+}
+
+.call--video.is-showing .call__key.is-on {
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.call--video.is-showing .call__captions .caption {
+  background: rgba(20, 24, 28, 0.6);
+}
+
+.call--video.is-showing .caption__said {
+  color: #fff;
+}
+
+.call--video.is-showing .caption--mine .caption__said {
+  color: rgba(255, 255, 255, 0.75);
+}
+
 /* ---------- 통화 자막 ---------- */
 
 /*

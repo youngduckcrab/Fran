@@ -403,7 +403,7 @@ export type ClientEvent =
    * 이거야" 를 대신 전해 주는 것뿐이다. 둘만 쓰는 앱이라 방 개념이 필요 없고,
    * callId 하나로 지난 통화의 신호가 새 통화에 섞이는 것만 막으면 된다.
    */
-  | { type: 'call'; callId: string; offer: string }
+  | { type: 'call'; callId: string; offer: string; video: boolean }
   | { type: 'call_answer'; callId: string; answer: string }
   | { type: 'call_ice'; callId: string; candidate: string }
   /** 거절·끊기·못 받음. 어느 쪽이 보내도 통화는 거기서 끝난다. */
@@ -414,7 +414,14 @@ export type ClientEvent =
    * 말하는 도중에는 계속 고쳐지므로(final=false) 그때는 화면에만 띄우고 흘려보낸다.
    * 다 말한 줄(final=true)만 번역하고 기록에 남긴다.
    */
-  | { type: 'caption'; callId: string; id: string; text: string; final: boolean };
+  | { type: 'caption'; callId: string; id: string; text: string; final: boolean }
+  /**
+   * 내 카메라를 껐거나 켰다.
+   *
+   * 트랙만 끄면 상대에게는 검은 화면이 간다. 끊긴 것인지 끈 것인지 알 수 없어서
+   * 따로 말해 준다.
+   */
+  | { type: 'call_camera'; callId: string; on: boolean };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */
@@ -438,7 +445,7 @@ export type ServerEvent =
   | { type: 'glossary'; entries: GlossaryEntry[] }
   /* --- 통화 --- */
   /** 상대가 건 전화. */
-  | { type: 'call'; callId: string; from: string; offer: string }
+  | { type: 'call'; callId: string; from: string; offer: string; video: boolean }
   | { type: 'call_answer'; callId: string; answer: string }
   | { type: 'call_ice'; callId: string; candidate: string }
   | { type: 'call_end'; callId: string; reason: CallEndReason }
@@ -458,4 +465,5 @@ export type ServerEvent =
       final: boolean;
       /** 번역은 늦게 따라온다. 없으면 아직 오는 중이다. */
       translated?: string;
-    };
+    }
+  | { type: 'call_camera'; callId: string; from: string; on: boolean };
