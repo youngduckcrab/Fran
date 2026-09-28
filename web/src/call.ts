@@ -42,6 +42,8 @@ export interface Caption {
   mine: boolean;
   text: string;
   translated?: string;
+  /** 번역이 끝내 안 온 줄. 원문만 남는다. */
+  failed?: boolean;
   final: boolean;
 }
 
@@ -363,6 +365,7 @@ export function useCall(
               mine: event.from === myId,
               text: event.text,
               ...(event.translated ? { translated: event.translated } : {}),
+              ...(event.failed ? { failed: true } : {}),
               final: event.final,
             }));
             return;

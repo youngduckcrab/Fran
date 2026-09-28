@@ -31,7 +31,17 @@ export class GeminiProvider implements TranslationProvider {
 
   constructor(options: GeminiOptions) {
     this.model = options.model;
-    this.client = new GoogleGenAI({ apiKey: options.apiKey });
+    this.client = new GoogleGenAI({
+      apiKey: options.apiKey,
+      /*
+       * 다시 걸어 보는 일은 이 위층(completeWithRetry)이 맡는다.
+       *
+       * 이 SDK 는 기본으로 다섯 번까지, 1초에서 시작해 두 배씩 늘려 가며 스스로
+       * 다시 건다. 그 위에서 또 돌리면 자막 한 줄이 수십 초를 끌 수 있다.
+       * 늦게 온 자막은 이미 지나간 말이라 맞아도 쓸모가 없다. 정책을 한 곳에만 둔다.
+       */
+      httpOptions: { retryOptions: { attempts: 1 } },
+    });
     this.thinkingBudget = options.thinkingBudget;
     // 연인끼리 주고받는 애정 표현이 안전 필터에 걸려 번역이 통째로 막히는 일을 막는다.
     this.safetySettings = HARM_CATEGORIES.map((category) => ({

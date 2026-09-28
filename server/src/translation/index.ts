@@ -132,6 +132,13 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function completeWithRetry(
   provider: TranslationProvider,
   request: ProviderRequest,
+  /**
+   * 기다렸다 다시 걸어 볼 간격.
+   *
+   * 메시지 번역은 늦게라도 제대로 오는 편이 낫다. 자막은 반대다 — 11초 뒤에
+   * 도착한 자막은 이미 지나간 말이라, 맞아도 쓸모가 없고 엉뚱한 자리에 끼어든다.
+   */
+  delays: readonly number[] = RETRY_DELAYS_MS,
 ): Promise<ProviderResponse> {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -139,12 +146,13 @@ async function completeWithRetry(
     } catch (error) {
       if (!(error instanceof TranslationError) || !error.retryable) throw error;
 
-      const limit = Math.min(error.retryLimit ?? RETRY_DELAYS_MS.length, RETRY_DELAYS_MS.length);
-      const backoff = RETRY_DELAYS_MS[attempt];
+      const limit = Math.min(error.retryLimit ?? delays.length, delays.length);
+      const backoff = delays[attempt];
       if (attempt >= limit || backoff === undefined) throw error;
 
       // 서버가 "N초 뒤에 오라"고 했으면 그 말을 따른다. 그게 더 정확하다.
-      const delay = Math.max(backoff, error.retryAfterMs ?? 0);
+      // 서버가 더 오래 기다리라고 해도, 이 부름이 감당할 수 있는 만큼만 기다린다.
+      const delay = Math.min(Math.max(backoff, error.retryAfterMs ?? 0), delays[delays.length - 1]!);
 
       console.warn(
         `[translate] 일시적 오류, ${delay}ms 뒤 재시도 (${attempt + 1}/${limit}): ${error.message}`,
@@ -392,6 +400,14 @@ export async function lookUpWord({
 /* 통화 자막                                                            */
 /* ------------------------------------------------------------------ */
 
+/**
+ * 자막이 다시 걸어 보는 간격. 한 번, 그것도 곧바로.
+ *
+ * 이보다 늦게 오는 자막은 이미 대화가 지나가 버려서, 맞는 번역이어도 읽는
+ * 사람을 헷갈리게 한다. 그럴 바엔 원문만 남기고 다음 말로 넘어가는 편이 낫다.
+ */
+const CAPTION_RETRY_MS = [400] as const;
+
 export interface CaptionArgs {
   /** 받아쓴 말 한 줄. */
   text: string;
@@ -415,11 +431,15 @@ export async function translateCaption({
   const provider = getProvider();
 
   const startedAt = Date.now();
-  const response = await completeWithRetry(provider, {
-    systemPrompt: buildCaptionSystemPrompt(participants, await listGlossary(), targetLang),
-    userPrompt: buildCaptionUserPrompt(text, speaker),
-    schema: CAPTION_SCHEMA,
-  });
+  const response = await completeWithRetry(
+    provider,
+    {
+      systemPrompt: buildCaptionSystemPrompt(participants, await listGlossary(), targetLang),
+      userPrompt: buildCaptionUserPrompt(text, speaker),
+      schema: CAPTION_SCHEMA,
+    },
+    CAPTION_RETRY_MS,
+  );
   recordUsage(provider, response.usage, Date.now() - startedAt);
 
   let raw: unknown;

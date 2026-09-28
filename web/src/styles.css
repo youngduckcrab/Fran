@@ -2736,6 +2736,14 @@ button:active:not(:disabled) {
   color: var(--accent);
 }
 
+/* 번역이 못 온 줄. 원문은 그대로 두고 이것만 조용히 알린다. */
+.caption__meaning--failed {
+  font-size: 13px;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
 .caption--mine .caption__meaning {
   font-size: 15px;
   font-weight: 500;

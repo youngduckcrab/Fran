@@ -83,6 +83,11 @@ export default function CallScreen({ call, peerName }: Props) {
             >
               <span className="caption__said">{line.text}</span>
               {line.translated && <span className="caption__meaning">{line.translated}</span>}
+              {line.failed && !line.translated && (
+                <span className="caption__meaning caption__meaning--failed">
+                  {t('call.captionFailed')}
+                </span>
+              )}
             </p>
           ))}
         </div>

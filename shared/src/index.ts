@@ -465,5 +465,7 @@ export type ServerEvent =
       final: boolean;
       /** 번역은 늦게 따라온다. 없으면 아직 오는 중이다. */
       translated?: string;
+      /** 번역이 끝내 안 됐다. 빈칸으로 두면 오는 중인지 아닌지 알 수가 없다. */
+      failed?: boolean;
     }
   | { type: 'call_camera'; callId: string; from: string; on: boolean };

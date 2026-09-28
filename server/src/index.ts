@@ -1411,6 +1411,19 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
           sendToUser(userId, done);
         } catch (error) {
           console.warn('자막 번역 실패:', error instanceof Error ? error.message : error);
+          // 빈칸으로 두면 아직 오는 중인지 영영 안 오는지 알 수가 없다.
+          const failed: ServerEvent = {
+            type: 'caption',
+            callId: event.callId,
+            id: event.id,
+            from: userId,
+            lang,
+            text,
+            final: true,
+            failed: true,
+          };
+          sendToUser(peer, failed);
+          sendToUser(userId, failed);
         }
       })();
       return;

@@ -29,7 +29,17 @@ export class ClaudeProvider implements TranslationProvider {
   constructor(options: ClaudeOptions) {
     this.model = options.model;
     this.effort = effortFor(options.model, options.effort);
-    this.client = new Anthropic(options.apiKey ? { apiKey: options.apiKey } : {});
+    this.client = new Anthropic({
+      ...(options.apiKey ? { apiKey: options.apiKey } : {}),
+      /*
+       * 다시 걸어 보는 일은 이 위층(completeWithRetry)이 맡는다.
+       *
+       * SDK 도 스스로 두 번 더 걸어 보는데, 그러면 한 번의 complete() 가 실제로는
+       * 세 번이 되고 그 위에서 또 한 번 더 돌린다. 자막처럼 늦으면 쓸모없어지는
+       * 길에서는 이게 몇 초가 된다. 정책을 한 곳에만 둔다.
+       */
+      maxRetries: 0,
+    });
   }
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
