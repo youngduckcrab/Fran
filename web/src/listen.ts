@@ -34,17 +34,44 @@ function ctor(): Ctor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+/** 애플 기기인지. 아이패드는 자기를 맥이라고 말하므로 손가락이 닿는지로 가른다. */
+export function isApple(): boolean {
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+}
+
+/** 애플 기기에서 그래도 해 보겠다고 켜 둔 값. */
+const TRY_APPLE_KEY = 'fran.tryAppleCaptions';
+
+export function tryingOnApple(): boolean {
+  try {
+    return localStorage.getItem(TRY_APPLE_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
+export function setTryOnApple(on: boolean): void {
+  try {
+    localStorage.setItem(TRY_APPLE_KEY, on ? 'on' : 'off');
+  } catch {
+    // 저장 못 해도 이번 통화에는 적용된다.
+  }
+}
+
 /**
  * 이 기기에서 받아쓰기를 쓸 수 있는지.
  *
- * API 가 있다고 되는 것은 아니다. iOS 는 있다고 해 놓고 통화 중에는 동작하지 않아서,
- * 여기서 미리 걸러 낸다.
+ * API 가 있다고 되는 것은 아니다. 애플 기기는 통화로 마이크를 이미 잡고 있으면
+ * 받아쓰기가 붙지 않는다는 보고가 많아 기본으로 끈다.
+ *
+ * 다만 그 보고는 아이폰 이야기이고, 기기와 판올림에 따라 될 수도 있다. 여기서
+ * 확인할 방법이 없으니 켜 볼 수 있게 두었다 — 켜서 안 되면 그 통화에서 스스로
+ * 물러나고 왜 안 되는지 알려 준다.
  */
 export function canListen(): boolean {
   if (!ctor()) return false;
-  const ua = navigator.userAgent;
-  const isApple = /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
-  return !isApple;
+  return !isApple() || tryingOnApple();
 }
 
 /**
@@ -114,6 +141,13 @@ export function listen({ lang, onLine, onError }: ListenOptions): Listener {
       onError?.(event.error);
       // 마이크를 못 쓰게 된 경우라면 다시 켜 봐야 같은 일이 반복된다.
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') stopped = true;
+      /*
+       * 애플 기기에서 걸리면 거기서 멈춘다.
+       *
+       * 계속 다시 켜면 통화 중인 마이크만 흔들어 목소리까지 끊는다. 자막을
+       * 못 얻는 것보다 통화가 망가지는 쪽이 훨씬 나쁘다.
+       */
+      if (isApple()) stopped = true;
     };
 
     recognition.onend = () => {

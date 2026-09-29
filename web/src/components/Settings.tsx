@@ -18,6 +18,7 @@ import Icon from './Icon';
 import { attachmentUrl, prepareImage, uploadAttachment } from '../media';
 import { photoWallpaper, wallpaperPhotoId } from '../wallpaper';
 import { BUBBLE_VIEWS, type BubbleView } from '../view';
+import { isApple, setTryOnApple, tryingOnApple } from '../listen';
 
 interface Props {
   profile: UserProfile;
@@ -158,6 +159,7 @@ export default function Settings({
 
   /* ---- 알림 ---- */
   const [push, setPush] = useState<PushState>('unsupported');
+  const [tryApple, setTryApple] = useState(tryingOnApple);
   const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
@@ -413,6 +415,25 @@ export default function Settings({
           {passError && !mismatch && <p className="sheet__error">{passError}</p>}
           {passDone && <p className="sheet__done">{t('settings.passcodeChanged')}</p>}
         </section>
+
+        {/* 애플 기기에서만. 다른 기기는 그냥 되므로 보여 줄 이유가 없다. */}
+        {isApple() && (
+          <section className="sheet__section">
+            <h3>{t('settings.captions')}</h3>
+            <label className="sheet__toggle">
+              <input
+                type="checkbox"
+                checked={tryApple}
+                onChange={(event) => {
+                  setTryOnApple(event.target.checked);
+                  setTryApple(event.target.checked);
+                }}
+              />
+              {t('settings.captionsTry')}
+            </label>
+            <p className="sheet__hint">{t('settings.captionsHint')}</p>
+          </section>
+        )}
 
         <section className="sheet__section">
           <h3>{t('settings.notify')}</h3>

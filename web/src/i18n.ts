@@ -312,6 +312,7 @@ const ko = {
   'call.flip': '앞뒤 카메라 바꾸기',
   'call.peerCameraOff': '상대가 카메라를 껐어요',
   'call.captionFailed': '번역 못 함',
+  'call.captionsNoDevice': '이 기기에서는 내 말을 받아쓰지 못해요. 상대 자막은 그대로 보여요.',
   'calls.title': '통화 기록',
   'calls.empty': '아직 남은 통화가 없어요.',
   'calls.hint': '자막을 켜고 통화하면 나눈 말이 여기 남아요.',
@@ -320,6 +321,10 @@ const ko = {
   'calls.delete': '이 기록 지우기',
   'calls.deleted': '지웠어요',
   'calls.loading': '불러오는 중…',
+  'settings.captions': '통화 자막',
+  'settings.captionsTry': '이 기기에서도 자막 만들기 시도',
+  'settings.captionsHint':
+    '아이폰·아이패드는 통화 중에 목소리를 글로 옮기는 기능이 잘 붙지 않아 기본으로 꺼 둡니다. 기기에 따라 될 수도 있으니 한 번 켜서 통화해 보세요. 안 되면 그 통화에서 저절로 물러나고 화면에 알려 드립니다. 이걸 꺼도 상대가 만든 자막은 그대로 보입니다.',
   "chat.wakingHint":
     "한동안 안 쓰면 서버가 잠들어요. 깨어나는 데 30초쯤 걸려요.",
 
@@ -636,6 +641,7 @@ const es: Record<StringKey, string> = {
   'call.flip': 'Cambiar de cámara',
   'call.peerCameraOff': 'Apagó su cámara',
   'call.captionFailed': 'Sin traducción',
+  'call.captionsNoDevice': 'Este equipo no puede transcribir tu voz. Los subtítulos de la otra persona sí se ven.',
   'calls.title': 'Llamadas',
   'calls.empty': 'Todavía no hay llamadas guardadas.',
   'calls.hint': 'Con los subtítulos activados, lo que hablen queda aquí.',
@@ -644,6 +650,10 @@ const es: Record<StringKey, string> = {
   'calls.delete': 'Borrar este registro',
   'calls.deleted': 'Borrado',
   'calls.loading': 'Cargando…',
+  'settings.captions': 'Subtítulos en llamadas',
+  'settings.captionsTry': 'Intentar también en este equipo',
+  'settings.captionsHint':
+    'En iPhone y iPad la transcripción durante una llamada suele fallar, así que viene desactivada. Según el equipo puede funcionar: actívala y prueba una llamada. Si no funciona, se desactiva sola en esa llamada y te avisa. Aunque esté apagada, seguirás viendo los subtítulos de la otra persona.',
   "chat.wakingHint":
     "El servidor se duerme si nadie entra por un rato. Tarda unos 30 segundos en despertar.",
 };
@@ -950,6 +960,7 @@ const en: Record<StringKey, string> = {
   'call.flip': 'Switch camera',
   'call.peerCameraOff': 'Their camera is off',
   'call.captionFailed': 'No translation',
+  'call.captionsNoDevice': "This device can't transcribe your voice. You'll still see theirs.",
   'calls.title': 'Calls',
   'calls.empty': 'No calls saved yet.',
   'calls.hint': 'Turn subtitles on during a call and what you said is kept here.',
@@ -958,6 +969,10 @@ const en: Record<StringKey, string> = {
   'calls.delete': 'Delete this record',
   'calls.deleted': 'Deleted',
   'calls.loading': 'Loading…',
+  'settings.captions': 'Call subtitles',
+  'settings.captionsTry': 'Try on this device too',
+  'settings.captionsHint':
+    "On iPhone and iPad, transcribing your voice during a call often fails, so it's off by default. It may work on your device — turn it on and try a call. If it fails it backs off for that call and tells you. Either way you still see the other person's subtitles.",
   "chat.wakingHint":
     "The server sleeps when nobody uses it for a while. It takes about 30 seconds to wake.",
 };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CallEndReason, ClientEvent, LangCode, ServerEvent } from '@fran/shared';
 import { fetchIceServers } from './api';
-import { canListen, listen, type Listener } from './listen';
+import { canListen, isApple, listen, type Listener } from './listen';
 
 /**
  * 통화가 어디쯤 와 있는지.
@@ -97,6 +97,8 @@ export function useCall(
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   /** 앞뒤 카메라. 바꿀 때 트랙만 갈아 끼운다. */
   const facing = useRef<'user' | 'environment'>('user');
+  /** 이 기기가 받아쓰기를 끝내 못 한 경우. 켜 둔 사람에게 왜 안 되는지 알려 준다. */
+  const [captionsBroken, setCaptionsBroken] = useState(false);
   /** 통화가 붙은 시각. 화면의 시계가 이걸 센다. */
   const [since, setSince] = useState<number | null>(null);
 
@@ -118,6 +120,7 @@ export function useCall(
     ear.current?.stop();
     ear.current = null;
     setCaptions([]);
+    setCaptionsBroken(false);
     pc.current?.close();
     pc.current = null;
     // 놓아 주지 않으면 통화가 끝나도 폰에 카메라·마이크 표시가 남는다.
@@ -442,6 +445,10 @@ export function useCall(
         sentText = text;
         emit({ type: 'caption', callId: id, id: current, text, final: false });
       },
+      onError: () => {
+        // 애플 기기에서 걸리면 listen() 이 스스로 물러난다. 왜 조용한지는 알려 줘야 한다.
+        if (isApple()) setCaptionsBroken(true);
+      },
     });
     ear.current = ear_;
     return () => {
@@ -483,6 +490,7 @@ export function useCall(
     remoteStream,
     captions,
     captionsOn,
+    captionsBroken,
     /** 이 기기에서 받아쓰기를 쓸 수 있는지. 못 쓰면 켜는 단추를 보여 줄 이유가 없다. */
     canCaption: canListen(),
     start,

@@ -62,6 +62,9 @@ export default function CallScreen({ call, peerName }: Props) {
         {call.video && !call.peerCamera && call.phase === 'connected' && (
           <p className="call__hint">{t('call.peerCameraOff')}</p>
         )}
+        {call.captionsOn && call.captionsBroken && (
+          <p className="call__hint">{t('call.captionsNoDevice')}</p>
+        )}
         {call.error === 'denied' && <p className="call__hint">{t('call.denied')}</p>}
         {call.error === 'nomic' && <p className="call__hint">{t('call.nomic')}</p>}
       </div>
