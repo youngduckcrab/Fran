@@ -260,7 +260,15 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
 
   return (
     <>
-      <CallScreen call={call} peerName={chat.peer?.name ?? ''} />
+      <CallScreen
+        call={call}
+        peerName={chat.peer?.name ?? ''}
+        myId={chat.me?.id ?? ''}
+        peerId={chat.peer?.id ?? ''}
+        messages={chat.messages}
+        readingLang={primaryLang}
+        onSend={(text) => chat.sendMessage(text)}
+      />
 
       {alerted && (
         <button

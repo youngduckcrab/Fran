@@ -218,8 +218,12 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
           authenticated.current = true;
           attempts.current = 0;
         }
-        // 통화 신호와 자막은 대화 상태와 아무 상관이 없다. 통화 쪽으로 바로 넘긴다.
-        if (event.type.startsWith('call') || event.type === 'caption') {
+        // 통화 신호·자막·낙서는 대화 상태와 아무 상관이 없다. 통화 쪽으로 바로 넘긴다.
+        if (
+          event.type.startsWith('call') ||
+          event.type.startsWith('draw') ||
+          event.type === 'caption'
+        ) {
           callListener.current?.(event);
           return;
         }

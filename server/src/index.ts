@@ -114,6 +114,9 @@ const MAX_NOTE_LENGTH = 500;
 
 /** 자막 한 줄의 한계. 한 호흡에 이보다 길게 말하지 않는다. */
 const MAX_CAPTION_LENGTH = 1000;
+
+/** 낙서 한 덩이에 담기는 좌표 수의 한계. 손가락이 이보다 빠를 수는 없다. */
+const MAX_STROKE_POINTS = 400;
 /** 첨부 한 건의 최대 크기. 사진은 화면에서 미리 줄여서 올라온다. */
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
@@ -1434,6 +1437,27 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         callId: event.callId,
         from: userId,
         on: event.on,
+      });
+      return;
+    }
+    case 'draw': {
+      // 서버는 좌표를 들여다보지 않고 넘기기만 한다. 한 획이 수십 번 쪼개져 오므로
+      // 붙잡아 두지 않는 것이 중요하다.
+      if (event.points.length > MAX_STROKE_POINTS) return;
+      sendToUser(peerOf(userId).profile.id, {
+        type: 'draw',
+        callId: event.callId,
+        from: userId,
+        strokeId: event.strokeId,
+        points: event.points,
+      });
+      return;
+    }
+    case 'draw_clear': {
+      sendToUser(peerOf(userId).profile.id, {
+        type: 'draw_clear',
+        callId: event.callId,
+        from: userId,
       });
       return;
     }

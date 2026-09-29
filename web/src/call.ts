@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CallEndReason, ClientEvent, LangCode, ServerEvent } from '@fran/shared';
 import { fetchIceServers } from './api';
 import { canListen, isApple, listen, type Listener } from './listen';
+import { useDoodle } from './doodle';
 
 /**
  * 통화가 어디쯤 와 있는지.
@@ -97,6 +98,15 @@ export function useCall(
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   /** 앞뒤 카메라. 바꿀 때 트랙만 갈아 끼운다. */
   const facing = useRef<'user' | 'environment'>('user');
+  /*
+   * 낙서 쪽 함수들을 담아 두는 곳.
+   *
+   * 소켓을 듣는 effect 는 통화가 붙는 동안 한 번만 걸려야 한다. 낙서 함수를 그
+   * 목록에 직접 넣으면 획을 그을 때마다 소켓을 다시 걸게 되고, 그 사이 오는
+   * 신호를 놓친다.
+   */
+  const receiveDraw = useRef<((id: string, points: number[]) => void) | null>(null);
+  const wipeDoodle = useRef<(() => void) | null>(null);
   /** 이 기기가 받아쓰기를 끝내 못 한 경우. 켜 둔 사람에게 왜 안 되는지 알려 준다. */
   const [captionsBroken, setCaptionsBroken] = useState(false);
   /** 통화가 붙은 시각. 화면의 시계가 이걸 센다. */
@@ -115,12 +125,16 @@ export function useCall(
    */
   const earlyIce = useRef<RTCIceCandidateInit[]>([]);
 
+  /** 낙서. 통화가 끝나면 함께 지워진다. */
+  const doodle = useDoodle(emit, callId.current);
+
   /** 통화에 쓴 것들을 모두 놓아 준다. 마이크를 안 놓으면 폰에 녹음 표시가 계속 남는다. */
   const teardown = useCallback(() => {
     ear.current?.stop();
     ear.current = null;
     setCaptions([]);
     setCaptionsBroken(false);
+    wipeDoodle.current?.();
     pc.current?.close();
     pc.current = null;
     // 놓아 주지 않으면 통화가 끝나도 폰에 카메라·마이크 표시가 남는다.
@@ -373,6 +387,16 @@ export function useCall(
             }));
             return;
           }
+          case 'draw': {
+            if (callId.current !== event.callId) return;
+            receiveDraw.current?.(event.strokeId, event.points);
+            return;
+          }
+          case 'draw_clear': {
+            if (callId.current !== event.callId) return;
+            wipeDoodle.current?.();
+            return;
+          }
           case 'call_camera': {
             if (callId.current !== event.callId) return;
             setPeerCamera(event.on);
@@ -479,8 +503,12 @@ export function useCall(
     return () => window.removeEventListener('pagehide', bye);
   }, [emit]);
 
+  receiveDraw.current = doodle.receive;
+  wipeDoodle.current = doodle.wipe;
+
   return {
     ...state,
+    doodle,
     muted,
     since,
     video,

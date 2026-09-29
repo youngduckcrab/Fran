@@ -1,11 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ChatMessage, LangCode } from '@fran/shared';
 import type { Call } from '../call';
 import { useT } from '../i18n';
+import { usePip } from '../pip';
+import DoodleLayer from './DoodleLayer';
+import CallChat from './CallChat';
 import Icon from './Icon';
 
 interface Props {
   call: Call;
   peerName: string;
+  myId: string;
+  peerId: string;
+  /** 통화 중에 오간 글. 평소 채팅 길을 그대로 탄다. */
+  messages: ChatMessage[];
+  readingLang: LangCode;
+  onSend: (text: string) => void;
 }
 
 /**
@@ -15,10 +25,31 @@ interface Props {
  * 통화 중에는 화면을 덮는다 — 이때 할 일은 하나뿐이라 대화를 뒤에 비춰 둘
  * 이유가 없다.
  */
-export default function CallScreen({ call, peerName }: Props) {
+export default function CallScreen({
+  call,
+  peerName,
+  myId,
+  peerId,
+  messages,
+  readingLang,
+  onSend,
+}: Props) {
   const t = useT();
   const elapsed = useElapsed(call.since);
+  /** 내 모습을 크게 보고 있는 중인지. 작은 창을 누를 때마다 뒤집힌다. */
+  const [swapped, setSwapped] = useState(false);
+  const swap = useCallback(() => setSwapped((on) => !on), []);
+  const [chatOpen, setChatOpen] = useState(false);
+  const pip = usePip(swap);
+
   const showRemoteVideo = call.video && call.peerCamera && call.phase === 'connected';
+  /** 통화가 끝나면 원래대로. 다음 통화가 뒤집힌 채로 시작하면 당황스럽다. */
+  useEffect(() => {
+    if (call.phase === 'idle' || call.phase === 'ended') {
+      setSwapped(false);
+      setChatOpen(false);
+    }
+  }, [call.phase]);
 
   if (call.phase === 'idle') return null;
 
@@ -49,7 +80,11 @@ export default function CallScreen({ call, peerName }: Props) {
         상대 화면. 영상통화가 아니어도 이 자리에 붙여 둔다 — 소리가 여기서 나온다.
         엘리먼트를 없애면 상대 목소리가 아예 들리지 않는다.
       */}
-      <Media stream={call.remoteStream} className="call__remote" />
+      <Media
+        stream={swapped ? call.localStream : call.remoteStream}
+        className={`call__remote ${swapped ? 'is-mine' : ''}`}
+        muted={swapped}
+      />
 
       <div className="call__who">
         {!showRemoteVideo && (
@@ -69,9 +104,46 @@ export default function CallScreen({ call, peerName }: Props) {
         {call.error === 'nomic' && <p className="call__hint">{t('call.nomic')}</p>}
       </div>
 
-      {/* 내 화면. 작게 얹어 둔다 — 내가 어떻게 보이는지만 알면 된다. */}
-      {call.video && call.cameraOn && call.phase !== 'ended' && (
-        <Media stream={call.localStream} className="call__me" muted />
+      {/*
+        작은 창. 끌어서 옮기고, 오므려서 키우고, 누르면 큰 화면과 자리가 바뀐다.
+        바뀐 상태에서는 여기에 상대가 들어온다.
+      */}
+      {call.video && call.phase !== 'ended' && (swapped || call.cameraOn) && (
+        <div
+          ref={pip.ref}
+          className={`call__me ${pip.dragging ? 'is-dragging' : ''}`}
+          style={pip.style}
+          role="button"
+          tabIndex={0}
+          aria-label={t('call.swap')}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') swap();
+          }}
+          {...pip.handlers}
+        >
+          <Media
+            stream={swapped ? call.remoteStream : call.localStream}
+            className={`call__meVideo ${swapped ? '' : 'is-mirrored'}`}
+            muted={!swapped}
+          />
+        </div>
+      )}
+
+      {/* 낙서 판. 영상통화가 붙어 있을 때만. 그리는 중이 아니면 손가락을 통과시킨다. */}
+      {call.video && call.phase === 'connected' && (
+        <DoodleLayer doodle={call.doodle} myId={myId} peerId={peerId} />
+      )}
+
+      {/* 통화 중에 친 글. 자막 위에 쌓인다. */}
+      {call.phase === 'connected' && (
+        <CallChat
+          messages={messages}
+          myId={myId}
+          readingLang={readingLang}
+          onSend={onSend}
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+        />
       )}
 
       {/* 오간 말. 상대 말이 크게, 내 말은 작게 — 내 것은 마이크가 잡히는지 보는 용도다. */}
@@ -94,6 +166,12 @@ export default function CallScreen({ call, peerName }: Props) {
             </p>
           ))}
         </div>
+      )}
+
+      {call.video && call.doodle.drawing && call.doodle.strokes.length > 0 && (
+        <button type="button" className="call__erase" onClick={call.doodle.clear}>
+          {t('call.drawClear')}
+        </button>
       )}
 
       <div className="call__keys">
@@ -159,6 +237,28 @@ export default function CallScreen({ call, peerName }: Props) {
                 <Icon name="flip" size={24} />
               </button>
             )}
+
+            {call.video && (
+              <button
+                type="button"
+                className={`call__key call__key--draw ${call.doodle.drawing ? 'is-on' : ''}`}
+                onClick={() => call.doodle.setDrawing(!call.doodle.drawing)}
+                aria-label={t(call.doodle.drawing ? 'call.drawOff' : 'call.drawOn')}
+                aria-pressed={call.doodle.drawing}
+              >
+                <Icon name="pencil" size={22} />
+              </button>
+            )}
+
+            <button
+              type="button"
+              className={`call__key ${chatOpen ? 'is-on' : ''}`}
+              onClick={() => setChatOpen((on) => !on)}
+              aria-label={t('callChat.open')}
+              aria-pressed={chatOpen}
+            >
+              <Icon name="chat" size={22} />
+            </button>
 
             {call.canCaption && (
               <button

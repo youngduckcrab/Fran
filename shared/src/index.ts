@@ -421,7 +421,17 @@ export type ClientEvent =
    * 트랙만 끄면 상대에게는 검은 화면이 간다. 끊긴 것인지 끈 것인지 알 수 없어서
    * 따로 말해 준다.
    */
-  | { type: 'call_camera'; callId: string; on: boolean };
+  | { type: 'call_camera'; callId: string; on: boolean }
+  /**
+   * 통화 화면에 그은 낙서 한 획.
+   *
+   * 좌표는 화면 크기로 나눈 0~1 이다. 폰마다 화면이 달라서 픽셀을 그대로 보내면
+   * 상대 화면에서는 엉뚱한 자리에 그려진다. [x,y,x,y,…] 로 납작하게 보낸다 —
+   * 손가락이 움직이는 내내 오가는 것이라 한 점당 무게를 줄여야 한다.
+   */
+  | { type: 'draw'; callId: string; strokeId: string; points: number[] }
+  /** 화면을 지운다. 누가 눌러도 양쪽이 같이 지워진다. */
+  | { type: 'draw_clear'; callId: string };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */
@@ -468,4 +478,6 @@ export type ServerEvent =
       /** 번역이 끝내 안 됐다. 빈칸으로 두면 오는 중인지 아닌지 알 수가 없다. */
       failed?: boolean;
     }
-  | { type: 'call_camera'; callId: string; from: string; on: boolean };
+  | { type: 'call_camera'; callId: string; from: string; on: boolean }
+  | { type: 'draw'; callId: string; from: string; strokeId: string; points: number[] }
+  | { type: 'draw_clear'; callId: string; from: string };
