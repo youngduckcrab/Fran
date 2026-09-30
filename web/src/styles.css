@@ -2715,6 +2715,61 @@ button:active:not(:disabled) {
   color: rgba(255, 255, 255, 0.75);
 }
 
+/* ---------- 새 버전 알림 ---------- */
+
+/*
+ * 새 버전이 왔다고 알리는 줄. 화면 맨 위에 잠깐 얹힌다.
+ * 눌러야 갈아탄다 — 보고 있는 화면을 멋대로 새로 불러오지 않는다.
+ */
+.fresh {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 24px);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  animation: fresh-in 220ms ease-out;
+}
+
+.fresh__text {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.fresh__go {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+@keyframes fresh-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fresh {
+    animation: none;
+  }
+}
+
 /* ---------- 통화 중 채팅 ---------- */
 
 /*

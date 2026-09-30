@@ -4,11 +4,32 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const API_TARGET = process.env.VITE_API_TARGET ?? 'http://localhost:8787';
 
+/**
+ * 이 빌드가 언제 만들어진 것인지.
+ *
+ * 화면에 보여 두면 "고쳤다는데 왜 그대로냐" 를 한 번에 가릴 수 있다 —
+ * 날짜가 옛것이면 아직 안 받은 것이고, 새것이면 다른 데 문제가 있는 것이다.
+ */
+const BUILT_AT = new Date().toISOString().slice(0, 16).replace('T', ' ');
+
 export default defineConfig({
+  define: {
+    __BUILT_AT__: JSON.stringify(BUILT_AT),
+  },
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      /*
+       * 갱신은 앱이 직접 다룬다(web/src/update.ts).
+       *
+       * autoUpdate 로 두면 새 워커가 조용히 자리를 잡지만, 이미 떠 있는 화면은
+       * 옛 코드를 그대로 붙들고 있다. 홈 화면 앱은 껐다 켜도 새로 불러오지 않고
+       * 되살아나기만 해서, 새 기능이 며칠이 지나도 안 보이는 일이 생긴다.
+       * 통화 중에 멋대로 새로고침하면 전화가 끊기므로 그 시점도 우리가 정해야 한다.
+       */
+      registerType: 'prompt',
+      // 등록도 우리가 한다. 자동으로 끼워 넣는 조각은 첫 로드 때 한 번만 돈다.
+      injectRegister: null,
       // 알림 처리는 우리가 쓴다. 생성된 서비스 워커가 이 파일을 불러오게 한다.
       workbox: { importScripts: ['push-sw.js'] },
       manifest: {

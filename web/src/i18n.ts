@@ -329,6 +329,10 @@ const ko = {
   'calls.delete': '이 기록 지우기',
   'calls.deleted': '지웠어요',
   'calls.loading': '불러오는 중…',
+  'update.ready': '새 버전이 나왔어요',
+  'update.apply': '지금 받기',
+  'settings.version': '버전',
+  'settings.versionBuilt': '{at} 에 만들어진 앱 (UTC)',
   'settings.captions': '통화 자막',
   'settings.captionsTry': '이 기기에서도 자막 만들기 시도',
   'settings.captionsHint':
@@ -666,6 +670,10 @@ const es: Record<StringKey, string> = {
   'calls.delete': 'Borrar este registro',
   'calls.deleted': 'Borrado',
   'calls.loading': 'Cargando…',
+  'update.ready': 'Hay una versión nueva',
+  'update.apply': 'Actualizar',
+  'settings.version': 'Versión',
+  'settings.versionBuilt': 'Compilada el {at} (UTC)',
   'settings.captions': 'Subtítulos en llamadas',
   'settings.captionsTry': 'Intentar también en este equipo',
   'settings.captionsHint':
@@ -993,6 +1001,10 @@ const en: Record<StringKey, string> = {
   'calls.delete': 'Delete this record',
   'calls.deleted': 'Deleted',
   'calls.loading': 'Loading…',
+  'update.ready': 'A new version is ready',
+  'update.apply': 'Update now',
+  'settings.version': 'Version',
+  'settings.versionBuilt': 'Built {at} (UTC)',
   'settings.captions': 'Call subtitles',
   'settings.captionsTry': 'Try on this device too',
   'settings.captionsHint':

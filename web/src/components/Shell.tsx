@@ -4,6 +4,7 @@ import { useChat } from '../useChat';
 import { activeUser, fetchPhotos, fetchSaved, fetchVocab } from '../api';
 import { toUiLang, useT, type UiLang } from '../i18n';
 import { useWaking } from '../waking';
+import { useUpdate } from '../update';
 import { useCall } from '../call';
 import CallScreen from './CallScreen';
 import CallLog from './CallLog';
@@ -41,6 +42,8 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
   const t = useT();
   const chat = useChat(token, onLogout);
   const waking = useWaking(chat.connection);
+  // 이름이 겹치지 않게. 아래 update 는 보관함을 고치는 쪽이다.
+  const fresh = useUpdate();
   // 받아쓰기는 내가 실제로 입 밖에 내는 말로 들어야 한다. 화면 언어가 아니라 모국어다.
   const call = useCall(chat.emit, chat.onCallEvent, chat.me?.nativeLang ?? 'ko', chat.me?.id ?? '');
   const [view, setView] = useState<View>('home');
@@ -260,6 +263,17 @@ export default function Shell({ token, onLogout, onUiLang, onToken }: Props) {
 
   return (
     <>
+      {/*
+        새 버전이 왔을 때. 통화 중에는 띄우지 않는다 — 여기서 새로고침하면
+        전화가 끊기고, 끊긴 이유도 모른 채 남는다.
+      */}
+      {fresh.ready && call.phase === 'idle' && (
+        <button type="button" className="fresh" onClick={fresh.refresh}>
+          <span className="fresh__text">{t('update.ready')}</span>
+          <span className="fresh__go">{t('update.apply')}</span>
+        </button>
+      )}
+
       <CallScreen
         call={call}
         peerName={chat.peer?.name ?? ''}

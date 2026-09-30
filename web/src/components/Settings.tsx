@@ -19,6 +19,7 @@ import { attachmentUrl, prepareImage, uploadAttachment } from '../media';
 import { photoWallpaper, wallpaperPhotoId } from '../wallpaper';
 import { BUBBLE_VIEWS, type BubbleView } from '../view';
 import { isApple, setTryOnApple, tryingOnApple } from '../listen';
+import { builtAt } from '../update';
 
 interface Props {
   profile: UserProfile;
@@ -414,6 +415,15 @@ export default function Settings({
           {mismatch && <p className="sheet__error">{t('settings.passcodeMismatch')}</p>}
           {passError && !mismatch && <p className="sheet__error">{passError}</p>}
           {passDone && <p className="sheet__done">{t('settings.passcodeChanged')}</p>}
+        </section>
+
+        {/*
+          이 앱이 언제 만들어진 것인지. 고쳤다는데 그대로일 때 여기부터 본다 —
+          날짜가 옛것이면 아직 새 버전을 안 받은 것이다.
+        */}
+        <section className="sheet__section">
+          <h3>{t('settings.version')}</h3>
+          <p className="sheet__hint">{t('settings.versionBuilt', { at: builtAt })}</p>
         </section>
 
         {/* 애플 기기에서만. 다른 기기는 그냥 되므로 보여 줄 이유가 없다. */}
