@@ -12,10 +12,16 @@ const KEY = 'fran.pip';
 /** 창 너비의 한계(화면 너비 대비). 너무 작으면 얼굴이 안 보이고 크면 상대를 가린다. */
 const MIN_W = 0.2;
 const MAX_W = 0.62;
-const DEFAULT_W = 0.28;
+const DEFAULT_W = 0.32;
 
-/** 세로:가로. 폰 카메라에 맞춘다. */
-const RATIO = 4 / 3;
+/**
+ * 창의 가로:세로. 카메라가 주는 그림의 비율을 따라간다.
+ *
+ * 값을 박아 두면 안 된다. 카메라는 보통 가로로 긴 그림(4:3)을 주는데 창을 세로로
+ * 길게 잡아 두면, object-fit: cover 가 양옆을 크게 잘라내서 얼굴이 화면을 꽉 채운
+ * 것처럼 보인다. 그림이 도착하면 그 비율로 맞춘다.
+ */
+const DEFAULT_ASPECT = 4 / 3;
 
 /** 가장자리에서 이만큼 띄운다. 모서리에 딱 붙으면 눌러도 잘 안 잡힌다. */
 const EDGE = 12;
@@ -62,7 +68,7 @@ function spread(a: Point, b: Point): number {
  * 화면 크기가 기기마다 다르므로 자리와 크기를 비율로 들고 있다가 그릴 때만 px 로
  * 바꾼다. 그래야 가로로 돌리거나 다른 기기에서 열어도 화면 밖으로 나가지 않는다.
  */
-export function usePip(onTap: () => void) {
+export function usePip(onTap: () => void, aspect = DEFAULT_ASPECT) {
   const [box, setBox] = useState<PipBox>(load);
   const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -85,8 +91,10 @@ export function usePip(onTap: () => void) {
 
   const size = useCallback(() => {
     const width = window.innerWidth * box.w;
-    return { width, height: width * RATIO };
-  }, [box.w]);
+    // 비율이 아직 안 왔거나 이상하면 기본값으로. 0 으로 나누는 일은 없어야 한다.
+    const safe = aspect > 0.2 && aspect < 5 ? aspect : DEFAULT_ASPECT;
+    return { width, height: width / safe };
+  }, [aspect, box.w]);
 
   const down = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {

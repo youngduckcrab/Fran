@@ -40,7 +40,9 @@ export default function CallScreen({
   const [swapped, setSwapped] = useState(false);
   const swap = useCallback(() => setSwapped((on) => !on), []);
   const [chatOpen, setChatOpen] = useState(false);
-  const pip = usePip(swap);
+  /** 카메라가 주는 그림의 가로:세로. 작은 창이 이 비율을 따라간다. */
+  const [aspect, setAspect] = useState(4 / 3);
+  const pip = usePip(swap, aspect);
 
   const showRemoteVideo = call.video && call.peerCamera && call.phase === 'connected';
   /** 통화가 끝나면 원래대로. 다음 통화가 뒤집힌 채로 시작하면 당황스럽다. */
@@ -125,6 +127,7 @@ export default function CallScreen({
             stream={swapped ? call.remoteStream : call.localStream}
             className={`call__meVideo ${swapped ? '' : 'is-mirrored'}`}
             muted={!swapped}
+            onAspect={setAspect}
           />
         </div>
       )}
@@ -294,10 +297,13 @@ function Media({
   stream,
   className,
   muted,
+  onAspect,
 }: {
   stream: MediaStream | null;
   className: string;
   muted?: boolean;
+  /** 그림이 도착하면 그 가로:세로를 알려 준다. 작은 창이 이걸로 모양을 맞춘다. */
+  onAspect?: (aspect: number) => void;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
 
@@ -309,12 +315,20 @@ function Media({
     void element.play().catch(() => {});
   }, [stream]);
 
+  const report = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const { videoWidth, videoHeight } = event.currentTarget;
+    if (videoWidth > 0 && videoHeight > 0) onAspect?.(videoWidth / videoHeight);
+  };
+
   return (
     <video
       ref={ref}
       className={className}
       autoPlay
       playsInline
+      // 카메라를 앞뒤로 바꾸면 크기가 달라지기도 한다. 그때도 다시 알려 준다.
+      onLoadedMetadata={report}
+      onResize={report}
       {...(muted ? { muted: true } : {})}
     />
   );
