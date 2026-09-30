@@ -35,6 +35,9 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "@types/react-test-renderer": "^19.3.0",
+    "react-test-renderer": "^19.2.3",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -42,7 +45,8 @@
     "android": "expo run:android",
     "postinstall": "node scripts/sync-web.mjs",
     "sync": "node scripts/sync-web.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:logic": "node --import tsx --import ./tests/register.mjs --test tests/logic.test.mts"
   },
   "private": true
 }

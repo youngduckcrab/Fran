@@ -38,6 +38,8 @@ import {
 } from './auth.js';
 import { config, findUserById, peerOf } from './config.js';
 import {
+  deleteNativePushToken,
+  saveNativePushToken,
   attachToMessage,
   clearTranslations,
   claimNotify,
@@ -1088,6 +1090,27 @@ const TEST_BODY: Record<LangCode, string> = {
   en: 'Notifications are working ✅',
   zh: '通知正常 ✅',
 };
+
+/**
+ * 앱(안드로이드)의 알림 토큰 등록. 웹 구독(/api/push/subscribe)과 나란히 쓴다.
+ * 토큰은 FCM 이 기기마다 주는 문자열이고, 앱을 지우거나 데이터를 지우면 바뀐다.
+ */
+app.post('/api/push/native', async (c) => {
+  const userId = authenticate(c);
+  if (!userId) return c.json({ error: 'unauthorized' }, 401);
+  const body = (await c.req.json().catch(() => null)) as { token?: unknown; platform?: unknown } | null;
+  const token = typeof body?.token === 'string' ? body.token.trim() : '';
+  if (!token || token.length > 4096) return c.json({ error: '알림 토큰이 올바르지 않습니다.' }, 400);
+  await saveNativePushToken(userId, token, typeof body?.platform === 'string' ? body.platform : 'android');
+  return c.json({ ok: true });
+});
+
+app.post('/api/push/native/remove', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  const body = (await c.req.json().catch(() => null)) as { token?: unknown } | null;
+  if (typeof body?.token === 'string') await deleteNativePushToken(body.token);
+  return c.json({ ok: true });
+});
 
 app.post('/api/push/unsubscribe', async (c) => {
   if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);

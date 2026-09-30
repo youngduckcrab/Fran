@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import type { LangCode } from '@fran/shared';
+import { sendFcm } from './fcm.js';
 import {
   deletePushSubscription,
   getSecret,
@@ -76,6 +77,24 @@ export interface PushPayload {
  * 푸시 서비스가 404/410 으로 알려주므로 그때 지운다. 그대로 두면 보낼 때마다 실패한다.
  */
 export async function notify(userId: string, payload: PushPayload): Promise<number> {
+  // 앱(FCM)과 웹(웹 푸시)에 함께 보낸다. 한 사람이 둘 다 켜 뒀을 수도 있다.
+  const [web, app] = await Promise.all([
+    notifyWeb(userId, payload),
+    sendFcm(userId, {
+      title: payload.title,
+      body: payload.body,
+      tag: payload.messageId,
+      ...(payload.unread ? { unread: payload.unread } : {}),
+      call: payload.messageId.startsWith('call:'),
+    }).catch((error: unknown) => {
+      console.warn('[fcm] 알림 실패:', error);
+      return 0;
+    }),
+  ]);
+  return web + app;
+}
+
+async function notifyWeb(userId: string, payload: PushPayload): Promise<number> {
   if (!keys) return 0;
   const subscriptions = await listPushSubscriptions(userId);
   if (subscriptions.length === 0) return 0;

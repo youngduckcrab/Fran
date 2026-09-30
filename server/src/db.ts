@@ -188,6 +188,14 @@ const SCHEMA = `
     created_at BIGINT NOT NULL
   );
 
+  -- 앱(안드로이드)의 알림 토큰. 웹 푸시 구독과는 모양이 달라 따로 둔다.
+  CREATE TABLE IF NOT EXISTS native_push_tokens (
+    token      TEXT   PRIMARY KEY,
+    user_id    TEXT   NOT NULL,
+    platform   TEXT   NOT NULL,
+    created_at BIGINT NOT NULL
+  );
+
   -- 서버가 스스로 만들어 두고두고 써야 하는 값(알림 서명 키 등).
   -- 환경변수로 받으면 사람이 한 번 더 손을 대야 하고, 재배포 때마다 새로 만들면
   -- 이미 등록된 알림이 전부 무효가 된다.
@@ -1148,6 +1156,27 @@ export async function listPushSubscriptions(userId: string): Promise<PushSubscri
     p256dh: row.p256dh,
     auth: row.auth,
   }));
+}
+
+export async function saveNativePushToken(userId: string, token: string, platform: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO native_push_tokens (token, user_id, platform, created_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform`,
+    [token, userId, platform, Date.now()],
+  );
+}
+
+export async function deleteNativePushToken(token: string): Promise<void> {
+  await pool.query(`DELETE FROM native_push_tokens WHERE token = $1`, [token]);
+}
+
+export async function listNativePushTokens(userId: string): Promise<string[]> {
+  const { rows } = await pool.query<{ token: string }>(
+    `SELECT token FROM native_push_tokens WHERE user_id = $1`,
+    [userId],
+  );
+  return rows.map((row) => row.token);
 }
 
 /* --------------------- 서버가 스스로 간직하는 값 --------------------- */
