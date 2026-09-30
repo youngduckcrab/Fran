@@ -2424,7 +2424,8 @@ button:active:not(:disabled) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  /* 위에서부터 쌓고, 빈 칸(.call__spacer)이 나머지를 아래로 밀어 붙인다. */
+  justify-content: flex-start;
   padding: max(64px, env(safe-area-inset-top)) 24px max(48px, env(safe-area-inset-bottom));
   background: linear-gradient(160deg, var(--accent-soft) 0%, var(--surface) 70%);
   animation: call-in 200ms ease-out;
@@ -2433,6 +2434,12 @@ button:active:not(:disabled) {
 .call__who {
   margin-top: 12vh;
   text-align: center;
+}
+
+/* 이름·시간과 아래 것들 사이를 벌려 주는 빈 칸. */
+.call__spacer {
+  flex: 1;
+  min-height: 0;
 }
 
 /* 이름 첫 글자. 얼굴 사진을 둘 자리가 없어서 이걸로 대신한다. */
@@ -2602,6 +2609,16 @@ button:active:not(:disabled) {
 .call--video .call__captions {
   position: relative;
   z-index: 2;
+}
+
+/*
+ * 이름과 통화 시간은 작은 창보다도 위에 둔다.
+ * 창을 크게 키우면 그 뒤로 숨어서, 누구와 얼마나 통화 중인지 알 수 없게 된다.
+ * 글씨에는 그림자가 있어 영상 위에 얹혀도 읽힌다.
+ */
+.call--video .call__who {
+  z-index: 4;
+  pointer-events: none;
 }
 
 /*
@@ -2886,6 +2903,8 @@ button:active:not(:disabled) {
   position: relative;
   z-index: 5;
   align-self: center;
+  /* 단추 줄 바로 위에 붙인다. 안 그러면 화면 한가운데에 떠서 낙서를 가린다. */
+  margin-top: auto;
   margin-bottom: 14px;
   padding: 8px 18px;
   border: 1px solid rgba(255, 255, 255, 0.24);
@@ -2904,11 +2923,10 @@ button:active:not(:disabled) {
  * 새 줄이 아래로 쌓이므로 아래쪽에 붙여 둔다.
  */
 .call__captions {
-  flex: 1;
   width: 100%;
   max-width: 520px;
-  /* 아래쪽을 넉넉히 비운다. 마지막 줄이 단추에 붙으면 둘 다 읽기 어렵다. */
-  margin: 24px 0 28px;
+  /* 아래쪽을 조금 비운다. 마지막 줄이 글칸에 붙으면 둘 다 읽기 어렵다. */
+  margin: 0 0 10px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;

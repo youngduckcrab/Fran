@@ -129,21 +129,16 @@ export default function CallScreen({
         </div>
       )}
 
+      {/*
+        빈 칸.
+        이름·시간은 위에, 자막·글·단추는 아래에 모이게 한다. 이게 없으면
+        가운데에 흩어져서 얼굴을 가리고 읽기도 나쁘다.
+      */}
+      <div className="call__spacer" />
+
       {/* 낙서 판. 영상통화가 붙어 있을 때만. 그리는 중이 아니면 손가락을 통과시킨다. */}
       {call.video && call.phase === 'connected' && (
         <DoodleLayer doodle={call.doodle} myId={myId} peerId={peerId} />
-      )}
-
-      {/* 통화 중에 친 글. 자막 위에 쌓인다. */}
-      {call.phase === 'connected' && (
-        <CallChat
-          messages={messages}
-          myId={myId}
-          readingLang={readingLang}
-          onSend={onSend}
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-        />
       )}
 
       {/* 오간 말. 상대 말이 크게, 내 말은 작게 — 내 것은 마이크가 잡히는지 보는 용도다. */}
@@ -172,6 +167,18 @@ export default function CallScreen({
         <button type="button" className="call__erase" onClick={call.doodle.clear}>
           {t('call.drawClear')}
         </button>
+      )}
+
+      {/* 통화 중에 친 글. 자막 아래, 입력칸 바로 위에 쌓인다. */}
+      {call.phase === 'connected' && (
+        <CallChat
+          messages={messages}
+          myId={myId}
+          readingLang={readingLang}
+          onSend={onSend}
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+        />
       )}
 
       <div className="call__keys">
