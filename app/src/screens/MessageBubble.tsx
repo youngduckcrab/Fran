@@ -84,7 +84,6 @@ function MessageBubble(props: Props) {
     quoteBar: { width: 3, borderRadius: 2, backgroundColor: c.accent },
     quoteText: { color: c.textMuted, fontSize: 12, flexShrink: 1 },
     bubble: {
-      maxWidth: '82%',
       paddingHorizontal: 13,
       paddingVertical: 9,
       borderRadius: 20,
@@ -331,7 +330,7 @@ function MessageBubble(props: Props) {
         </View>
       )}
 
-      <Animated.View {...pan.panHandlers} style={{ transform: [{ translateX: offset }], maxWidth: '100%' }}>
+      <Animated.View {...pan.panHandlers} style={{ transform: [{ translateX: offset }], maxWidth: '82%' }}>
         <Pressable
           onPress={() => {
             // 내 말풍선을 누르면 상대에게 간 번역을 접었다 편다. 받은 말풍선은 원문을 보여준다.

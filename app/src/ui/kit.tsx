@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   StyleSheet,
@@ -183,7 +184,9 @@ export function Sheet({
   const p = usePalette();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={onClose}>
+        {/* 키보드가 올라오면 창을 그만큼 밀어 올린다. 안 그러면 아래쪽 입력칸이 가려진다. */}
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
           onPress={() => {}}
           style={{
@@ -197,6 +200,7 @@ export function Sheet({
         >
           {children}
         </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );

@@ -12,7 +12,7 @@ import { plainText } from '../web/text';
 import { EMPTY, loadCollections, saveCollections, type Collections } from '../web/collections';
 import { loadBubbleView, saveBubbleView, type BubbleView } from '../web/view';
 import { useBackClose } from '../backstack';
-import { clearDelivered, useKeepPushFresh, useNotificationOpen } from '../push';
+import { clearDelivered, enablePush, pushState, useKeepPushFresh, useNotificationOpen } from '../push';
 import { useAppUpdate } from '../update';
 import { useStyles } from '../ui/kit';
 import Album from './Album';
@@ -62,6 +62,18 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
   const [bubbleView, setBubbleView] = useState<BubbleView>(loadBubbleView);
 
   useKeepPushFresh();
+
+  /*
+   * 처음 로그인했을 때 알림을 한 번 물어본다. 안드로이드 13 부터는 앱이 직접 허락을 받아야
+   * 알림이 뜬다. 설정에서 끌 수 있고, 거절하면 다시 묻지 않는다.
+   */
+  useEffect(() => {
+    if (localStorage.getItem('fran.pushAsked')) return;
+    localStorage.setItem('fran.pushAsked', '1');
+    void pushState()
+      .then((state) => (state === 'off' ? enablePush() : state))
+      .catch(() => undefined);
+  }, []);
   // 알림을 누르면 채팅으로. 앱이 꺼져 있다가 그 알림으로 켜진 경우도 여기로 온다.
   useNotificationOpen(useCallback(() => setPage('chat'), []));
 

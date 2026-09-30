@@ -48,7 +48,6 @@ export default function Login({ onLogin, presetUserId, uiLang, onUiLang }: Props
     },
     personOn: { backgroundColor: c.accentSoft, borderColor: c.accent },
     personText: { color: c.text, fontWeight: '600' },
-    as: { color: c.text, textAlign: 'center', fontWeight: '600' },
     input: {
       borderWidth: 1,
       borderColor: c.border,
@@ -77,8 +76,6 @@ export default function Login({ onLogin, presetUserId, uiLang, onUiLang }: Props
       .catch((cause: Error) => setError(cause.message));
   }, [presetUserId, onUiLang]);
 
-  const preset = users.find((user) => user.id === presetUserId);
-
   const submit = async () => {
     setBusy(true);
     setError(null);
@@ -103,26 +100,22 @@ export default function Login({ onLogin, presetUserId, uiLang, onUiLang }: Props
           <Text style={st.title}>Fran</Text>
           <Text style={st.subtitle}>{t('login.subtitle')}</Text>
 
-          {preset ? (
-            // 마지막으로 쓴 사람이 있으면 고르게 하지 않는다. 비밀번호만 받는다.
-            <Text style={st.as}>{t('login.as', { name: preset.name })}</Text>
-          ) : (
-            <View style={st.people}>
-              {users.map((user) => (
-                <Pressable
-                  key={user.id}
-                  onPress={() => {
-                    setUserId(user.id);
-                    onUiLang(toUiLang(user.uiLang));
-                    input.current?.focus();
-                  }}
-                  style={[st.person, userId === user.id && st.personOn]}
-                >
-                  <Text style={st.personText}>{user.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
+          {/* 두 사람뿐이라 늘 보여 준다. 로그아웃한 뒤에 다른 사람으로 들어올 길이 있어야 한다. */}
+          <View style={st.people}>
+            {users.map((user) => (
+              <Pressable
+                key={user.id}
+                onPress={() => {
+                  setUserId(user.id);
+                  onUiLang(toUiLang(user.uiLang));
+                  input.current?.focus();
+                }}
+                style={[st.person, userId === user.id && st.personOn]}
+              >
+                <Text style={st.personText}>{user.name}</Text>
+              </Pressable>
+            ))}
+          </View>
 
           <TextInput
             ref={input}

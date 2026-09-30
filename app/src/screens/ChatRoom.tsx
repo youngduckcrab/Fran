@@ -362,7 +362,8 @@ export default function ChatRoom({
               setTimeout(() => list.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: false }), 120);
             }}
             keyboardShouldPersistTaps="handled"
-            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            // 위로 올려 읽는 중에는 새 메시지가 와도 보던 자리를 지키고, 맨 아래 가까이에 있을 때만 따라 내려간다.
+            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
             ListHeaderComponent={
               <View>
                 {chat.peerTyping && (
