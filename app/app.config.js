@@ -70,6 +70,8 @@ module.exports = {
             minSdkVersion: 24,
             // https 서버만 쓴다. 평문 통신은 막아 둔다.
             usesCleartextTraffic: false,
+            // 요즘 폰은 전부 arm64. 다른 구조까지 담으면 파일이 네 배로 커진다.
+            buildArchs: ['arm64-v8a'],
           },
         },
       ],
