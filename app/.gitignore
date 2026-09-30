@@ -43,3 +43,6 @@ yarn-error.*
 # 푸시 알림용 Firebase 설정. 프로젝트 소유자의 것이라 올리지 않는다.
 google-services.json
 GoogleService-Info.plist
+
+# scripts/sync-web.mjs 가 만든다
+src/web/

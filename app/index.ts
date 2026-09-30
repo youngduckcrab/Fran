@@ -1,8 +1,6 @@
+// 브라우저 환경을 흉내 내는 것을 다른 무엇보다 먼저 채운다.
+import './src/shims';
 import { registerRootComponent } from 'expo';
+import App from './src/App';
 
-import App from './App';
-
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
 registerRootComponent(App);

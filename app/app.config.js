@@ -100,6 +100,10 @@ module.exports = {
         },
       ],
       [
+        'expo-media-library',
+        { savePhotosPermission: '받은 사진을 폰에 저장하려면 사진 보관함이 필요해요.', isAccessMediaLocationEnabled: false },
+      ],
+      [
         'expo-audio',
         { microphonePermission: '음성 메시지를 녹음하려면 마이크가 필요해요.' },
       ],

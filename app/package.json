@@ -16,10 +16,14 @@
     "expo-file-system": "~57.0.7",
     "expo-haptics": "~57.0.3",
     "expo-image": "~57.0.5",
+    "expo-image-manipulator": "~57.0.20",
     "expo-image-picker": "~57.0.20",
     "expo-keep-awake": "~57.0.2",
+    "expo-linear-gradient": "~57.0.2",
+    "expo-media-library": "~57.0.5",
     "expo-notifications": "~57.0.21",
     "expo-secure-store": "~57.0.4",
+    "expo-speech": "~57.0.3",
     "expo-speech-recognition": "^57.1.0",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
@@ -36,8 +40,9 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web"
+    "postinstall": "node scripts/sync-web.mjs",
+    "sync": "node scripts/sync-web.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "private": true
 }
