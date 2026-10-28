@@ -95,10 +95,16 @@ server.on('upgrade', (request, socket, head) => {
     socket.destroy();
     return;
   }
+  // 열쇠가 "bad" 면 진짜 Gemini 처럼 설정을 받고 나서 1008 로 끊는다.
+  const badKey = new URL(request.url ?? '/', 'http://localhost').searchParams.get('key') === 'bad';
   wss.handleUpgrade(request, socket, head, (ws) => {
     let target = 'en';
     ws.on('message', (raw) => {
       const message = JSON.parse(String(raw));
+      if (message.setup && badKey) {
+        ws.close(1008, 'API key not valid. Please pass a valid API key.');
+        return;
+      }
       if (message.setup) {
         live.setups.push(message.setup);
         target = message.setup.generationConfig?.translationConfig?.targetLanguageCode ?? target;

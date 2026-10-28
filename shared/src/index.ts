@@ -361,6 +361,18 @@ export interface CallRecord {
   lines: number;
 }
 
+/**
+ * 통역 음성이 어디쯤인지. 듣는 사람 화면에 띄운다.
+ *
+ * 'waiting' 은 켜졌고 상대가 말하기를 기다리는 중, 'live' 는 옮긴 소리가 오고 있는 중,
+ * 'failed' 는 이번 통화에서는 더 해 볼 수 없는 것(열쇠가 없거나 하루 한도를 다 쓴 것 등).
+ */
+export const INTERPRET_STATUSES = ['waiting', 'live', 'failed'] as const;
+export type InterpretStatus = (typeof INTERPRET_STATUSES)[number];
+
+/** 통역 음성에 오가는 소리 한 토막의 최대 크기(base64 글자 수). 100ms 토막이 4~6천 자다. */
+export const MAX_VOICE_CHUNK = 64_000;
+
 export const CALL_END_REASONS = ['hangup', 'declined', 'missed', 'failed'] as const;
 export type CallEndReason = (typeof CALL_END_REASONS)[number];
 
@@ -431,7 +443,21 @@ export type ClientEvent =
    */
   | { type: 'draw'; callId: string; strokeId: string; points: number[] }
   /** 화면을 지운다. 누가 눌러도 양쪽이 같이 지워진다. */
-  | { type: 'draw_clear'; callId: string };
+  | { type: 'draw_clear'; callId: string }
+  /**
+   * 상대 말을 통역 음성으로 듣겠다(on) / 그만 듣겠다(off).
+   *
+   * 말을 소리째 옮기려면 말하는 쪽 폰이 마이크 소리를 보내 줘야 한다. 서버가 이걸
+   * 상대에게 전해서 소리를 보내기 시작하게 한다.
+   */
+  | { type: 'call_interpret'; callId: string; on: boolean }
+  /**
+   * 통역에 쓸 내 마이크 소리 한 토막(16kHz 모노 16비트 PCM, base64).
+   *
+   * 조용할 때는 보내지 않는다. 말이 끊기면 end 를 한 번 보낸다 — 모델이 남은 말을
+   * 기다리지 않고 마저 옮긴다. 그때 pcm 은 비어 있다.
+   */
+  | { type: 'call_mic'; callId: string; pcm: string; end?: boolean };
 
 export type ServerEvent =
   /** 접속 직후 1회. 내 프로필, 상대 프로필, 최근 대화. */
@@ -482,4 +508,10 @@ export type ServerEvent =
     }
   | { type: 'call_camera'; callId: string; from: string; on: boolean }
   | { type: 'draw'; callId: string; from: string; strokeId: string; points: number[] }
-  | { type: 'draw_clear'; callId: string; from: string };
+  | { type: 'draw_clear'; callId: string; from: string }
+  /** 상대가 내 말을 통역 음성으로 듣고 싶어 한다(on) / 그만(off). 켜져 있는 동안 마이크 소리를 보낸다. */
+  | { type: 'call_interpret'; callId: string; from: string; on: boolean }
+  /** 옮긴 소리 한 토막(모노 16비트 PCM, base64). rate 는 표본 수/초 — 지금 모델은 24000 이다. */
+  | { type: 'call_voice'; callId: string; from: string; pcm: string; rate: number }
+  /** 통역 음성이 어디쯤인지. 실패면 왜인지 code 로(번역 실패와 같은 코드). */
+  | { type: 'call_interpret_status'; callId: string; status: InterpretStatus; code?: TranslationErrorCode };

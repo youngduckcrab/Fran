@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatMessage, LangCode } from '@fran/shared';
 import type { Call } from '../call';
-import { useT } from '../i18n';
+import { useT, type StringKey, type Translate } from '../i18n';
 import { usePip } from '../pip';
 import DoodleLayer from './DoodleLayer';
 import CallChat from './CallChat';
@@ -106,6 +106,16 @@ export default function CallScreen({
         {/* 읽어 줄 번역은 상대 자막에서 온다. 아직 하나도 안 왔으면 왜 조용한지 알려 준다. */}
         {call.voice === 'read' && call.phase === 'connected' && !call.captions.some((c) => !c.mine) && (
           <p className="call__hint">{t('call.readHint')}</p>
+        )}
+        {call.voice === 'live' && call.liveStatus === 'waiting' && (
+          <p className="call__hint">{t('call.liveWaiting')}</p>
+        )}
+        {call.voice === 'live' && call.liveStatus === 'failed' && (
+          <p className="call__hint">{liveTrouble(call, t)}</p>
+        )}
+        {/* 내 목소리가 서버를 거쳐 모델로 간다. 모르는 채로 두지 않는다. */}
+        {call.peerListening && call.phase === 'connected' && (
+          <p className="call__hint">{t('call.peerListening')}</p>
         )}
         {call.error === 'denied' && <p className="call__hint">{t('call.denied')}</p>}
         {call.error === 'nomic' && <p className="call__hint">{t('call.nomic')}</p>}
@@ -297,6 +307,18 @@ export default function CallScreen({
             >
               <Icon name="speaker" size={24} />
             </button>
+
+            {call.canInterpret && (
+              <button
+                type="button"
+                className={`call__key ${call.voice === 'live' ? 'is-on' : ''}`}
+                onClick={() => call.setVoice(call.voice === 'live' ? 'off' : 'live')}
+                aria-label={t(call.voice === 'live' ? 'call.liveOff' : 'call.liveOn')}
+                aria-pressed={call.voice === 'live'}
+              >
+                <Icon name="headphones" size={24} />
+              </button>
+            )}
           </>
         )}
       </div>
@@ -356,6 +378,13 @@ function Media({
       {...(muted ? { muted: true } : {})}
     />
   );
+}
+
+/** 통역 음성을 못 쓰는 까닭을 사람 말로. 모르는 까닭이면 못 쓴다는 말만. */
+function liveTrouble(call: Call, t: Translate): string {
+  const code = call.liveError;
+  if (!code || code === 'unknown') return t('call.liveFailed');
+  return `${t('call.liveFailed')} ${t(`error.${code}` as StringKey)}`;
 }
 
 /** 끝난 이유에 맞는 문구. */

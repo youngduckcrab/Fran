@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CallEndReason, ClientEvent, LangCode, ServerEvent } from '@fran/shared';
+import type {
+  CallEndReason,
+  ClientEvent,
+  InterpretStatus,
+  LangCode,
+  ServerEvent,
+  TranslationErrorCode,
+} from '@fran/shared';
 import { fetchIceServers } from './api';
 import { canListen, isApple, listen, type Listener } from './listen';
 import { primeSpeech, speakLine } from './speech';
+import { canInterpret, createPlayer, tapMic, unlockAudio, type VoicePlayer } from './pcm';
 import { useDoodle } from './doodle';
 
 /**
@@ -42,8 +50,10 @@ const CAPTION_KEY = 'fran.captions';
  * 상대 말을 소리로 어떻게 들을지.
  *
  * 'off' 는 상대 목소리 그대로. 'read' 는 자막 번역을 폰 목소리(TTS)로 읽어 준다.
+ * 'live' 는 말 자체를 Gemini 가 소리째 옮겨 들려준다(통역 음성). 둘은 함께 켜지 않는다 —
+ * 같은 말이 두 목소리로 겹쳐 나온다.
  */
-export type CallVoice = 'off' | 'read';
+export type CallVoice = 'off' | 'read' | 'live';
 
 /** 한 번 고르면 다음 통화에도 그대로 간다. */
 const VOICE_KEY = 'fran.callVoice';
@@ -68,9 +78,29 @@ const DUCK_TAIL_MS = 400;
  */
 const READ_BACKLOG = 2;
 
+/** 통역 음성이 지금 어디쯤인지. 'off' 는 꺼져 있거나 통화 중이 아닌 것. */
+export type LiveStatus = 'off' | InterpretStatus;
+
+/**
+ * 통역에 보낼 내 말소리의 크기 문턱(RMS, 0~1).
+ *
+ * 조용할 때까지 다 보내면 무료 한도를 빈 소리로 깎는다. 이 위로 올라오면 말하기
+ * 시작한 것으로 본다. 통화 마이크는 잡음 제거·자동 크기 조절을 거친 소리라 낮게 잡아도 된다.
+ */
+const SPEECH_LEVEL = 0.012;
+
+/** 말이 시작되기 직전 소리도 함께 보낸다(토막 수, 100ms 씩). 첫 음절이 잘리지 않게. */
+const PREROLL_CHUNKS = 3;
+
+/** 이만큼 조용하면 말이 끝난 것으로 보고 끊는다(토막 수). 숨 고르는 틈에 끊지 않을 만큼. */
+const HANGOVER_CHUNKS = 8;
+
 function voiceWanted(): CallVoice {
   try {
-    return localStorage.getItem(VOICE_KEY) === 'read' ? 'read' : 'off';
+    const saved = localStorage.getItem(VOICE_KEY);
+    if (saved === 'read') return 'read';
+    if (saved === 'live' && canInterpret()) return 'live';
+    return 'off';
   } catch {
     return 'off';
   }
@@ -146,8 +176,26 @@ export function useCall(
    * 번역을 내 말로 받아 적어 상대에게 보낸다.
    */
   const [speaking, setSpeaking] = useState(false);
-  const speakingRef = useRef(speaking);
-  speakingRef.current = speaking;
+  /** 통역 음성이 어디쯤인지와, 실패했다면 왜인지. */
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>('off');
+  const [liveError, setLiveError] = useState<TranslationErrorCode | null>(null);
+  /** 옮겨 온 소리를 트는 중인지. 읽어 주기처럼 이 동안 상대 목소리를 줄이고 받아쓰기는 쉰다. */
+  const [playing, setPlaying] = useState(false);
+  const player = useRef<VoicePlayer | null>(null);
+  const playingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 상대가 내 말을 통역으로 듣고 있는지. 그동안 내 마이크 소리를 서버로 보낸다. */
+  const [peerListening, setPeerListening] = useState(false);
+  /**
+   * 번역이나 통역을 소리로 내고 있는 중.
+   *
+   * 내 마이크에 그 소리가 다시 들어가면 받아쓰기는 그걸 내 말로 적고, 통역은 그걸
+   * 다시 옮겨 상대에게 되돌려 보낸다. 이 동안은 둘 다 쉰다.
+   */
+  const busy = speaking || playing;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
   /** 읽을 차례를 기다리는 번역. */
   const readQueue = useRef<{ text: string; lang: LangCode }[]>([]);
   /** 지금 읽고 있는 줄을 멈추는 함수. 읽고 있지 않으면 null. */
@@ -233,11 +281,37 @@ export function useCall(
     [readNext],
   );
 
+  /* --- 통역 음성 --- */
+
+  /** 틀던 통역 소리를 버린다. 틀개는 그대로 둔다 — 다음 소리가 오면 이어 쓴다. */
+  const stopPlaying = useCallback(() => {
+    if (playingTimer.current) clearTimeout(playingTimer.current);
+    playingTimer.current = null;
+    setPlaying(false);
+  }, []);
+
+  /** 옮겨 온 소리 한 토막을 튼다. 다 틀 때까지 상대 목소리를 줄인다. */
+  const playVoice = useCallback((pcm: string, rate: number) => {
+    const out = player.current;
+    if (!out) return;
+    const ahead = out.play(pcm, rate);
+    setPlaying(true);
+    if (playingTimer.current) clearTimeout(playingTimer.current);
+    playingTimer.current = setTimeout(() => {
+      playingTimer.current = null;
+      setPlaying(false);
+    }, ahead * 1000 + DUCK_TAIL_MS);
+  }, []);
+
   /** 통화에 쓴 것들을 모두 놓아 준다. 마이크를 안 놓으면 폰에 녹음 표시가 계속 남는다. */
   const teardown = useCallback(() => {
     ear.current?.stop();
     ear.current = null;
     stopReading();
+    stopPlaying();
+    setPeerListening(false);
+    setLiveStatus('off');
+    setLiveError(null);
     setCaptions([]);
     setCaptionsBroken(false);
     wipeDoodle.current?.();
@@ -257,7 +331,7 @@ export function useCall(
     setPeerCamera(true);
     setLocalStream(null);
     setRemoteStream(null);
-  }, [stopReading]);
+  }, [stopPlaying, stopReading]);
 
   const finish = useCallback(
     (reason: CallEndReason, error?: string) => {
@@ -497,6 +571,23 @@ export function useCall(
             }
             return;
           }
+          case 'call_interpret': {
+            // 상대가 내 말을 통역으로 듣겠다(또는 그만). 켜져 있는 동안 내 마이크 소리를 보낸다.
+            if (callId.current !== event.callId) return;
+            setPeerListening(event.on);
+            return;
+          }
+          case 'call_voice': {
+            if (callId.current !== event.callId || voiceRef.current !== 'live') return;
+            playVoice(event.pcm, event.rate);
+            return;
+          }
+          case 'call_interpret_status': {
+            if (callId.current !== event.callId || voiceRef.current !== 'live') return;
+            setLiveStatus(event.status);
+            setLiveError(event.code ?? null);
+            return;
+          }
           case 'draw': {
             if (callId.current !== event.callId) return;
             receiveDraw.current?.(event.strokeId, event.points);
@@ -531,7 +622,7 @@ export function useCall(
       })();
     });
     return () => subscribe(null);
-  }, [drainIce, emit, finish, myId, read, subscribe, teardown]);
+  }, [drainIce, emit, finish, myId, playVoice, read, subscribe, teardown]);
 
   /**
    * 통화가 붙어 있는 동안 내 말을 받아쓴다.
@@ -545,7 +636,7 @@ export function useCall(
     const id = callId.current;
     const live = state.phase === 'connected' || state.phase === 'connecting';
     // 번역을 소리로 내는 동안은 쉰다. 스피커에서 나온 번역을 내 말로 받아 적으면 안 된다.
-    if (!live || !captionsOn || speaking || !canListen() || !id) return;
+    if (!live || !captionsOn || busy || !canListen() || !id) return;
 
     /** 지금 말하고 있는 한 줄의 id. 도중이든 끝이든 같은 id 라야 한 줄로 이어진다. */
     let lineId = crypto.randomUUID();
@@ -597,21 +688,95 @@ export function useCall(
        * 번역을 읽어 주느라 잠깐 멈추는 것이면, 하던 말은 거기까지로 마무리 짓는다.
        * 멈춘 인식기는 그 줄을 끝내 주지 않아서, 그대로 두면 번역도 기록도 안 된다.
        */
-      if (speakingRef.current && saying) {
+      if (busyRef.current && saying) {
         const current = lineId;
         const text = saying;
         setCaptions((previous) => merge(previous, { id: current, mine: true, text, final: true }));
         emit({ type: 'caption', callId: id, id: current, text, final: true });
       }
     };
-  }, [captionsOn, emit, myLang, speaking, state.phase]);
+  }, [busy, captionsOn, emit, myLang, state.phase]);
+
+  /**
+   * 통역 음성으로 듣기. 켜 두면 통화가 붙을 때 서버에 알리고, 옮겨 온 소리를 틀 준비를 한다.
+   * 끄거나 통화가 끝나면 서버에도 알린다 — 상대 폰이 마이크 소리를 그만 보낸다.
+   */
+  useEffect(() => {
+    const id = callId.current;
+    if (voice !== 'live' || state.phase !== 'connected' || !id) return;
+    const out = createPlayer();
+    player.current = out;
+    setLiveStatus('waiting');
+    setLiveError(null);
+    emit({ type: 'call_interpret', callId: id, on: true });
+    return () => {
+      emit({ type: 'call_interpret', callId: id, on: false });
+      out.close();
+      if (player.current === out) player.current = null;
+      stopPlaying();
+      setLiveStatus('off');
+      setLiveError(null);
+    };
+  }, [emit, state.phase, stopPlaying, voice]);
+
+  /**
+   * 상대가 내 말을 통역으로 듣는 동안, 내 마이크 소리를 떼어 서버로 보낸다.
+   *
+   * 말할 때만 보낸다. 조용한 소리까지 다 보내면 무료 한도를 빈 소리로 깎는다. 말이
+   * 시작되기 직전 조금(첫 음절)도 같이 보내고, 숨 고르는 틈에는 끊지 않는다. 말이
+   * 끝나면 end 를 보내 모델이 남은 말을 마저 옮기게 한다.
+   *
+   * 음소거 중이거나 내 폰이 번역·통역 소리를 내고 있을 때는 보내지 않는다. 스피커
+   * 소리가 마이크로 들어가 상대 말이 상대에게 되돌아가는 것을 막는다.
+   */
+  useEffect(() => {
+    const id = callId.current;
+    if (!peerListening || state.phase !== 'connected' || !id) return;
+
+    let sending = false;
+    let quiet = 0;
+    let preroll: string[] = [];
+    const finishTurn = () => {
+      if (!sending) return;
+      sending = false;
+      emit({ type: 'call_mic', callId: id, pcm: '', end: true });
+    };
+
+    const tap = tapMic(mic.current, (pcm, level) => {
+      if (mutedRef.current || busyRef.current) {
+        finishTurn();
+        preroll = [];
+        return;
+      }
+      const loud = level >= SPEECH_LEVEL;
+      quiet = loud ? 0 : quiet + 1;
+      if (!sending) {
+        if (!loud) {
+          preroll.push(pcm);
+          if (preroll.length > PREROLL_CHUNKS) preroll.shift();
+          return;
+        }
+        // 말이 시작됐다. 바로 앞 조용한 토막부터 보낸다.
+        sending = true;
+        for (const chunk of preroll) emit({ type: 'call_mic', callId: id, pcm: chunk });
+        preroll = [];
+      }
+      emit({ type: 'call_mic', callId: id, pcm });
+      if (quiet >= HANGOVER_CHUNKS) finishTurn();
+    });
+    return () => {
+      tap.stop();
+      finishTurn();
+    };
+  }, [emit, peerListening, state.phase]);
 
   /** 상대 말을 소리로 어떻게 들을지 바꾼다. 다음 통화에도 그대로 간다. */
   const setVoice = useCallback(
     (next: CallVoice) => {
-      // iOS 는 사람이 누른 이 순간에 소리 문을 열어 둬야 나중에 저절로 읽어 준다.
+      // iOS 는 사람이 누른 이 순간에 소리 문을 열어 둬야 나중에 저절로 소리를 낸다.
       if (next === 'read') primeSpeech();
       else stopReading();
+      if (next === 'live') unlockAudio();
       setVoiceState(next);
       try {
         localStorage.setItem(VOICE_KEY, next);
@@ -667,10 +832,16 @@ export function useCall(
     /** 번역을 소리로 내고 있는 중. */
     speaking,
     /**
-     * 상대 목소리를 얼마나 크게 틀지(0~1). 번역을 소리로 내는 동안 줄어든다.
+     * 상대 목소리를 얼마나 크게 틀지(0~1). 번역·통역을 소리로 내는 동안 줄어든다.
      * 소리를 실제로 트는 곳(웹은 video 엘리먼트, 앱은 트랙)이 이 값을 따른다.
      */
-    peerVolume: speaking ? DUCK_VOLUME : 1,
+    peerVolume: busy ? DUCK_VOLUME : 1,
+    /** 이 기기에서 통역 음성을 쓸 수 있는지. */
+    canInterpret: canInterpret(),
+    liveStatus,
+    liveError,
+    /** 상대가 내 말을 통역 음성으로 듣고 있는지. 내 마이크 소리가 서버로 간다는 뜻이다. */
+    peerListening,
     start,
     accept,
     decline,

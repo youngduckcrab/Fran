@@ -1,0 +1,7 @@
+{
+  "name": "fran-audio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "통역 음성용 날소리: 통화 마이크에서 떼어 내고, 옮겨 온 소리를 튼다(안드로이드)",
+  "main": "index.ts"
+}

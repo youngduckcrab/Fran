@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.franaudio'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.franaudio"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // 통화 소리 장치(JavaAudioDeviceModule)와 그걸 끼우는 자리(WebRTCModuleOptions)가 여기 있다.
+  implementation project(':react-native-webrtc')
+}

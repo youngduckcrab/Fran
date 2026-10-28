@@ -15,6 +15,7 @@ import {
   isThemeId,
   isWallpaperId,
   messageText,
+  MAX_VOICE_CHUNK,
   type Attachment,
   type CallEndReason,
   type AttachmentKind,
@@ -107,6 +108,13 @@ import {
   translateCaption,
 } from './translation/index.js';
 import { toModelAudio } from './audio.js';
+import {
+  feedMic,
+  startInterpret,
+  stopInterpret,
+  stopInterpretForCall,
+  stopInterpretForUser,
+} from './interpret.js';
 import { initPush, kindLabel, notify, publicKey, subscribe, unsubscribe } from './push.js';
 
 const MAX_MESSAGE_LENGTH = 4000;
@@ -449,6 +457,7 @@ function endCall(callId: string, reason: CallEndReason): void {
   if (!ringing || ringing.callId !== callId) return;
   const { from, to } = ringing;
   stopRinging();
+  stopInterpretForCall(callId);
   void finishCall(callId).catch(() => {});
   sendToUser(from, { type: 'call_end', callId, reason });
   sendToUser(to, { type: 'call_end', callId, reason });
@@ -1500,8 +1509,46 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         endCall(event.callId, reason);
       } else {
         // 이미 붙은 통화를 끊는 경우. 울림 상태는 진작 지워졌다.
+        stopInterpretForCall(event.callId);
         void finishCall(event.callId).catch(() => {});
         sendToUser(peerOf(userId).profile.id, { type: 'call_end', callId: event.callId, reason });
+      }
+      return;
+    }
+
+    /*
+     * 통역 음성. 듣고 싶은 쪽이 켜면 말하는 쪽에 알려서 마이크 소리를 보내게 하고,
+     * 그 소리를 Gemini 에 흘려 넣어 옮긴 소리를 듣는 쪽에 넘긴다.
+     */
+    case 'call_interpret': {
+      const speakerId = peerOf(userId).profile.id;
+      const callId = event.callId;
+      if (event.on) {
+        const listener = await profileOf(userId);
+        // 자막 번역과 같은 말로. 상대 말을 받아 보는 언어다.
+        const targetLang = listener.displayLangs[0] ?? listener.nativeLang;
+        let refused = false;
+        startInterpret(speakerId, userId, callId, targetLang, {
+          voice: (pcm, rate) => sendToUser(userId, { type: 'call_voice', callId, from: speakerId, pcm, rate }),
+          status: (status, code) => {
+            if (status === 'failed') refused = true;
+            sendToUser(userId, { type: 'call_interpret_status', callId, status, ...(code ? { code } : {}) });
+          },
+          stopSpeaker: () => sendToUser(speakerId, { type: 'call_interpret', callId, from: userId, on: false }),
+        });
+        // 시작부터 안 되는 경우(열쇠가 없는 등). 상대 마이크를 깨울 이유가 없다.
+        if (refused) return;
+      } else {
+        stopInterpret(speakerId);
+      }
+      sendToUser(speakerId, { type: 'call_interpret', callId, from: userId, on: event.on });
+      return;
+    }
+    case 'call_mic': {
+      if (typeof event.pcm !== 'string' || event.pcm.length > MAX_VOICE_CHUNK) return;
+      if (!feedMic(userId, event.callId, event.pcm, event.end === true)) {
+        // 옮길 길이 없는 소리다(통역이 꺼졌거나 통화가 끝났다). 그만 보내라고 알린다.
+        send(socket, { type: 'call_interpret', callId: event.callId, from: peerOf(userId).profile.id, on: false });
       }
       return;
     }
@@ -1742,6 +1789,8 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
       if (ringing && (ringing.from === userId || ringing.to === userId)) {
         endCall(ringing.callId, 'failed');
       }
+      // 마이크 소리도, 옮긴 소리를 받을 곳도 없다.
+      stopInterpretForUser(userId);
     }
   });
 });

@@ -164,6 +164,15 @@ export const config = {
       effort: oneOf('CLAUDE_EFFORT', CLAUDE_EFFORTS, 'low'),
     },
   },
+  /**
+   * 통역 음성 — 통화 중에 말을 소리째 다른 말로 옮겨 들려준다(Gemini Live Translate).
+   *
+   * 열쇠는 번역과 같은 GEMINI_API_KEY 를 쓴다. 번역을 Claude 로 돌려도 이것만은 Gemini 다 —
+   * 말을 소리로 바로 옮기는 모델이 거기에만 있다.
+   */
+  interpret: {
+    model: process.env.GEMINI_INTERPRET_MODEL ?? 'gemini-3.5-live-translate-preview',
+  },
   users: [buildUser('A', 'ko'), buildUser('B', 'es')] as const,
   glossary: loadGlossary(),
 };

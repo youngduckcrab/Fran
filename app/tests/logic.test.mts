@@ -290,3 +290,130 @@ test('앱 로직: 번역 읽어주기 — 읽는 동안 상대 목소리를 줄�
 
   await close();
 });
+
+/** 가짜 통역 모듈(tests/stubs/expo.mjs)이 들여다보게 열어 둔 것. */
+interface FakeAudio {
+  tapping: boolean;
+  played: { pcm: string; rate: number }[];
+  emit: (pcm: string, level: number) => void;
+}
+
+/** 100ms 짜리 16kHz 소리. 값은 아무래도 된다 — 가짜 모델은 받은 만큼 되돌려 줄 뿐이다. */
+const MIC_CHUNK = Buffer.from(new Int16Array(1600).fill(1000).buffer).toString('base64');
+
+/** 옮겨 온 소리의 첫 표본. 가짜 모델은 목표 언어의 첫 글자를 표본 값으로 새겨 보낸다. */
+const firstSample = (pcm: string) => Buffer.from(pcm, 'base64').readInt16LE(0);
+
+const FAKE_GEMINI = process.env.FAKE_GEMINI ?? 'http://localhost:8841';
+
+test('앱 로직: 통역 음성 — 내가 들을 때. 상대 말소리가 Gemini 를 거쳐 내 말로 온다', async () => {
+  const audio = (globalThis as unknown as { __franAudio: FakeAudio }).__franAudio;
+  const { call, other, callId, close } = await connectedCall();
+
+  await act(async () => {
+    call().setVoice('live');
+  });
+  // 서버가 프란 폰에게 "마이크 소리를 보내 달라" 고 전한다.
+  const asked = await until('프란에게 요청', () =>
+    other.seen.find((e) => e.type === 'call_interpret' && e.on && e.callId === callId),
+  );
+  assert.equal((asked as Extract<ServerEvent, { type: 'call_interpret' }>).from, 'me');
+  await until('기다리는 중', () => call().liveStatus === 'waiting');
+
+  // 프란이 말한다(소리 세 토막과 끝).
+  const before = audio.played.length;
+  for (let i = 0; i < 3; i += 1) other.send({ type: 'call_mic', callId, pcm: MIC_CHUNK });
+  other.send({ type: 'call_mic', callId, pcm: '', end: true });
+
+  await until('옮긴 소리가 옴', () => audio.played.length >= before + 3);
+  const voice = audio.played[before]!;
+  assert.equal(voice.rate, 24000);
+  assert.equal(firstSample(voice.pcm), 'k'.charCodeAt(0), '내 말(ko)로 옮겼다');
+  await until('통역 중', () => call().liveStatus === 'live');
+  assert.equal(call().peerVolume, 0.2, '트는 동안 상대 목소리를 줄인다');
+
+  // 서버가 Gemini 에 연 세션의 설정.
+  const live = (await (await fetch(`${FAKE_GEMINI}/__live`)).json()) as {
+    setups: { model: string; generationConfig?: { responseModalities?: string[]; translationConfig?: unknown } }[];
+    ends: number;
+  };
+  const setup = live.setups.at(-1)!;
+  assert.equal(setup.model, 'models/gemini-3.5-live-translate-preview');
+  assert.deepEqual(setup.generationConfig?.responseModalities, ['AUDIO']);
+  assert.deepEqual(setup.generationConfig?.translationConfig, { targetLanguageCode: 'ko', echoTargetLanguage: false });
+  assert.ok(live.ends >= 1, '말이 끊긴 것도 전했다');
+
+  // 끄면 프란 폰에도 알린다.
+  await act(async () => {
+    call().setVoice('off');
+  });
+  await until('프란에게 그만', () =>
+    other.seen.find((e) => e.type === 'call_interpret' && !e.on && e.callId === callId),
+  );
+  assert.equal(call().liveStatus, 'off');
+  await until('다 틀고 나면 원래 크기', () => call().peerVolume === 1);
+
+  await close();
+});
+
+test('앱 로직: 통역 음성 — 상대가 들을 때. 내가 말할 때만 마이크 소리를 보낸다', async () => {
+  const audio = (globalThis as unknown as { __franAudio: FakeAudio }).__franAudio;
+  const { call, other, callId, close } = await connectedCall();
+
+  // 프란이 내 말을 통역으로 듣겠다고 한다.
+  other.send({ type: 'call_interpret', callId, on: true });
+  await until('내가 소리를 떼어 냄', () => call().peerListening && audio.tapping);
+  const voicesBefore = other.seen.filter((e) => e.type === 'call_voice').length;
+
+  // 조용한 동안은 보내지 않는다.
+  await act(async () => {
+    for (let i = 0; i < 5; i += 1) audio.emit(MIC_CHUNK, 0.001);
+    await sleep(300);
+  });
+  assert.equal(other.seen.filter((e) => e.type === 'call_voice').length, voicesBefore, '조용할 때는 안 보냄');
+
+  // 말하면 보낸다. 말 직전의 조용한 토막도 함께(첫 음절이 잘리지 않게).
+  await act(async () => {
+    audio.emit(MIC_CHUNK, 0.2);
+    audio.emit(MIC_CHUNK, 0.2);
+  });
+  const first = (await until('프란에게 옮긴 소리', () =>
+    other.seen.filter((e) => e.type === 'call_voice')[voicesBefore],
+  )) as Extract<ServerEvent, { type: 'call_voice' }>;
+  assert.equal(first.from, 'me');
+  assert.equal(firstSample(first.pcm), 'e'.charCodeAt(0), '프란의 말(es)로 옮겼다');
+  await until('말 직전 소리까지 다섯 토막', () =>
+    other.seen.filter((e) => e.type === 'call_voice').length - voicesBefore >= 5,
+  );
+
+  // 숨 고르는 틈을 넘겨 조용하면 끊는다.
+  const endsBefore = ((await (await fetch(`${FAKE_GEMINI}/__live`)).json()) as { ends: number }).ends;
+  await act(async () => {
+    for (let i = 0; i < 9; i += 1) audio.emit(MIC_CHUNK, 0.001);
+  });
+  let ends = endsBefore;
+  for (let tries = 0; tries < 50 && ends <= endsBefore; tries += 1) {
+    await act(async () => {
+      await sleep(40);
+    });
+    ends = ((await (await fetch(`${FAKE_GEMINI}/__live`)).json()) as { ends: number }).ends;
+  }
+  assert.ok(ends > endsBefore, '말이 끝났다고 모델에 알렸다');
+
+  // 음소거 중에는 말해도 보내지 않는다.
+  await act(async () => {
+    call().toggleMute();
+  });
+  const sentBefore = other.seen.filter((e) => e.type === 'call_voice').length;
+  await act(async () => {
+    for (let i = 0; i < 3; i += 1) audio.emit(MIC_CHUNK, 0.3);
+    await sleep(300);
+  });
+  assert.equal(other.seen.filter((e) => e.type === 'call_voice').length, sentBefore, '음소거면 안 보냄');
+
+  // 프란이 그만 들으면 떼어 내기를 멈춘다.
+  other.send({ type: 'call_interpret', callId, on: false });
+  await until('떼어 내기 멈춤', () => !call().peerListening && !audio.tapping);
+
+  await close();
+});

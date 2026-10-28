@@ -26,7 +26,13 @@ app/overrides/*.ts      ← 브라우저 대신 폰 기능을 쓰는 것. 같은
                           (listen.ts = 받아쓰기, speech.ts = 읽어주기)
 app/src/shims.ts        ← 브라우저 전용 이름(localStorage, location, document, fetch('/api'))을 폰에서 채운다
 app/src/screens, ui     ← 화면. 폰용으로 새로 썼다
+app/modules/fran-audio  ← 통역 음성에 쓰는 네이티브 모듈(안드로이드, Kotlin). overrides/pcm.ts 가 부른다
 ```
+
+`modules/fran-audio` 는 Expo 가 저절로 붙인다(로컬 모듈). 앱이 켜질 때 react-native-webrtc 가 쓸
+소리 장치(`JavaAudioDeviceModule`)를 직접 만들어 끼우면서, 그 장치가 마이크에서 읽은 소리를 곁에서
+받는 자리를 하나 단다. 마이크를 따로 열지 않으므로 통화 소리는 흔들리지 않는다. 옮겨 온 소리는
+통화 소리와 같은 길(`USAGE_VOICE_COMMUNICATION`)의 `AudioTrack` 으로 튼다.
 
 가져오는 목록은 `scripts/sync-web.mjs` 의 `SHARED`. 화면(DOM)에 묶인 코드는 넣지 않는다.
 
@@ -50,7 +56,8 @@ APK 는 `.github/workflows/android.yml` 이 만든다(`app/`, `shared/` 가 바�
 가짜 모델은 `node tests/fake-gemini.mjs`(:8841) 로 띄우고, 서버를 `GEMINI_API_KEY=fake
 GOOGLE_GEMINI_BASE_URL=http://localhost:8841 PORT=8840` 에 두 사람을 `me`/`aaaa`, `fran`/`bbbb` 로 두고 켠다.
 
-**폰에서 직접 확인하지 못한 것**: 화면 모양, 카메라·마이크·WebRTC 영상, 통화 중 받아쓰기, 폰 알림.
+**폰에서 직접 확인하지 못한 것**: 화면 모양, 카메라·마이크·WebRTC 영상, 통화 중 받아쓰기, 폰 알림,
+통화 중 읽어 주기(TTS)의 소리 크기·나오는 곳, 통역 음성의 실제 소리(마이크 떼어 내기와 틀기).
 이것들은 실기기에서 써 봐야 안다.
 
 ## 푸시 알림 켜기 (FCM)

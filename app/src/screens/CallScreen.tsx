@@ -5,7 +5,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ChatMessage, LangCode } from '@fran/shared';
 import type { Call } from '../web/call';
-import { useT } from '../web/i18n';
+import { useT, type StringKey, type Translate } from '../web/i18n';
 import Icon, { type IconName } from '../Icon';
 import { usePip } from '../callPip';
 import { ensureCallPermissions } from '../permissions';
@@ -191,6 +191,20 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
               {t('call.readHint')}
             </Text>
           )}
+          {call.voice === 'live' && call.liveStatus === 'waiting' && (
+            <Text style={{ color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingHorizontal: 24 }}>
+              {t('call.liveWaiting')}
+            </Text>
+          )}
+          {call.voice === 'live' && call.liveStatus === 'failed' && (
+            <Text style={{ color: '#ffb3c0', textAlign: 'center', paddingHorizontal: 24 }}>{liveTrouble(call, t)}</Text>
+          )}
+          {/* 내 목소리가 서버를 거쳐 모델로 간다. 모르는 채로 두지 않는다. */}
+          {call.peerListening && call.phase === 'connected' && (
+            <Text style={{ color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingHorizontal: 24 }}>
+              {t('call.peerListening')}
+            </Text>
+          )}
           {call.error === 'denied' && <Text style={{ color: '#ffb3c0' }}>{t('call.denied')}</Text>}
           {call.error === 'nomic' && <Text style={{ color: '#ffb3c0' }}>{t('call.nomic')}</Text>}
         </View>
@@ -314,6 +328,14 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
                   label={t(call.voice === 'read' ? 'call.readOff' : 'call.readOn')}
                   onPress={() => call.setVoice(call.voice === 'read' ? 'off' : 'read')}
                 />
+                {call.canInterpret && (
+                  <Key
+                    icon="headphones"
+                    on={call.voice === 'live'}
+                    label={t(call.voice === 'live' ? 'call.liveOff' : 'call.liveOn')}
+                    onPress={() => call.setVoice(call.voice === 'live' ? 'off' : 'live')}
+                  />
+                )}
               </>
             )}
           </View>
@@ -321,6 +343,13 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
       </View>
     </Modal>
   );
+}
+
+/** 통역 음성을 못 쓰는 까닭을 사람 말로. 모르는 까닭이면 못 쓴다는 말만. */
+function liveTrouble(call: Call, t: Translate): string {
+  const code = call.liveError;
+  if (!code || code === 'unknown') return t('call.liveFailed');
+  return `${t('call.liveFailed')} ${t(`error.${code}` as StringKey)}`;
 }
 
 /** 끝난 이유에 맞는 문구. */

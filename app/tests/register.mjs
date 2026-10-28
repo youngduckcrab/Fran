@@ -10,6 +10,7 @@ const STUBS = {
   'react-native': stub('react-native'),
   'expo-speech-recognition': stub('expo-speech-recognition'),
   'expo-speech': stub('expo-speech'),
+  'expo': stub('expo'),
 };
 
 const original = Module._resolveFilename;
