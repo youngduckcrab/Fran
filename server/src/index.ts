@@ -1432,6 +1432,7 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
             text,
             final: true,
             translated,
+            translatedLang: targetLang,
           };
           sendToUser(peer, done);
           sendToUser(userId, done);

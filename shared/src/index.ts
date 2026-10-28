@@ -475,6 +475,8 @@ export type ServerEvent =
       final: boolean;
       /** 번역은 늦게 따라온다. 없으면 아직 오는 중이다. */
       translated?: string;
+      /** translated 가 무슨 말인지. 소리로 읽어 줄 때 그 말의 목소리를 고른다. */
+      translatedLang?: LangCode;
       /** 번역이 끝내 안 됐다. 빈칸으로 두면 오는 중인지 아닌지 알 수가 없다. */
       failed?: boolean;
     }

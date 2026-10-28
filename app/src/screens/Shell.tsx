@@ -49,7 +49,14 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
   const waking = useWaking(chat.connection);
   const update = useAppUpdate();
   // 받아쓰기는 내가 실제로 입 밖에 내는 말로 들어야 한다. 화면 언어가 아니라 모국어다.
-  const call = useCall(chat.emit, chat.onCallEvent, chat.me?.nativeLang ?? 'ko', chat.me?.id ?? '');
+  // 번역을 소리로 읽어 줄 때는 상대 말을 옮겨 받는 언어(주 언어)의 목소리를 쓴다.
+  const call = useCall(
+    chat.emit,
+    chat.onCallEvent,
+    chat.me?.nativeLang ?? 'ko',
+    chat.me?.id ?? '',
+    chat.me?.displayLangs[0] ?? chat.me?.nativeLang ?? 'ko',
+  );
   const [page, setPage] = useState<Page>('home');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);

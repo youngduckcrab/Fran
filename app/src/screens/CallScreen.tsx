@@ -64,6 +64,16 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
     };
   }, [active]);
 
+  /*
+   * 번역을 소리로 내는 동안 상대 목소리를 줄인다.
+   * 웹은 video 엘리먼트의 볼륨을 쓰지만, 폰은 받은 소리 트랙에 직접 건다(react-native-webrtc 의 _setVolume).
+   */
+  useEffect(() => {
+    for (const track of call.remoteStream?.getAudioTracks() ?? []) {
+      (track as unknown as { _setVolume?: (volume: number) => void })._setVolume?.(call.peerVolume);
+    }
+  }, [call.remoteStream, call.peerVolume]);
+
   // 전화가 오는 동안 진동. 앱이 꺼져 있을 때는 푸시 알림이 대신 울린다.
   useEffect(() => {
     if (call.phase !== 'ringing') return;
@@ -173,6 +183,12 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
           {call.captionsOn && call.captionsBroken && (
             <Text style={{ color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingHorizontal: 24 }}>
               {t('call.captionsNoDevice')}
+            </Text>
+          )}
+          {/* 읽어 줄 번역은 상대 자막에서 온다. 아직 하나도 안 왔으면 왜 조용한지 알려 준다. */}
+          {call.voice === 'read' && call.phase === 'connected' && !call.captions.some((c) => !c.mine) && (
+            <Text style={{ color: 'rgba(255,255,255,0.75)', textAlign: 'center', paddingHorizontal: 24 }}>
+              {t('call.readHint')}
             </Text>
           )}
           {call.error === 'denied' && <Text style={{ color: '#ffb3c0' }}>{t('call.denied')}</Text>}
@@ -292,6 +308,12 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
                     onPress={call.toggleCaptions}
                   />
                 )}
+                <Key
+                  icon="speaker"
+                  on={call.voice === 'read'}
+                  label={t(call.voice === 'read' ? 'call.readOff' : 'call.readOn')}
+                  onPress={() => call.setVoice(call.voice === 'read' ? 'off' : 'read')}
+                />
               </>
             )}
           </View>

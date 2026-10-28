@@ -21,6 +21,9 @@ const VOICE_PREFERENCE: Record<LangCode, string[]> = {
 /** 공부하려고 듣는 거라 평소 속도보다 조금 느리게. */
 const RATE = 0.92;
 
+/** 통화 중에 번역을 읽어 줄 때. 말이 계속 이어지는 중이라 늦게 읽으면 밀린다. */
+const CALL_RATE = 1.05;
+
 function synth(): SpeechSynthesis | null {
   // 오래된 인앱 브라우저에는 없다. 없으면 버튼 자체를 띄우지 않는다.
   // 이름만 있고 알맹이가 없는 경우도 있어서 speak 까지 확인한다.
@@ -119,4 +122,70 @@ export function useSpeaker(): Speaker {
   }, []);
 
   return { supported, speakingKey, failedKey, toggle };
+}
+
+/**
+ * 읽는 중인 문장들.
+ *
+ * 크롬은 읽는 도중에 문장 객체를 치워 버리는 일이 있다. 그러면 onend 가 영영 안 와서
+ * 다음 줄로 못 넘어간다. 다 읽을 때까지 붙잡아 둔다.
+ */
+const reading = new Set<SpeechSynthesisUtterance>();
+
+/**
+ * 한 줄을 끝까지 읽고 onDone 을 부른다. 통화 중 번역 읽어 주기가 쓴다.
+ *
+ * 눌러서 듣는 useSpeaker 와 달리 다 읽은 때를 알아야 다음 줄로 넘어간다. 돌려준
+ * 함수로 멈추면 onDone 은 불리지 않는다 — 멈춘 쪽이 이미 뒷정리를 하고 있다.
+ */
+export function speakLine(text: string, lang: LangCode, onDone: () => void): () => void {
+  const speech = synth();
+  const say = speakable(text);
+  if (!speech || !HAS_LETTERS.test(say)) {
+    const timer = setTimeout(onDone, 0);
+    return () => clearTimeout(timer);
+  }
+
+  let live = true;
+  const utterance = new SpeechSynthesisUtterance(say);
+  const voice = pickVoice(speech.getVoices(), lang);
+  if (voice) utterance.voice = voice;
+  utterance.lang = voice?.lang ?? VOICE_PREFERENCE[lang][0] ?? lang;
+  utterance.rate = CALL_RATE;
+
+  // onend 가 끝내 안 오는 브라우저가 있다. 글자 수로 넉넉히 잡고 그때는 넘어간다.
+  const fallback = setTimeout(() => finish(), 3000 + say.length * 200);
+  const finish = () => {
+    clearTimeout(fallback);
+    reading.delete(utterance);
+    if (!live) return;
+    live = false;
+    onDone();
+  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
+
+  reading.add(utterance);
+  speech.speak(utterance);
+  return () => {
+    clearTimeout(fallback);
+    reading.delete(utterance);
+    if (!live) return;
+    live = false;
+    speech.cancel();
+  };
+}
+
+/**
+ * 사람이 누른 그 순간에 한 번 불러 둔다.
+ *
+ * iOS 는 사용자가 누른 순간에 소리를 낸 적이 있어야 그 뒤로 저절로 읽어 준다.
+ * 번역은 나중에 소켓으로 오므로, 켜는 단추를 누를 때 소리 없는 한 마디로 문을 연다.
+ */
+export function primeSpeech(): void {
+  const speech = synth();
+  if (!speech) return;
+  const silent = new SpeechSynthesisUtterance(' ');
+  silent.volume = 0;
+  speech.speak(silent);
 }

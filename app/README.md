@@ -47,6 +47,8 @@ APK 는 `.github/workflows/android.yml` 이 만든다(`app/`, `shared/` 가 바�
 `npm run test:logic` 은 `useChat`·`useCall` 이 폰의 호환 계층 위에서 **실제 서버**와 맞물려 도는지 노드에서
 본다(접속 → 전송 → 번역 → 읽음 → 반응/수정 → 검색, 통화 걸기 → 응답 → 자막 번역 → 끊기).
 서버가 `http://localhost:8840` 에 떠 있어야 하고(`FRAN_TEST_SERVER`), 가짜 번역 모델이 필요하다.
+가짜 모델은 `node tests/fake-gemini.mjs`(:8841) 로 띄우고, 서버를 `GEMINI_API_KEY=fake
+GOOGLE_GEMINI_BASE_URL=http://localhost:8841 PORT=8840` 에 두 사람을 `me`/`aaaa`, `fran`/`bbbb` 로 두고 켠다.
 
 **폰에서 직접 확인하지 못한 것**: 화면 모양, 카메라·마이크·WebRTC 영상, 통화 중 받아쓰기, 폰 알림.
 이것들은 실기기에서 써 봐야 안다.

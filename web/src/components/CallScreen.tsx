@@ -86,6 +86,7 @@ export default function CallScreen({
         stream={swapped ? call.localStream : call.remoteStream}
         className={`call__remote ${swapped ? 'is-mine' : ''}`}
         muted={swapped}
+        volume={call.peerVolume}
       />
 
       <div className="call__who">
@@ -101,6 +102,10 @@ export default function CallScreen({
         )}
         {call.captionsOn && call.captionsBroken && (
           <p className="call__hint">{t('call.captionsNoDevice')}</p>
+        )}
+        {/* 읽어 줄 번역은 상대 자막에서 온다. 아직 하나도 안 왔으면 왜 조용한지 알려 준다. */}
+        {call.voice === 'read' && call.phase === 'connected' && !call.captions.some((c) => !c.mine) && (
+          <p className="call__hint">{t('call.readHint')}</p>
         )}
         {call.error === 'denied' && <p className="call__hint">{t('call.denied')}</p>}
         {call.error === 'nomic' && <p className="call__hint">{t('call.nomic')}</p>}
@@ -127,6 +132,7 @@ export default function CallScreen({
             stream={swapped ? call.remoteStream : call.localStream}
             className={`call__meVideo ${swapped ? '' : 'is-mirrored'}`}
             muted={!swapped}
+            volume={call.peerVolume}
             onAspect={setAspect}
           />
         </div>
@@ -281,6 +287,16 @@ export default function CallScreen({
                 <Icon name="captions" size={24} />
               </button>
             )}
+
+            <button
+              type="button"
+              className={`call__key ${call.voice === 'read' ? 'is-on' : ''}`}
+              onClick={() => call.setVoice(call.voice === 'read' ? 'off' : 'read')}
+              aria-label={t(call.voice === 'read' ? 'call.readOff' : 'call.readOn')}
+              aria-pressed={call.voice === 'read'}
+            >
+              <Icon name="speaker" size={24} />
+            </button>
           </>
         )}
       </div>
@@ -297,11 +313,14 @@ function Media({
   stream,
   className,
   muted,
+  volume = 1,
   onAspect,
 }: {
   stream: MediaStream | null;
   className: string;
   muted?: boolean;
+  /** 0~1. 번역을 소리로 내는 동안 상대 목소리를 줄인다. 아이폰은 이 값을 무시한다. */
+  volume?: number;
   /** 그림이 도착하면 그 가로:세로를 알려 준다. 작은 창이 이걸로 모양을 맞춘다. */
   onAspect?: (aspect: number) => void;
 }) {
@@ -314,6 +333,11 @@ function Media({
     // 자동 재생이 막히는 경우가 있다. 막혀도 통화는 이어지므로 조용히 넘어간다.
     void element.play().catch(() => {});
   }, [stream]);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (element) element.volume = volume;
+  }, [volume]);
 
   const report = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     const { videoWidth, videoHeight } = event.currentTarget;

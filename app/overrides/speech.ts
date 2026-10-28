@@ -20,6 +20,9 @@ const VOICE_PREFERENCE: Record<LangCode, string[]> = {
 /** 공부하려고 듣는 거라 평소 속도보다 조금 느리게. */
 const RATE = 0.92;
 
+/** 통화 중에 번역을 읽어 줄 때. 말이 계속 이어지는 중이라 늦게 읽으면 밀린다. */
+const CALL_RATE = 1.05;
+
 export function speechSupported(): boolean {
   return true;
 }
@@ -92,4 +95,58 @@ export function useSpeaker(): Speaker {
   }, []);
 
   return { supported: true, speakingKey, failedKey, toggle };
+}
+
+/** 통화 중에 쓸 목소리 목록. 한 번만 받아 둔다. */
+let callVoices: Speech.Voice[] = [];
+let callVoicesAsked = false;
+
+function loadCallVoices(): void {
+  if (callVoicesAsked) return;
+  callVoicesAsked = true;
+  void Speech.getAvailableVoicesAsync()
+    .then((list) => {
+      callVoices = list;
+    })
+    .catch(() => {});
+}
+
+/**
+ * 한 줄을 끝까지 읽고 onDone 을 부른다 — 앱 판. 통화 중 번역 읽어 주기가 쓴다.
+ * 돌려준 함수로 멈추면 onDone 은 불리지 않는다.
+ */
+export function speakLine(text: string, lang: LangCode, onDone: () => void): () => void {
+  loadCallVoices();
+  const say = speakable(text);
+  if (!HAS_LETTERS.test(say)) {
+    const timer = setTimeout(onDone, 0);
+    return () => clearTimeout(timer);
+  }
+
+  let live = true;
+  const finish = () => {
+    if (!live) return;
+    live = false;
+    onDone();
+  };
+  const voice = pickVoice(callVoices, lang);
+  Speech.speak(say, {
+    language: voice?.language ?? VOICE_PREFERENCE[lang][0] ?? lang,
+    ...(voice ? { voice: voice.identifier } : {}),
+    rate: CALL_RATE,
+    onDone: finish,
+    // 말풍선의 소리 버튼이 끊은 경우. 다음 줄로 넘어가면 된다.
+    onStopped: finish,
+    onError: finish,
+  });
+  return () => {
+    if (!live) return;
+    live = false;
+    void Speech.stop();
+  };
+}
+
+/** 웹 판은 여기서 iOS 의 소리 문을 연다. 폰은 그럴 필요가 없고, 목소리 목록만 미리 받는다. */
+export function primeSpeech(): void {
+  loadCallVoices();
 }

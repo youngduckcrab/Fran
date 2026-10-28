@@ -138,8 +138,8 @@ test('앱 로직: 로그인 → 접속 → 보내기 → 번역 → 읽음 → �
   });
 });
 
-test('앱 로직: 통화 신호 — 걸기 → 응답 → 연결 → 자막(번역)', async () => {
-  // WebRTC 는 노드에 없다. 신호가 오가는 모양만 보려고 최소한의 가짜를 둔다.
+/** WebRTC 는 노드에 없다. 신호가 오가는 모양만 보려고 최소한의 가짜를 둔다. 붙은 설명을 log 에 적는다. */
+function fakeWebRTC(): string[] {
   const log: string[] = [];
   class FakePeer {
     connectionState = 'new';
@@ -179,7 +179,12 @@ test('앱 로직: 통화 신호 — 걸기 → 응답 → 연결 → 자막(번�
     }
   };
   Object.defineProperty(globalThis.navigator, 'mediaDevices', { value: { getUserMedia: async () => stream }, configurable: true });
+  return log;
+}
 
+/** 내 쪽(앱 로직)과 프란 쪽(날것의 소켓)을 붙여 통화를 연결해 둔다. */
+async function connectedCall() {
+  const log = fakeWebRTC();
   setActiveUser('me');
   const token = await login('me', 'aaaa');
   let call!: ReturnType<typeof useCall>;
@@ -211,21 +216,77 @@ test('앱 로직: 통화 신호 — 걸기 → 응답 → 연결 → 자막(번�
   await until('연결됨', () => call.phase === 'connected');
   assert.ok(log.includes('remote:answer'));
 
+  return {
+    call: () => call,
+    other,
+    callId,
+    /** 끊고 정리한다. */
+    async close() {
+      await act(async () => {
+        call.hangup();
+      });
+      await until('프란에게 끝 알림', () => other.seen.find((e) => e.type === 'call_end'));
+      await until('끝난 화면', () => call.phase === 'ended' || call.phase === 'idle');
+      other.close();
+      await act(async () => {
+        root.unmount();
+      });
+    },
+  };
+}
+
+test('앱 로직: 통화 신호 — 걸기 → 응답 → 연결 → 자막(번역)', async () => {
+  const { call: current, other, callId, close } = await connectedCall();
+
   // 프란이 말한다 → 서버가 번역해서 돌려준다 → 앱 자막에 뜬다.
   other.send({ type: 'caption', callId, id: 'c1', text: 'Hoy fui a la playa', final: true });
-  const line = await until('자막 번역', () => call.captions.find((c) => c.id === 'c1' && c.translated));
+  const line = await until('자막 번역', () => current().captions.find((c) => c.id === 'c1' && c.translated));
   assert.equal(line.translated, '오늘 바닷가에 갔어');
   assert.equal(line.mine, false);
 
   // 끊으면 프란에게도 알려진다.
-  await act(async () => {
-    call.hangup();
-  });
-  await until('프란에게 끝 알림', () => other.seen.find((e) => e.type === 'call_end'));
-  await until('끝난 화면', () => call.phase === 'ended' || call.phase === 'idle');
+  await close();
+});
 
-  other.close();
+test('앱 로직: 번역 읽어주기 — 읽는 동안 상대 목소리를 줄이고 받아쓰기는 쉰다', async () => {
+  const { spoken } = (await import('expo-speech')) as unknown as { spoken: { text: string; language?: string }[] };
+  const { recognition } = (await import('expo-speech-recognition')) as unknown as {
+    recognition: { starts: number; aborts: number };
+  };
+  const { call, other, callId, close } = await connectedCall();
+
   await act(async () => {
-    root.unmount();
+    call().setVoice('read');
   });
+  assert.equal(call().voice, 'read');
+  assert.equal(storage.getItem('fran.callVoice'), 'read', '다음 통화에도 가도록 적어 둔다');
+  await until('받아쓰기가 켜짐', () => recognition.starts > 0);
+  const aborts = recognition.aborts;
+
+  // 프란이 말한다 → 번역이 오면 내 언어 목소리로 읽는다.
+  other.send({ type: 'caption', callId, id: 'r1', text: 'Hoy fui a la playa', final: true });
+  const said = await until('읽어 줌', () => spoken.find((s) => s.text === '오늘 바닷가에 갔어'));
+  assert.equal(said.language, 'ko-KR');
+  await until('읽는 중', () => call().speaking);
+  assert.equal(call().peerVolume, 0.2, '읽는 동안 상대 목소리를 줄인다');
+  await until('받아쓰기가 쉰다', () => recognition.aborts > aborts);
+  const starts = recognition.starts;
+
+  // 다 읽으면 원래대로.
+  await until('다 읽음', () => !call().speaking);
+  assert.equal(call().peerVolume, 1);
+  await until('받아쓰기 다시 켜짐', () => recognition.starts > starts);
+
+  // 끄면 더 읽지 않는다. 자막은 그대로 뜬다.
+  await act(async () => {
+    call().setVoice('off');
+  });
+  other.send({ type: 'caption', callId, id: 'r2', text: 'Te quiero mucho', final: true });
+  await until('자막은 뜸', () => call().captions.find((c) => c.id === 'r2' && c.translated));
+  await act(async () => {
+    await sleep(300);
+  });
+  assert.ok(!spoken.some((s) => s.text === '«Te quiero mucho»'), '끈 뒤에는 읽지 않는다');
+
+  await close();
 });

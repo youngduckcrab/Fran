@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CallEndReason, ClientEvent, LangCode, ServerEvent } from '@fran/shared';
 import { fetchIceServers } from './api';
 import { canListen, isApple, listen, type Listener } from './listen';
+import { primeSpeech, speakLine } from './speech';
 import { useDoodle } from './doodle';
 
 /**
@@ -36,6 +37,44 @@ const INTERIM_EVERY_MS = 250;
 
 /** 자막을 켤지 말지. 한 번 정하면 다음 통화에도 그대로 간다. */
 const CAPTION_KEY = 'fran.captions';
+
+/**
+ * 상대 말을 소리로 어떻게 들을지.
+ *
+ * 'off' 는 상대 목소리 그대로. 'read' 는 자막 번역을 폰 목소리(TTS)로 읽어 준다.
+ */
+export type CallVoice = 'off' | 'read';
+
+/** 한 번 고르면 다음 통화에도 그대로 간다. */
+const VOICE_KEY = 'fran.callVoice';
+
+/**
+ * 번역을 소리로 내는 동안 상대 목소리를 이만큼으로 줄인다.
+ *
+ * 아예 끄지는 않는다. 웃음이나 맞장구까지 사라지면 통화가 아니라 녹음을 듣는 것 같다.
+ */
+const DUCK_VOLUME = 0.2;
+
+/**
+ * 다 읽고 나서 이만큼 더 기다렸다가 원래대로 돌린다.
+ *
+ * 합성음 끝자락이 스피커에서 마이크로 되돌아 들어가면 내 받아쓰기가 그걸 내 말로 적는다.
+ */
+const DUCK_TAIL_MS = 400;
+
+/**
+ * 읽을 번역이 이보다 많이 밀리면 오래된 것은 건너뛴다.
+ * 지나간 말을 몇십 초 뒤에 듣는 것은 대화에 도움이 안 된다. 화면 자막에는 그대로 남는다.
+ */
+const READ_BACKLOG = 2;
+
+function voiceWanted(): CallVoice {
+  try {
+    return localStorage.getItem(VOICE_KEY) === 'read' ? 'read' : 'off';
+  } catch {
+    return 'off';
+  }
+}
 
 /** 통화 자막 한 줄. 화면에 뜨는 형태 그대로. */
 export interface Caption {
@@ -83,12 +122,37 @@ export function useCall(
   myLang: LangCode,
   /** 내 id. 자막이 누구 말인지 가르는 데 쓴다. */
   myId: string,
+  /**
+   * 상대 말을 옮겨 받는 언어. 번역을 소리로 읽을 때 이 말의 목소리를 쓴다.
+   * 서버가 번역문에 언어를 붙여 주지만, 그걸 모르는 예전 서버와도 맞물리게 둔다.
+   */
+  hearLang: LangCode = myLang,
 ) {
   const [state, setState] = useState<CallState>({ phase: 'idle' });
   const [muted, setMuted] = useState(false);
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [captionsOn, setCaptionsOn] = useState(captionsWanted);
   const ear = useRef<Listener | null>(null);
+  const [voice, setVoiceState] = useState<CallVoice>(voiceWanted);
+  /** 소켓 콜백은 한 번만 걸린다. 지금 값을 거기서 읽으려고 따로 둔다. */
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+  const hearLangRef = useRef(hearLang);
+  hearLangRef.current = hearLang;
+  /**
+   * 번역을 소리로 내고 있는 중인지.
+   *
+   * 그동안 상대 목소리를 줄이고 내 받아쓰기는 쉰다. 쉬지 않으면 스피커에서 나온
+   * 번역을 내 말로 받아 적어 상대에게 보낸다.
+   */
+  const [speaking, setSpeaking] = useState(false);
+  const speakingRef = useRef(speaking);
+  speakingRef.current = speaking;
+  /** 읽을 차례를 기다리는 번역. */
+  const readQueue = useRef<{ text: string; lang: LangCode }[]>([]);
+  /** 지금 읽고 있는 줄을 멈추는 함수. 읽고 있지 않으면 null. */
+  const stopLine = useRef<(() => void) | null>(null);
+  const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 이번 통화가 영상인지. 걸 때 정해지고 통화 내내 바뀌지 않는다. */
   const [video, setVideo] = useState(false);
   const [cameraOn, setCameraOn] = useState(true);
@@ -128,10 +192,52 @@ export function useCall(
   /** 낙서. 통화가 끝나면 함께 지워진다. */
   const doodle = useDoodle(emit, callId.current);
 
+  /* --- 번역을 소리로 읽어 주기 --- */
+
+  /** 읽던 것도, 기다리던 것도 모두 그만둔다. */
+  const stopReading = useCallback(() => {
+    readQueue.current = [];
+    stopLine.current?.();
+    stopLine.current = null;
+    if (quietTimer.current) clearTimeout(quietTimer.current);
+    quietTimer.current = null;
+    setSpeaking(false);
+  }, []);
+
+  /** 다음 줄을 읽는다. 더 없으면 잠깐 뒤에 상대 목소리를 되돌린다. */
+  const readNext = useCallback(() => {
+    const next = readQueue.current.shift();
+    if (!next) {
+      stopLine.current = null;
+      quietTimer.current = setTimeout(() => {
+        quietTimer.current = null;
+        setSpeaking(false);
+      }, DUCK_TAIL_MS);
+      return;
+    }
+    if (quietTimer.current) clearTimeout(quietTimer.current);
+    quietTimer.current = null;
+    setSpeaking(true);
+    stopLine.current = speakLine(next.text, next.lang, readNext);
+  }, []);
+
+  /** 번역 한 줄을 읽을 차례에 넣는다. 읽고 있지 않았으면 바로 읽는다. */
+  const read = useCallback(
+    (text: string, lang: LangCode) => {
+      readQueue.current.push({ text, lang });
+      if (readQueue.current.length > READ_BACKLOG) {
+        readQueue.current = readQueue.current.slice(-READ_BACKLOG);
+      }
+      if (!stopLine.current) readNext();
+    },
+    [readNext],
+  );
+
   /** 통화에 쓴 것들을 모두 놓아 준다. 마이크를 안 놓으면 폰에 녹음 표시가 계속 남는다. */
   const teardown = useCallback(() => {
     ear.current?.stop();
     ear.current = null;
+    stopReading();
     setCaptions([]);
     setCaptionsBroken(false);
     wipeDoodle.current?.();
@@ -151,7 +257,7 @@ export function useCall(
     setPeerCamera(true);
     setLocalStream(null);
     setRemoteStream(null);
-  }, []);
+  }, [stopReading]);
 
   const finish = useCallback(
     (reason: CallEndReason, error?: string) => {
@@ -385,6 +491,10 @@ export function useCall(
               ...(event.failed ? { failed: true } : {}),
               final: event.final,
             }));
+            // 상대 말의 번역이 다 왔으면 소리로도 들려준다. 내 말은 읽지 않는다.
+            if (event.translated && event.from !== myId && voiceRef.current === 'read') {
+              read(event.translated, event.translatedLang ?? hearLangRef.current);
+            }
             return;
           }
           case 'draw': {
@@ -421,7 +531,7 @@ export function useCall(
       })();
     });
     return () => subscribe(null);
-  }, [drainIce, emit, finish, myId, subscribe, teardown]);
+  }, [drainIce, emit, finish, myId, read, subscribe, teardown]);
 
   /**
    * 통화가 붙어 있는 동안 내 말을 받아쓴다.
@@ -434,12 +544,15 @@ export function useCall(
   useEffect(() => {
     const id = callId.current;
     const live = state.phase === 'connected' || state.phase === 'connecting';
-    if (!live || !captionsOn || !canListen() || !id) return;
+    // 번역을 소리로 내는 동안은 쉰다. 스피커에서 나온 번역을 내 말로 받아 적으면 안 된다.
+    if (!live || !captionsOn || speaking || !canListen() || !id) return;
 
     /** 지금 말하고 있는 한 줄의 id. 도중이든 끝이든 같은 id 라야 한 줄로 이어진다. */
     let lineId = crypto.randomUUID();
     let sentAt = 0;
     let sentText = '';
+    /** 말하는 도중이라 아직 끝나지 않은 줄. 다 말하면 비운다. */
+    let saying = '';
 
     const ear_ = listen({
       lang: myLang,
@@ -459,8 +572,10 @@ export function useCall(
           lineId = crypto.randomUUID();
           sentAt = 0;
           sentText = '';
+          saying = '';
           return;
         }
+        saying = text;
 
         // 받아쓰기는 1초에도 여러 번 고쳐 준다. 그대로 흘리면 소켓만 시끄럽다.
         const now = Date.now();
@@ -478,8 +593,34 @@ export function useCall(
     return () => {
       ear_.stop();
       if (ear.current === ear_) ear.current = null;
+      /*
+       * 번역을 읽어 주느라 잠깐 멈추는 것이면, 하던 말은 거기까지로 마무리 짓는다.
+       * 멈춘 인식기는 그 줄을 끝내 주지 않아서, 그대로 두면 번역도 기록도 안 된다.
+       */
+      if (speakingRef.current && saying) {
+        const current = lineId;
+        const text = saying;
+        setCaptions((previous) => merge(previous, { id: current, mine: true, text, final: true }));
+        emit({ type: 'caption', callId: id, id: current, text, final: true });
+      }
     };
-  }, [captionsOn, emit, myLang, state.phase]);
+  }, [captionsOn, emit, myLang, speaking, state.phase]);
+
+  /** 상대 말을 소리로 어떻게 들을지 바꾼다. 다음 통화에도 그대로 간다. */
+  const setVoice = useCallback(
+    (next: CallVoice) => {
+      // iOS 는 사람이 누른 이 순간에 소리 문을 열어 둬야 나중에 저절로 읽어 준다.
+      if (next === 'read') primeSpeech();
+      else stopReading();
+      setVoiceState(next);
+      try {
+        localStorage.setItem(VOICE_KEY, next);
+      } catch {
+        // 저장 못 해도 이번 통화에는 적용된다.
+      }
+    },
+    [stopReading],
+  );
 
   const toggleCaptions = useCallback(() => {
     setCaptionsOn((on) => {
@@ -521,6 +662,15 @@ export function useCall(
     captionsBroken,
     /** 이 기기에서 받아쓰기를 쓸 수 있는지. 못 쓰면 켜는 단추를 보여 줄 이유가 없다. */
     canCaption: canListen(),
+    voice,
+    setVoice,
+    /** 번역을 소리로 내고 있는 중. */
+    speaking,
+    /**
+     * 상대 목소리를 얼마나 크게 틀지(0~1). 번역을 소리로 내는 동안 줄어든다.
+     * 소리를 실제로 트는 곳(웹은 video 엘리먼트, 앱은 트랙)이 이 값을 따른다.
+     */
+    peerVolume: speaking ? DUCK_VOLUME : 1,
     start,
     accept,
     decline,

@@ -30,7 +30,9 @@ export type IconName =
   | 'captions'
   | 'video'
   | 'videoOff'
-  | 'flip';
+  | 'flip'
+  | 'speaker'
+  | 'headphones';
 
 interface Props {
   name: IconName;
@@ -148,6 +150,21 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <Path d="M2.5 12.5 7 17l8.5-9" />
       <Path d="M11 14.5 12.5 16l8-8.5" />
+    </>
+  ),
+  // 소리로 읽어 주기. 스피커와 퍼져 나가는 소리.
+  speaker: (
+    <>
+      <Path d="M4.5 9.5h3l4.5-3.8v12.6l-4.5-3.8h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1Z" />
+      <Path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+    </>
+  ),
+  // 통역 음성. 귀에 바로 들려준다는 뜻으로 헤드폰.
+  headphones: (
+    <>
+      <Path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+      <Rect x="3.5" y="14" width="4" height="6" rx="1.5" />
+      <Rect x="16.5" y="14" width="4" height="6" rx="1.5" />
     </>
   ),
 };
