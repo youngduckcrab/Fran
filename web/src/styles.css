@@ -3005,7 +3005,8 @@ button:active:not(:disabled) {
   }
 }
 
-.call__key--caption.is-on {
+.call__key--caption.is-on,
+.call__key--voice.is-on {
   background: var(--accent);
   color: #fff;
   border-color: transparent;

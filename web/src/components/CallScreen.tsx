@@ -300,7 +300,7 @@ export default function CallScreen({
 
             <button
               type="button"
-              className={`call__key ${call.voice === 'read' ? 'is-on' : ''}`}
+              className={`call__key call__key--voice ${call.voice === 'read' ? 'is-on' : ''}`}
               onClick={() => call.setVoice(call.voice === 'read' ? 'off' : 'read')}
               aria-label={t(call.voice === 'read' ? 'call.readOff' : 'call.readOn')}
               aria-pressed={call.voice === 'read'}
@@ -311,7 +311,7 @@ export default function CallScreen({
             {call.canInterpret && (
               <button
                 type="button"
-                className={`call__key ${call.voice === 'live' ? 'is-on' : ''}`}
+                className={`call__key call__key--voice ${call.voice === 'live' ? 'is-on' : ''}`}
                 onClick={() => call.setVoice(call.voice === 'live' ? 'off' : 'live')}
                 aria-label={t(call.voice === 'live' ? 'call.liveOff' : 'call.liveOn')}
                 aria-pressed={call.voice === 'live'}
