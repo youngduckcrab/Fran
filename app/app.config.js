@@ -5,7 +5,7 @@ const path = require('path');
  * 서버 주소. 빌드할 때 EXPO_PUBLIC_SERVER_URL 로 바꿀 수 있다.
  * 앱은 이 주소의 서버와만 이야기한다 — 로그인, 메시지, 통화 신호 전부.
  */
-const serverUrl = process.env.EXPO_PUBLIC_SERVER_URL || 'https://fran-g4j5.onrender.com';
+const serverUrl = (process.env.EXPO_PUBLIC_SERVER_URL || 'https://fran-g4j5.onrender.com').replace(/\/+$/, '');
 
 /**
  * 푸시 알림에 쓰는 Firebase 설정 파일. 저장소에 올리지 않는다(.gitignore).

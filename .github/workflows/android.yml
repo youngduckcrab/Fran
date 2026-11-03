@@ -20,6 +20,10 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # 앱이 이야기할 서버. 저장소 Settings → Variables 의 SERVER_URL 로 바꾼다.
+    # 비어 있으면 app.config.js 의 기본 주소를 쓴다. 설정을 읽는 단계가 여럿이라 작업 전체에 건다.
+    env:
+      EXPO_PUBLIC_SERVER_URL: ${{ vars.SERVER_URL }}
     steps:
       - uses: actions/checkout@v4
 
