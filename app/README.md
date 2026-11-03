@@ -48,7 +48,7 @@ npm run android      # 폰을 USB 로 연결한 상태에서 (Android SDK 필요
 APK 는 `.github/workflows/android.yml` 이 만든다(`app/`, `shared/` 가 바뀐 푸시마다).
 서버 주소는 빌드할 때 `EXPO_PUBLIC_SERVER_URL` 로 바꿀 수 있다(기본 `https://fran-g4j5.onrender.com`).
 Actions 로 만드는 APK 는 저장소 **Settings → Secrets and variables → Actions → Variables** 의 `SERVER_URL` 을
-읽는다. 서버를 옮겼다면 여기만 바꾸고 APK 를 다시 빌드하면 된다([Northflank 로 옮기기](../docs/deploy-northflank.md)).
+읽는다. 서버를 옮겼다면 여기만 바꾸고 APK 를 다시 빌드하면 된다.
 
 ## 검증
 
