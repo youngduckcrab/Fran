@@ -159,6 +159,7 @@ USER_A_PASSCODE / USER_B_PASSCODE   두 사람의 패스코드 (꼭 바꿀 것)
 
 | 방법 | 비용 | 확실함 |
 | --- | --- | --- |
+| 집에 늘 켜 두는 Windows 컴퓨터에서 돌리기 — [집 컴퓨터를 서버로](docs/home-server.md) | 무료 | 컴퓨터가 켜져 있는 동안 안 잠듦 |
 | 잠들지 않는 무료 호스팅으로 옮기기 — [Northflank 로 옮기는 법](docs/deploy-northflank.md) | 무료 | 안 잠듦 |
 | 호스팅 유료 등급 (Render Starter 등) | 월 몇 달러 | 확실히 안 잠듦 |
 | 밖에서 주기적으로 `/healthz` 찌르기 — [cron-job.org](https://cron-job.org), UptimeRobot | 무료 | 잘 됨 |

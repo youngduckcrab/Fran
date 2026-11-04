@@ -1,0 +1,63 @@
+name: Server image
+
+# 집 컴퓨터(docs/home-server.md)가 받아 가는 서버 이미지를 만든다.
+# 서버·웹·공용 코드가 바뀐 푸시마다 ghcr.io/<주인>/fran 에 올린다.
+#   기본 브랜치  → :latest
+#   다른 브랜치  → :<브랜치 이름>
+# 집 컴퓨터의 updater 가 몇 분마다 새 이미지를 확인해서 바꿔 띄운다.
+
+on:
+  push:
+    paths:
+      - 'server/**'
+      - 'web/**'
+      - 'shared/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/server-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: server-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/fran
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=sha
+
+      # 집 컴퓨터는 Windows(Docker Desktop)라 amd64 하나면 된다.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

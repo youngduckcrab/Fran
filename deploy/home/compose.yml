@@ -1,0 +1,87 @@
+# 집 컴퓨터에서 Fran 서버를 돌린다. 설치 순서는 docs/home-server.md.
+#
+#   tailscale  인터넷 주소. https://fran.<내 tailnet>.ts.net 으로 들어온 것을 fran 에 넘긴다(Funnel).
+#   fran       서버 본체(API·WebSocket·웹). GitHub Actions 가 만든 이미지를 받아 쓴다.
+#   updater    2분마다 새 이미지가 있는지 보고, 있으면 fran 만 바꿔 띄운다. 주소로 안 열리면 되살린다.
+#
+# 공유기 포트를 열 필요가 없고 집 IP 도 드러나지 않는다. 대화는 .env 의 DATABASE_URL(Neon)에 남는다.
+
+name: fran
+
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: fran
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?.env 에 TS_AUTHKEY 를 넣어야 합니다}
+      TS_HOSTNAME: fran
+      TS_STATE_DIR: /var/lib/tailscale
+      # Docker Desktop 에는 커널 터널 장치가 없다. 프로그램 안에서 네트워크를 돌린다.
+      TS_USERSPACE: 'true'
+      TS_AUTH_ONCE: 'true'
+      TS_SERVE_CONFIG: /config/serve.json
+    configs:
+      - source: serve
+        target: /config/serve.json
+    volumes:
+      # 로그인 상태. 지우면 Tailscale 에 새 기계로 다시 붙는다(주소가 fran-1 처럼 바뀔 수 있다).
+      - tailscale-state:/var/lib/tailscale
+
+  fran:
+    image: ghcr.io/youngduckcrab/fran:${FRAN_TAG:-latest}
+    restart: unless-stopped
+    # tailscale 과 같은 네트워크를 쓴다. Funnel 이 받은 것을 127.0.0.1:8787 로 넘긴다.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    env_file: .env
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:8787/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  updater:
+    image: docker:cli
+    restart: unless-stopped
+    working_dir: /deploy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/deploy:ro
+    entrypoint: ['sh', '-c']
+    # 이미지가 그대로면 pull 은 금방 끝나고 up 도 아무것도 하지 않는다.
+    #
+    # 그다음 Funnel 이 쓰는 길(tailscale 안의 127.0.0.1:8787)로 서버가 보이는지 본다. tailscale 만 다시
+    # 켜지면 서버는 옛 네트워크에 남아서, 겉보기엔 멀쩡한데 주소로는 열리지 않는다. 두 번 연달아
+    # 안 보이면 서버를 다시 켜서 새 네트워크에 붙인다.
+    command:
+      - |
+        while true; do
+          docker compose -p fran pull --quiet fran && docker compose -p fran up -d --no-deps fran
+          if ! docker compose -p fran exec -T tailscale wget -q -T 5 -O /dev/null http://127.0.0.1:8787/healthz; then
+            sleep 30
+            docker compose -p fran exec -T tailscale wget -q -T 5 -O /dev/null http://127.0.0.1:8787/healthz \
+              || docker compose -p fran restart fran
+          fi
+          sleep 120
+        done
+
+configs:
+  # Funnel 설정. 443 으로 들어온 HTTPS(WebSocket 포함)를 서버로 넘긴다.
+  # $$ 는 compose 가 건드리지 말라는 표시다. ${TS_CERT_DOMAIN} 은 tailscale 이 채운다.
+  serve:
+    content: |
+      {
+        "TCP": { "443": { "HTTPS": true } },
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": {
+            "Handlers": { "/": { "Proxy": "http://127.0.0.1:8787" } }
+          }
+        },
+        "AllowFunnel": { "$${TS_CERT_DOMAIN}:443": true }
+      }
+
+volumes:
+  tailscale-state:
