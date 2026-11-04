@@ -47,18 +47,10 @@
 1. <https://login.tailscale.com/start> 에서 가입한다(Google 계정 등, 무료 Personal).
    기기에 Tailscale 을 설치하라는 안내가 나오면 **건너뛴다** — 서버는 Docker 안의 Tailscale 을 쓴다.
 2. **DNS** 탭: MagicDNS 가 켜져 있는지 보고, 아래쪽 **HTTPS Certificates → Enable** 을 누른다.
-3. **Access controls** 탭: 정책 파일에 `funnel` 이 있는지 찾는다. 없으면 맨 바깥 `{ }` 안에 이 덩어리를
-   넣고 **Save**:
-
-   ```json
-   "nodeAttrs": [
-     { "target": ["autogroup:member"], "attr": ["funnel"] }
-   ],
-   ```
-
-   이미 `"nodeAttrs"` 가 있으면 그 목록 안에 `{ … "funnel" … }` 한 줄만 더한다.
-4. **Settings → Keys → Generate auth key…** 를 기본값 그대로 만들고, 나온 `tskey-auth-…` 를 복사해 둔다.
+3. **Settings → Keys → Generate auth key…** 를 기본값 그대로 만들고, 나온 `tskey-auth-…` 를 복사해 둔다.
    처음 한 번 로그인할 때만 쓰인다.
+
+인터넷 공개(Funnel)를 허락하는 것은 5단계에서 명령 한 줄로 한다. 관리 화면에서 정책을 손으로 고칠 필요가 없다.
 
 ## 4. 서버 파일 놓기
 
@@ -90,9 +82,21 @@ docker compose up -d
 1. `docker compose ps` 에서 `fran` 이 **healthy** 가 될 때까지 기다린다(1분쯤).
 2. Tailscale 관리 화면 **Machines** 에 `fran` 이 생긴다. 이름 아래 주소가 `fran.<이름>.ts.net` 이다.
 3. 그 줄 오른쪽 **⋯ → Disable key expiry.** 안 하면 180일 뒤에 저절로 끊긴다.
-4. 브라우저에서 `https://fran.<이름>.ts.net/healthz` 를 연다. `{"ok":true,"ready":true}` 면 성공이다.
-   처음 한 번은 인증서를 받느라 수십 초 걸릴 수 있다.
-5. `https://fran.<이름>.ts.net` 에서 로그인해 지난 대화가 보이는지 본다.
+4. **Funnel 허락.** 처음 한 번만:
+
+   ```powershell
+   docker compose exec tailscale tailscale funnel --bg 8787
+   ```
+
+   `Funnel is not enabled on your tailnet` 과 함께 링크가 나오면 그 링크를 열어 **Enable** 을 누른다.
+   링크 없이 끝나면 이미 허락된 것이다.
+
+   > `tailscale funnel status` 가 `(Funnel on)` 이라고 해도 이 허락이 없으면 인터넷에서는 열리지 않는다.
+   > 그 표시는 이 기계의 설정만 보여 준다. Tailscale 앱이 깔린 PC 에서는 허락 없이도 열리기 때문에
+   > 놓치기 쉽다 — 꼭 **폰의 모바일 데이터**로 확인한다.
+5. 폰(와이파이 끄고)에서 `https://fran.<이름>.ts.net/healthz` 를 연다. `{"ok":true,"ready":true}` 면 성공이다.
+   허락한 직후에는 주소가 퍼지는 데 몇 분 걸린다. 안 열리면 비행기 모드를 껐다 켜고 다시 본다.
+6. `https://fran.<이름>.ts.net` 에서 로그인해 지난 대화가 보이는지 본다.
 
 ## 6. 폰 앱을 새 주소로
 
@@ -130,5 +134,6 @@ docker compose up -d
 | 이미지를 못 받음(`denied`, `unauthorized`) | GitHub → 내 프로필 → **Packages → fran → Package settings → Change visibility → Public** |
 | `fran` 이 healthy 가 안 됨 | `docker compose logs fran`. 대개 `.env` 의 이름 오타나 `DATABASE_URL` |
 | Machines 에 `fran` 이 안 생김 | `docker compose logs tailscale`. 키가 틀렸거나 만료됐으면 새 키를 넣고 `docker compose up -d` |
-| 주소로 안 열림 | 3단계의 HTTPS Certificates 와 `funnel` 정책. `docker compose logs tailscale` 에 Funnel 관련 오류가 보인다 |
+| PC 에선 열리는데 폰에선 "주소를 찾을 수 없음" | Funnel 허락(5단계 4번). PC 는 Tailscale 안이라 허락 없이도 열린다 |
+| 주소로 아예 안 열림 | 3단계의 HTTPS Certificates. `docker compose logs tailscale` |
 | 재부팅 뒤 안 켜짐 | Windows 에 로그인했는지, Docker Desktop 의 "Start … when you sign in" |
