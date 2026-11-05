@@ -242,6 +242,9 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
     },
     name: { color: c.text, fontWeight: '800' },
     text: { color: c.textMuted },
+    // 새 앱을 받는 진행 막대.
+    track: { height: 6, borderRadius: 3, backgroundColor: c.border, marginTop: 8, overflow: 'hidden' },
+    fill: { height: 6, borderRadius: 3, backgroundColor: c.accent },
   }));
 
   return (
@@ -261,11 +264,36 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
         </Pressable>
       )}
 
-      {/* 새 앱이 나왔을 때. 통화 중에는 띄우지 않는다 — 받으러 가면 전화가 끊긴다. */}
-      {update.available && call.phase === 'idle' && (
-        <Pressable style={[st.banner, { top: insets.top + (alerted ? 88 : 8) }]} onPress={update.open}>
-          <Text style={st.name}>{t('update.ready')}</Text>
-          <Text style={st.text}>{t('update.apply')}</Text>
+      {/* 새 앱이 나왔을 때. 통화 중에는 띄우지 않는다 — 설치하면 앱이 꺼지면서 전화가 끊긴다. */}
+      {update.phase !== 'none' && call.phase === 'idle' && (
+        <Pressable
+          style={[st.banner, { top: insets.top + (alerted ? 88 : 8) }]}
+          onPress={update.start}
+          disabled={update.phase === 'downloading' || update.phase === 'installing'}
+        >
+          {update.phase === 'downloading' ? (
+            <>
+              <Text style={st.name}>{t('update.downloading', { percent: String(Math.round(update.progress * 100)) })}</Text>
+              <View style={st.track}>
+                <View style={[st.fill, { width: `${Math.round(update.progress * 100)}%` }]} />
+              </View>
+            </>
+          ) : update.phase === 'installing' ? (
+            <>
+              <Text style={st.name}>{t('update.installing')}</Text>
+              <Text style={st.text}>{t('update.installHint')}</Text>
+            </>
+          ) : update.phase === 'failed' ? (
+            <>
+              <Text style={st.name}>{t('update.failed')}</Text>
+              <Text style={st.text}>{t('update.browser')}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={st.name}>{t('update.ready')}</Text>
+              <Text style={st.text}>{t('update.applyApp')}</Text>
+            </>
+          )}
         </Pressable>
       )}
 

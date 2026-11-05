@@ -46,6 +46,8 @@ module.exports = {
         'android.permission.POST_NOTIFICATIONS',
         'android.permission.VIBRATE',
         'android.permission.WAKE_LOCK',
+        // 새 APK 를 앱 안에서 받아 설치 화면을 열려면 필요하다(src/update.ts).
+        'android.permission.REQUEST_INSTALL_PACKAGES',
       ],
       softwareKeyboardLayoutMode: 'resize',
       ...(hasFirebase ? { googleServicesFile: './google-services.json' } : {}),
