@@ -382,10 +382,11 @@ export default function Settings({ profile, view, onChangeView, onSaved, onTheme
         </Section>
 
         <Section title={t('settings.notify')}>
+          {/* 웹의 문구는 브라우저 이야기라 앱에서는 앱에 맞는 것을 쓴다. */}
           {push === 'unsupported' ? (
-            <Text style={{ color: p.textMuted }}>{t('settings.notifyUnsupported')}</Text>
+            <Text style={{ color: p.textMuted }}>{t('settings.notifyAppUnsupported')}</Text>
           ) : push === 'denied' ? (
-            <Text style={{ color: p.textMuted }}>{t('settings.notifyDenied')}</Text>
+            <Text style={{ color: p.textMuted }}>{t('settings.notifyAppDenied')}</Text>
           ) : (
             <>
               <View style={st.toggle}>

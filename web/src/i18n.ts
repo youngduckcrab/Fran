@@ -268,6 +268,10 @@ const ko = {
   "settings.notifyUnsupported":
     "이 브라우저에서는 알림을 쓸 수 없어요. 홈 화면에 추가하면 될 수도 있어요.",
   "settings.notifyFailed": "알림을 켜지 못했어요.",
+  "settings.notifyAppUnsupported":
+    "이 앱은 푸시 알림 설정(Firebase) 없이 만들어져서, 앱을 닫아 두었을 때의 알림은 아직 안 돼요. 앱을 켜 두었을 때의 알림과 진동은 돼요.",
+  "settings.notifyAppDenied":
+    "폰에서 Fran 알림이 막혀 있어요. 폰 설정 → 애플리케이션 → Fran → 알림에서 허용해 주세요.",
   "settings.notifyTest": "시험 알림 받아보기",
   "settings.notifyTestSent": "보냈어요. 폰에 뜨는지 확인해 보세요. ({count}대)",
   "settings.notifyTestNone": "보낼 기기가 없어요. 알림을 껐다 다시 켜 보세요.",
@@ -615,6 +619,10 @@ const es: Record<StringKey, string> = {
   "settings.notifyUnsupported":
     "Este navegador no puede avisarte. Prueba a añadir la app a la pantalla de inicio.",
   "settings.notifyFailed": "No se pudieron activar los avisos.",
+  "settings.notifyAppUnsupported":
+    "Esta app se construyó sin la configuración de notificaciones push (Firebase), así que aún no avisa con la app cerrada. Con la app abierta, los avisos y la vibración sí funcionan.",
+  "settings.notifyAppDenied":
+    "Las notificaciones de Fran están bloqueadas en el teléfono. Permítelas en Ajustes → Aplicaciones → Fran → Notificaciones.",
   "settings.notifyTest": "Mandarme un aviso de prueba",
   "settings.notifyTestSent":
     "Enviado. Mira si aparece en el teléfono. ({count})",
@@ -954,6 +962,10 @@ const en: Record<StringKey, string> = {
   "settings.notifyUnsupported":
     "This browser can't notify you. Adding the app to your home screen may help.",
   "settings.notifyFailed": "Couldn't turn notifications on.",
+  "settings.notifyAppUnsupported":
+    "This app was built without push notification setup (Firebase), so it can't notify you while it's closed yet. Alerts and vibration still work while the app is open.",
+  "settings.notifyAppDenied":
+    "Fran's notifications are blocked on this phone. Allow them in Settings → Apps → Fran → Notifications.",
   "settings.notifyTest": "Send me a test notification",
   "settings.notifyTestSent":
     "Sent. See if it shows up on your phone. ({count})",

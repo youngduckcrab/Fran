@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, FlatList, KeyboardAvoidingView, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, Keyboard, KeyboardAvoidingView, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { messageText, type ChatMessage, type LangCode, type SavedSentence } from '@fran/shared';
@@ -78,6 +78,29 @@ export default function ChatRoom({
   const waking = useWaking(chat.connection);
   const speaker = useSpeaker();
   const list = useRef<FlatList<Row> | null>(null);
+
+  /*
+   * 키보드가 입력칸을 가리지 않게.
+   *
+   * 요즘 안드로이드는 키보드가 떠도 화면을 줄여 주지 않는다(edge-to-edge). 그만큼을 KeyboardAvoidingView 가
+   * 밀어 올리는데, 이 뷰는 자기 위치를 바로 위 부모 기준으로만 알아서 머리말과 상태 표시줄만큼 덜 올린다.
+   * 머리말 아래 끝이 화면에서 어디인지 재서 그만큼을 알려 준다.
+   */
+  const header = useRef<View | null>(null);
+  const [headerBottom, setHeaderBottom] = useState(0);
+  const measureHeader = useCallback(() => {
+    header.current?.measureInWindow((_x, y, _width, height) => setHeaderBottom(y + height));
+  }, []);
+  /** 키보드가 떠 있으면 아래 시스템 막대 자리를 비워 둘 이유가 없다. 키보드가 그 위를 덮는다. */
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
 
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
   const [picked, setPicked] = useState<ChatMessage | null>(null);
@@ -321,7 +344,7 @@ export default function ChatRoom({
 
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
-      <View style={{ paddingTop: insets.top, backgroundColor: p.surface }}>
+      <View ref={header} onLayout={measureHeader} style={{ paddingTop: insets.top, backgroundColor: p.surface }}>
         <Header
           title={peer?.name ?? t('chat.connecting')}
           subtitle={status}
@@ -340,7 +363,7 @@ export default function ChatRoom({
       </View>
 
       <Wallpaper value={me?.wallpaper}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerBottom}>
           <FlatList
             ref={list}
             data={rows}
@@ -421,7 +444,7 @@ export default function ChatRoom({
             </View>
           )}
 
-          <View style={{ paddingBottom: insets.bottom, backgroundColor: p.surface }}>
+          <View style={{ paddingBottom: keyboardOpen ? 0 : insets.bottom, backgroundColor: p.surface }}>
             <Composer
               peerName={peer?.name ?? ''}
               editing={editing}
