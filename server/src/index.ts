@@ -38,6 +38,7 @@ import {
   verifyToken,
 } from './auth.js';
 import { config, findUserById, peerOf } from './config.js';
+import { latestAppRelease, openAppApk } from './appRelease.js';
 import {
   deleteNativePushToken,
   saveNativePushToken,
@@ -940,6 +941,31 @@ app.get('/api/attachments/:id', async (c) => {
     'content-type': file.mime,
     // 내용이 바뀌지 않는 파일이다. 한 번 받은 폰은 다시 받지 않는다.
     'cache-control': 'private, max-age=31536000, immutable',
+  });
+});
+
+/* ------------------------------ 앱 새 판 ------------------------------ */
+
+/** 지금 받을 수 있는 앱 빌드 번호와 크기. 앱이 켜질 때 묻는다. */
+app.get('/api/app/latest', async (c) => {
+  if (!authenticate(c)) return c.json({ error: 'unauthorized' }, 401);
+  const release = await latestAppRelease();
+  if (!release) return c.json({ error: '새 판을 확인하지 못했습니다.' }, 502);
+  return c.json({ build: release.build, size: release.size });
+});
+
+/** 새 APK. 앱이 받아서 설치 화면을 연다. 저장소가 비공개여도 서버가 대신 받아 준다. */
+app.get('/api/app/apk', async (c) => {
+  if (!authenticateMedia(c)) return c.json({ error: 'unauthorized' }, 401);
+  const file = await openAppApk();
+  if (!file) return c.json({ error: '새 판을 받지 못했습니다.' }, 502);
+  return new Response(file.body, {
+    headers: {
+      'content-type': 'application/vnd.android.package-archive',
+      'content-length': String(file.size),
+      'content-disposition': 'attachment; filename="fran.apk"',
+      'cache-control': 'no-store',
+    },
   });
 });
 

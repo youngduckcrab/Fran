@@ -126,6 +126,40 @@ docker compose up -d
 새 판은 updater 가 2분마다 확인해서 저절로 바꿔 띄운다. 주소로 서버가 안 보이면 다시 켜서 되살리기도 한다. 코드가 바뀌어 GitHub Actions 의 `Server image` 가
 끝나면 곧 반영된다.
 
+## 저장소를 비공개로
+
+앱의 새 판은 이 서버를 거쳐 받는다(앱 → 서버 → GitHub 릴리스). 저장소를 비공개로 돌려도 앱 안 업데이트는
+그대로 되는데, 서버가 비공개 릴리스를 읽을 토큰이 하나 필요하다.
+
+**순서가 중요하다.** 두 폰 모두 빌드 19 이상이어야 한다(앱 **설정** 맨 아래 버전의 괄호 안 숫자).
+그 전 빌드는 GitHub 에 직접 묻기 때문에, 비공개로 돌린 뒤에는 새 판을 알아채지 못한다.
+
+1. GitHub → 오른쪽 위 프로필 → **Settings → Developer settings → Personal access tokens → Fine-grained tokens
+   → Generate new token**
+   - Token name: `fran-release` · Expiration: 원하는 만큼(만료되면 새로 만들어 바꿔 넣는다)
+   - Repository access: **Only select repositories → Fran**
+   - Permissions → Repository permissions → **Contents: Read-only** (나머지는 그대로)
+   - **Generate token** → 나온 `github_pat_…` 를 복사한다. 이 창을 닫으면 다시 볼 수 없다.
+2. 집 컴퓨터의 `C:\fran\.env` 맨 아래에 한 줄 더한다. 토큰은 채팅·GitHub 어디에도 붙여 넣지 않는다.
+
+   ```
+   APP_RELEASE_TOKEN=github_pat_…
+   ```
+3. PowerShell 에서 `cd C:\fran` → `docker compose up -d`
+4. 저장소 → **Settings → General → 맨 아래 Danger Zone → Change visibility → Make private**
+5. 확인
+   - 앱: 설정에서 버전을 본 뒤, 다음 새 판이 나오면 홈 아래에 업데이트 띠가 뜨는지.
+   - 집 서버 이미지: `docker compose pull fran` 이 그대로 되는지. `denied` 가 나오면 GitHub → 프로필 →
+     **Packages → fran → Package settings** 에서 공개(Public)인지 본다.
+
+알아 둘 것
+
+- 비공개 저장소는 GitHub Actions 를 한 달에 정해진 시간만 무료로 쓴다. 앱 빌드가 한 번에 10분쯤이라
+  평소에는 넉넉하다.
+- 새로 깔 폰에 줄 APK 링크(releases 페이지)는 비공개가 되면 열리지 않는다. 이미 깐 폰은 앱 안에서 계속 새 판을 받는다.
+- 토큰이 만료되거나 틀리면 업데이트 띠가 뜨지 않을 뿐 앱은 그대로 된다. `docker compose logs fran` 에
+  `APP_RELEASE_TOKEN 을 확인하세요` 가 보이면 토큰을 새로 만들어 바꾼다.
+
 ## 안 될 때
 
 | 증상 | 볼 곳 |

@@ -173,6 +173,18 @@ export const config = {
   interpret: {
     model: process.env.GEMINI_INTERPRET_MODEL ?? 'gemini-3.5-live-translate-preview',
   },
+  /**
+   * 앱의 새 판(APK)이 올라가는 곳. 앱은 서버에 묻고, 서버가 여기서 받아 넘긴다(appRelease.ts).
+   *
+   * 저장소가 비공개면 APP_RELEASE_TOKEN 이 있어야 한다. GitHub → Settings → Developer settings →
+   * Fine-grained tokens 에서 이 저장소 하나에 Contents: Read-only 만 준 토큰이면 된다.
+   */
+  appRelease: {
+    repo: process.env.APP_RELEASE_REPO?.trim() || 'youngduckcrab/Fran',
+    tag: process.env.APP_RELEASE_TAG?.trim() || 'android-latest',
+    asset: 'fran.apk',
+    token: process.env.APP_RELEASE_TOKEN?.trim() || undefined,
+  },
   users: [buildUser('A', 'ko'), buildUser('B', 'es')] as const,
   glossary: loadGlossary(),
 };
