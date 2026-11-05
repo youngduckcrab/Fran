@@ -54,41 +54,95 @@ export interface ListenOptions {
   onError?: (reason: string) => void;
 }
 
+/** 다시 켜 봐야 소용없는 오류. 권한이 막혔거나 이 언어를 못 알아듣는 기기다. */
+const FATAL = new Set(['not-allowed', 'service-not-allowed', 'language-not-supported']);
+
+/** 진짜 오류가 이만큼 잇달면 그만둔다. 끝없이 켰다 꺼지며 배터리와 마이크만 잡아먹는다. */
+const GIVE_UP_AFTER = 8;
+
+/** 받아쓰기가 오류로 끝났을 때 다시 켜기까지의 기다림. 잇달수록 길어진다. */
+function retryDelay(failures: number): number {
+  return Math.min(250 * 2 ** failures, 8000);
+}
+
 /**
  * 받아쓰기를 시작한다. 돌려주는 것으로 멈춘다.
  *
  * 인식기는 조용하면 스스로 끝난다. 통화가 이어지는 동안에는 곧바로 다시 켠다.
+ *
+ * 인식기는 폰에 하나뿐이다. 앞서 멈춘 받아쓰기(번역을 읽느라 잠깐 쉬었다가 다시 켠 것)의 "끝" 이
+ * 새 받아쓰기의 귀에 늦게 들어온다. 그걸 내 것으로 알고 다시 켜면, 막 켠 인식기를 또 켜려다
+ * 오류가 나고, 그 오류가 다시 끝을 부르며 빙글빙글 돈다. 내가 켠 뒤 "시작" 을 받기 전에 온 끝은 무시한다.
  */
 export function listen({ lang, onLine, onError }: ListenOptions): Listener {
   let stopped = false;
   let restartTimer: ReturnType<typeof setTimeout> | null = null;
+  /** starting: 켜 달라고 했고 아직 "시작" 을 못 받았다. running: 듣는 중. failed: 켜다가 오류가 났다. */
+  let phase: 'idle' | 'starting' | 'running' | 'failed' = 'idle';
+  /** 결과 없이 오류로 끝난 횟수. 무엇이든 알아들으면 0 으로. */
+  let failures = 0;
 
   const onResult = (event: ExpoSpeechRecognitionResultEvent) => {
     const text = event.results[0]?.transcript?.trim();
-    if (text) onLine(text, event.isFinal);
+    if (!text) return;
+    failures = 0;
+    onLine(text, event.isFinal);
+  };
+
+  const onStart = () => {
+    if (phase === 'starting') phase = 'running';
   };
 
   const onErrorEvent = (event: ExpoSpeechRecognitionErrorEvent) => {
-    // 조용했거나 우리가 멈춘 것은 알릴 일이 아니다.
-    if (event.error === 'no-speech' || event.error === 'speech-timeout' || event.error === 'aborted') return;
-    onError?.(event.error);
+    // 조용했거나 우리가 멈춘 것은 알릴 일이 아니다. 조용했다는 건 듣고 있었다는 뜻이기도 하다.
+    if (event.error === 'no-speech' || event.error === 'speech-timeout') {
+      if (phase === 'starting') phase = 'running';
+      return;
+    }
+    if (event.error === 'aborted' || phase === 'idle') return;
+    if (phase === 'starting') phase = 'failed';
+    failures += 1;
     // 마이크나 인식 권한이 막힌 것이면 다시 켜 봐야 같은 일이 반복된다.
-    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') stopped = true;
+    if (FATAL.has(event.error)) {
+      stopped = true;
+      onError?.(event.error);
+      return;
+    }
+    if (failures >= GIVE_UP_AFTER) {
+      stopped = true;
+      onError?.('gave-up');
+    }
   };
 
   const onEnd = () => {
     if (stopped) return;
-    restartTimer = setTimeout(begin, 250);
+    // 앞선 받아쓰기의 끝이 늦게 온 것. 지금 켜고 있는 것은 아직 살아 있다.
+    // 혹시 이번 것의 끝이었는데 "시작" 이 빠졌던 거라면, 조금 뒤에도 시작하지 않은 채일 테니 다시 켠다.
+    if (phase === 'starting') {
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        if (phase === 'starting') begin();
+      }, 4000);
+      return;
+    }
+    if (phase === 'idle') return;
+    const delay = phase === 'failed' || failures > 0 ? retryDelay(failures) : 250;
+    phase = 'idle';
+    if (restartTimer) clearTimeout(restartTimer);
+    restartTimer = setTimeout(begin, delay);
   };
 
   const subscriptions = [
+    ExpoSpeechRecognitionModule.addListener('start', onStart),
     ExpoSpeechRecognitionModule.addListener('result', onResult),
     ExpoSpeechRecognitionModule.addListener('error', onErrorEvent),
     ExpoSpeechRecognitionModule.addListener('end', onEnd),
   ];
 
   function begin() {
+    restartTimer = null;
     if (stopped) return;
+    phase = 'starting';
     try {
       ExpoSpeechRecognitionModule.start({
         lang: DIALECT[lang],
@@ -98,8 +152,16 @@ export function listen({ lang, onLine, onError }: ListenOptions): Listener {
         maxAlternatives: 1,
         androidIntentOptions: { EXTRA_LANGUAGE_MODEL: 'free_form' },
       });
-    } catch (error) {
-      onError?.(error instanceof Error ? error.message : 'unknown');
+    } catch {
+      // 켜지도 못했다. 끝 소식도 오지 않으므로 여기서 다시 잡는다.
+      phase = 'idle';
+      failures += 1;
+      if (failures >= GIVE_UP_AFTER) {
+        stopped = true;
+        onError?.('gave-up');
+        return;
+      }
+      restartTimer = setTimeout(begin, retryDelay(failures));
     }
   }
 

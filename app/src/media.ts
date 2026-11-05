@@ -9,6 +9,7 @@ import {
 import type { Attachment, AttachmentKind } from '@fran/shared';
 import { getToken } from './web/api';
 import { SERVER_URL } from './shims';
+import { stopVoice } from './voicePlayer';
 
 /** 사진의 긴 변을 이 정도로 줄여서 올린다. 폰 화면에서 보기에 충분하다. */
 const MAX_EDGE = 1600;
@@ -83,33 +84,56 @@ export function useVoiceRecorder(): VoiceRecorder {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recording, setRecording] = useState(false);
   const startedAt = useRef(0);
+  /** 녹음 중인지. 화면 상태(recording)는 다음 그림에서야 바뀌므로, 빨리 두 번 누른 것은 이걸로 막는다. */
+  const live = useRef(false);
 
   const start = useCallback(async () => {
+    if (live.current) return true;
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) return false;
+    // 듣던 음성 메시지가 녹음에 같이 들어가지 않게.
+    stopVoice();
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-    await recorder.prepareToRecordAsync();
-    recorder.record();
+    try {
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+    } catch (cause) {
+      // 다른 앱이나 전화가 마이크를 쥐고 있으면 여기서 실패한다. 그대로 두면 녹음기가 "준비됨" 에
+      // 걸려서, 다음에 누를 때마다 "이미 준비됐다" 오류만 난다. 멈춰서 처음 상태로 돌려 둔다.
+      await recorder.stop().catch(() => {});
+      await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+      throw cause;
+    }
+    live.current = true;
     startedAt.current = Date.now();
     setRecording(true);
     return true;
   }, [recorder]);
 
   const finish = useCallback(async () => {
+    live.current = false;
     setRecording(false);
     await recorder.stop();
     await setAudioModeAsync({ allowsRecording: false }).catch(() => {});
   }, [recorder]);
 
   const stop = useCallback(async () => {
-    const durationMs = Date.now() - startedAt.current;
+    if (!live.current) return null;
+    // 길이는 녹음기가 센 것을 쓴다. 앱이 뒤로 가 있던 동안 녹음기는 멈추는데, 시계는 계속 간다.
+    let durationMs = Date.now() - startedAt.current;
+    try {
+      const measured = recorder.getStatus().durationMillis;
+      if (measured > 0) durationMs = measured;
+    } catch {
+      // 시계 값으로 둔다.
+    }
     await finish();
     return recorder.uri ? { uri: recorder.uri, durationMs } : null;
   }, [finish, recorder]);
 
   const cancel = useCallback(async () => {
-    if (recording) await finish().catch(() => {});
-  }, [finish, recording]);
+    if (live.current) await finish().catch(() => {});
+  }, [finish]);
 
   return { recording, start, stop, cancel, get startedAt() { return startedAt.current; } };
 }

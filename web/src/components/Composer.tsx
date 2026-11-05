@@ -14,7 +14,8 @@ import {
 
 interface Props {
   peerName: string;
-  onSend: (text: string, options: { translationNote?: string; attachmentId?: string }) => void;
+  /** 보냈으면 true. 연결이 끊겨 못 보냈으면 false 이고, 쓴 글과 첨부를 그대로 둔다. */
+  onSend: (text: string, options: { translationNote?: string; attachmentId?: string }) => boolean;
   onTyping: (isTyping: boolean) => void;
   /** 고치고 있는 내 메시지. 없으면 평소처럼 새로 쓴다. */
   editing: ChatMessage | null;
@@ -162,10 +163,15 @@ export default function Composer({
 
     if (!text && !pending) return;
 
-    onSend(text, {
+    const sent = onSend(text, {
       ...(note.trim() ? { translationNote: note.trim() } : {}),
       ...(pending ? { attachmentId: pending.id } : {}),
     });
+    if (!sent) {
+      setError(t('composer.notSent'));
+      return;
+    }
+    setError(null);
     setDraft('');
     setNote('');
     setNoteOpen(false);

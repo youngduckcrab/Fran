@@ -119,7 +119,13 @@ export function useDoodle(emit: (event: ClientEvent) => void, callId: string | n
 
   const wipe = useCallback(() => setStrokes([]), []);
 
-  return { strokes, drawing, setDrawing, begin, extend, end, clear, receive, wipe };
+  /** 통화가 끝날 때. 그리기 모드도 끈다 — 켜 둔 채 끝나면 다음 영상통화가 손가락을 못 쓴 채 시작한다. */
+  const reset = useCallback(() => {
+    setStrokes([]);
+    setDrawing(false);
+  }, []);
+
+  return { strokes, drawing, setDrawing, begin, extend, end, clear, receive, wipe, reset };
 }
 
 export type Doodle = ReturnType<typeof useDoodle>;

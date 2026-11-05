@@ -102,7 +102,7 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
 
   const accept = async () => {
     if (await ensureCallPermissions(call.video)) void call.accept();
-    else call.decline();
+    else call.declineNoPermission();
   };
 
   const bigStream = swapped ? call.localStream : call.remoteStream;
@@ -150,7 +150,7 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
           <RTCView
             streamURL={streamUrl(bigStream) ?? ''}
             objectFit="cover"
-            mirror={swapped}
+            mirror={swapped && call.facing === 'user'}
             style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}
           />
         )}
@@ -221,7 +221,7 @@ export default function CallScreen({ call, peerName, myId, peerId, messages, rea
             <RTCView
               streamURL={streamUrl(smallStream) ?? ''}
               objectFit="cover"
-              mirror={!swapped}
+              mirror={!swapped && call.facing === 'user'}
               zOrder={1}
               style={{ flex: 1 }}
             />

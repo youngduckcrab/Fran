@@ -438,11 +438,42 @@ async function notifyNewMessage(messageId: string): Promise<void> {
  */
 const RING_TIMEOUT_MS = Number(process.env.RING_TIMEOUT_MS ?? 45_000);
 
-/** 지금 울리고 있는 전화. 둘만 쓰는 앱이라 한 번에 하나면 충분하다. */
-let ringing: { callId: string; from: string; to: string; timer: NodeJS.Timeout } | null = null;
+/**
+ * 통화 중에 한쪽 연결이 끊기면 이만큼 기다렸다가 끝낸다.
+ *
+ * 영상·음성은 서버를 거치지 않고 폰끼리 오간다. 와이파이에서 데이터로 넘어가는 몇 초 동안
+ * 서버 연결만 끊겼다 붙는 일은 흔한데, 그때마다 통화를 끊어 버리면 멀쩡히 이야기하다 끊긴다.
+ * 정말로 폰이 꺼진 것이면 폰끼리의 연결도 끊어져서 남은 쪽이 스스로 알아챈다.
+ */
+const CALL_DROP_GRACE_MS = Number(process.env.CALL_DROP_GRACE_MS ?? 20_000);
+
+/** 받기 전에 건 쪽이 보낸 연결 후보를 이만큼까지 들고 있는다. 받는 쪽이 늦게 들어와도 붙을 수 있게. */
+const RING_ICE_KEEP = 60;
+
+/**
+ * 지금 울리고 있거나 이어져 있는 전화. 둘만 쓰는 앱이라 한 번에 하나면 충분하다.
+ *
+ * offer 와 ice 는 받는 쪽이 앱을 꺼 둔 채 알림을 보고 들어왔을 때 다시 보내 주려고 들고 있는다.
+ * 그 사이에 보낸 것은 받을 곳이 없어 사라졌다.
+ */
+let ringing: {
+  callId: string;
+  from: string;
+  to: string;
+  timer: NodeJS.Timeout;
+  offer: string;
+  video: boolean;
+  ice: string[];
+  answered: boolean;
+  /** 한쪽이 끊겨서 기다리는 중. */
+  drop: NodeJS.Timeout | null;
+} | null = null;
 
 function stopRinging(): void {
-  if (ringing) clearTimeout(ringing.timer);
+  if (ringing) {
+    clearTimeout(ringing.timer);
+    if (ringing.drop) clearTimeout(ringing.drop);
+  }
   ringing = null;
 }
 
@@ -1369,6 +1400,11 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
         from: userId,
         to,
         timer: setTimeout(() => endCall(event.callId, 'missed'), RING_TIMEOUT_MS),
+        offer: event.offer,
+        video: event.video,
+        ice: [],
+        answered: false,
+        drop: null,
       };
       sendToUser(to, {
         type: 'call',
@@ -1386,6 +1422,8 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
       if (!ringing || ringing.callId !== event.callId) return;
       // 받았으니 더 울릴 이유가 없다. 내 다른 기기들도 멈춘다.
       clearTimeout(ringing.timer);
+      ringing.answered = true;
+      ringing.ice = [];
       sendToUser(userId, { type: 'call_taken', callId: event.callId }, socket);
       sendToUser(peerOf(userId).profile.id, {
         type: 'call_answer',
@@ -1496,6 +1534,9 @@ async function handleClientEvent(userId: string, socket: WebSocket, event: Clien
     }
     case 'call_ice': {
       // 붙는 길을 찾는 후보들. 통화 내내 계속 오간다.
+      if (ringing?.callId === event.callId && !ringing.answered && ringing.from === userId) {
+        if (ringing.ice.length < RING_ICE_KEEP) ringing.ice.push(event.candidate);
+      }
       sendToUser(peerOf(userId).profile.id, {
         type: 'call_ice',
         callId: event.callId,
@@ -1760,6 +1801,17 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
     send(socket, { type: 'glossary', entries: glossary });
     send(socket, { type: 'presence', userId: peer.id, online: isOnline(peer.id) });
     broadcast({ type: 'presence', userId, online: true }, socket);
+
+    // 앱을 꺼 둔 채 전화 알림을 보고 들어왔다. 울리는 중인 전화를 다시 보내야 받을 수 있다.
+    if (ringing && !ringing.answered && ringing.to === userId) {
+      send(socket, { type: 'call', callId: ringing.callId, from: ringing.from, offer: ringing.offer, video: ringing.video });
+      for (const candidate of ringing.ice) send(socket, { type: 'call_ice', callId: ringing.callId, candidate });
+    }
+    // 끊겼다가 돌아왔다. 기다리던 끝내기는 거둔다.
+    if (ringing?.drop && (ringing.from === userId || ringing.to === userId)) {
+      clearTimeout(ringing.drop);
+      ringing.drop = null;
+    }
   })().catch((error: unknown) => {
     console.error('[ws] 접속 처리 실패:', error);
     send(socket, { type: 'error', message: '대화를 불러오지 못했습니다.' });
@@ -1786,8 +1838,18 @@ wss.on('connection', (socket: WebSocket, _request: unknown, userId: string) => {
     if (!isOnline(userId)) {
       broadcast({ type: 'presence', userId, online: false });
       // 통화 중에 폰이 꺼지거나 지하철에 들어가면 상대 화면만 계속 통화 중으로 남는다.
-      if (ringing && (ringing.from === userId || ringing.to === userId)) {
-        endCall(ringing.callId, 'failed');
+      // 다만 잠깐 끊겼다 붙는 것일 수 있으니 조금 기다린다(CALL_DROP_GRACE_MS).
+      // 받기 전에 받는 쪽이 끊긴 것은 기다리지도 끝내지도 않는다. 알림을 보고 다시 들어와 받을 수 있고,
+      // 끝내 안 받으면 울림 시간이 지나 "못 받음" 으로 끝난다.
+      const call = ringing;
+      if (call && (call.from === userId || call.to === userId) && !call.drop) {
+        const calleeAway = !call.answered && call.to === userId;
+        if (!calleeAway) {
+          call.drop = setTimeout(() => {
+            call.drop = null;
+            if (ringing === call && !isOnline(userId)) endCall(call.callId, 'failed');
+          }, CALL_DROP_GRACE_MS);
+        }
       }
       // 마이크 소리도, 옮긴 소리를 받을 곳도 없다.
       stopInterpretForUser(userId);

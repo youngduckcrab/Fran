@@ -12,7 +12,7 @@ import { plainText } from '../web/text';
 import { EMPTY, loadCollections, saveCollections, type Collections } from '../web/collections';
 import { loadBubbleView, saveBubbleView, type BubbleView } from '../web/view';
 import { useBackClose } from '../backstack';
-import { clearDelivered, enablePush, pushState, useKeepPushFresh, useNotificationOpen } from '../push';
+import { ASKED_KEY, enablePush, pushState, useKeepPushFresh, useNotificationOpen } from '../push';
 import { useAppUpdate } from '../update';
 import { useStyles } from '../ui/kit';
 import Album from './Album';
@@ -48,6 +48,8 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
   const chat = useChat(token, onLogout);
   const waking = useWaking(chat.connection);
   const update = useAppUpdate();
+  /** 새 버전 띠를 이번에는 닫았는지. 다음에 앱을 켜면 다시 뜬다. */
+  const [updateClosed, setUpdateClosed] = useState(false);
   // 받아쓰기는 내가 실제로 입 밖에 내는 말로 들어야 한다. 화면 언어가 아니라 모국어다.
   // 번역을 소리로 읽어 줄 때는 상대 말을 옮겨 받는 언어(주 언어)의 목소리를 쓴다.
   const call = useCall(
@@ -75,8 +77,8 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
    * 알림이 뜬다. 설정에서 끌 수 있고, 거절하면 다시 묻지 않는다.
    */
   useEffect(() => {
-    if (localStorage.getItem('fran.pushAsked')) return;
-    localStorage.setItem('fran.pushAsked', '1');
+    if (localStorage.getItem(ASKED_KEY)) return;
+    localStorage.setItem(ASKED_KEY, '1');
     void pushState()
       .then((state) => (state === 'off' ? enablePush() : state))
       .catch(() => undefined);
@@ -141,10 +143,11 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
   const myReadAt = chat.readAt[chat.me?.id ?? ''] ?? 0;
   const unread = chat.messages.filter((message) => message.senderId !== chat.me?.id && message.createdAt > myReadAt).length;
 
-  // 아이콘 숫자는 서버 푸시가 붙여 준다. 앱을 열고 다 읽으면 치운다.
-  useEffect(() => {
-    if (unread === 0) void clearDelivered();
-  }, [unread]);
+  /*
+   * 폰에 쌓인 알림은 채팅을 열어 실제로 읽었을 때 치운다(ChatRoom).
+   * 앱을 여는 것만으로 치우면, 서버에서 새 메시지가 오기 전(기기에 적어 둔 대화로는 다 읽은
+   * 상태)이라 방금 온 알림까지 지워 버린다.
+   */
 
   /* ---- 화면 안 알림 ---- */
 
@@ -242,6 +245,9 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
     },
     name: { color: c.text, fontWeight: '800' },
     text: { color: c.textMuted },
+    // 새 앱 띠. 닫기 단추 자리를 비워 둔다.
+    updateBanner: { paddingRight: 40 },
+    updateClose: { position: 'absolute', top: 8, right: 10, padding: 4 },
     // 새 앱을 받는 진행 막대.
     track: { height: 6, borderRadius: 3, backgroundColor: c.border, marginTop: 8, overflow: 'hidden' },
     fill: { height: 6, borderRadius: 3, backgroundColor: c.accent },
@@ -264,13 +270,24 @@ export default function Shell({ token, onLogout, onUiLang, onTheme, onToken }: P
         </Pressable>
       )}
 
-      {/* 새 앱이 나왔을 때. 통화 중에는 띄우지 않는다 — 설치하면 앱이 꺼지면서 전화가 끊긴다. */}
-      {update.phase !== 'none' && call.phase === 'idle' && (
+      {/*
+        새 앱이 나왔을 때. 홈 화면 아래쪽에만 띄운다 — 위에 띄우면 화면마다 머리말의 단추(뒤로·전화·설정)를
+        덮는다. 닫을 수 있다. 통화 중에는 띄우지 않는다 — 설치하면 앱이 꺼지면서 전화가 끊긴다.
+      */}
+      {update.phase !== 'none' && !updateClosed && page === 'home' && call.phase === 'idle' && (
         <Pressable
-          style={[st.banner, { top: insets.top + (alerted ? 88 : 8) }]}
+          style={[st.banner, st.updateBanner, { top: undefined, bottom: insets.bottom + 12 }]}
           onPress={update.start}
           disabled={update.phase === 'downloading' || update.phase === 'installing'}
         >
+          <Pressable
+            style={st.updateClose}
+            onPress={() => setUpdateClosed(true)}
+            hitSlop={12}
+            accessibilityLabel={t('update.close')}
+          >
+            <Text style={st.text}>✕</Text>
+          </Pressable>
           {update.phase === 'downloading' ? (
             <>
               <Text style={st.name}>{t('update.downloading', { percent: String(Math.round(update.progress * 100)) })}</Text>

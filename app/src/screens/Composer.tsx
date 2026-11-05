@@ -11,7 +11,8 @@ import { usePalette } from '../theme';
 
 interface Props {
   peerName: string;
-  onSend: (text: string, options: { translationNote?: string; attachmentId?: string }) => void;
+  /** 보냈으면 true. 연결이 끊겨 못 보냈으면 false 이고, 쓴 글과 첨부를 그대로 둔다. */
+  onSend: (text: string, options: { translationNote?: string; attachmentId?: string }) => boolean;
   onTyping: (isTyping: boolean) => void;
   /** 고치고 있는 내 메시지. 없으면 평소처럼 새로 쓴다. */
   editing: ChatMessage | null;
@@ -24,6 +25,11 @@ interface Props {
 }
 
 const TYPING_IDLE_MS = 1500;
+/**
+ * 음성 메시지는 이만큼에서 저절로 끝내고 올린다. 서버는 8MB(이 음질로 8분쯤)까지 받는데,
+ * 그보다 길면 다 올린 뒤에야 거절당해 녹음을 통째로 잃는다.
+ */
+const MAX_RECORDING_MS = 5 * 60 * 1000;
 
 /**
  * 글·사진·음성을 보내는 아래쪽 칸.
@@ -157,7 +163,11 @@ export default function Composer({
   // 녹음 중에는 시간이 흐르는 게 보여야 한다. 멈춘 줄 알고 한참 떠들게 되면 곤란하다.
   useEffect(() => {
     if (!recorder.recording) return;
-    const timer = setInterval(() => setElapsed(Date.now() - recorder.startedAt), 200);
+    const timer = setInterval(() => {
+      const now = Date.now() - recorder.startedAt;
+      setElapsed(now);
+      if (now >= MAX_RECORDING_MS) void finishRef.current();
+    }, 200);
     return () => clearInterval(timer);
   }, [recorder.recording, recorder.startedAt]);
 
@@ -177,7 +187,10 @@ export default function Composer({
       const permission = camera
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) return;
+      if (!permission.granted) {
+        setError(t(camera ? 'composer.cameraDenied' : 'composer.photosDenied'));
+        return;
+      }
       const result = camera
         ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
@@ -216,6 +229,9 @@ export default function Composer({
     }
   };
 
+  const finishRef = useRef(finishRecording);
+  finishRef.current = finishRecording;
+
   const submit = () => {
     const text = draft.trim();
 
@@ -230,10 +246,15 @@ export default function Composer({
 
     if (!text && !pending) return;
 
-    onSend(text, {
+    const sent = onSend(text, {
       ...(note.trim() ? { translationNote: note.trim() } : {}),
       ...(pending ? { attachmentId: pending.id } : {}),
     });
+    if (!sent) {
+      setError(t('composer.notSent'));
+      return;
+    }
+    setError(null);
     setDraft('');
     setNote('');
     setNoteOpen(false);

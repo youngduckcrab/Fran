@@ -201,6 +201,12 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
       if (cancelled) return;
       setState((previous) => ({ ...previous, connection: 'connecting' }));
 
+      // 앞 소켓이 아직 열려 있으면 닫는다. 다시 붙는 길이 둘 겹치면(앱으로 돌아오며 바로 다시
+      // 붙는 것과 기다렸다 다시 붙는 것) 하나가 주인 없이 남아, 끈 뒤에도 접속 중으로 보이고
+      // 같은 이벤트를 두 번 받는다. 닫힌 소켓의 onclose 는 아래 isCurrent() 가 걸러 낸다.
+      const previous = socketRef.current;
+      if (previous && previous.readyState <= WebSocket.OPEN) previous.close();
+
       const socket = new WebSocket(websocketUrl(token));
       socketRef.current = socket;
 
@@ -243,15 +249,15 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
       attempts.current += 1;
 
       if (attempts.current >= VERIFY_AFTER_ATTEMPTS) {
-        // 한 번도 연결된 적이 없다면 토큰이 죽은 것일 수 있다. 소켓만 봐서는
-        // 401 과 네트워크 장애를 구분할 수 없으므로 서버에 직접 물어본다.
-        if (!authenticated.current) {
-          const valid = await isTokenValid(token);
-          if (cancelled) return;
-          if (!valid) {
-            onUnauthorized();
-            return;
-          }
+        // 토큰이 죽은 것일 수 있다. 소켓만 봐서는 401 과 네트워크 장애를 구분할 수 없으므로
+        // 서버에 직접 물어본다. 한 번 붙었던 연결이라도 묻는다 — 쓰는 도중에 다른 기기에서
+        // 비밀번호를 바꾸거나 토큰 기한이 지나면, 묻지 않는 한 영영 다시 붙기만 되풀이한다.
+        // (네트워크가 죽은 것이면 isTokenValid 는 true 를 돌려준다. 로그아웃시키지 않는다.)
+        const valid = await isTokenValid(token);
+        if (cancelled) return;
+        if (!valid) {
+          onUnauthorized();
+          return;
         }
         // 연결된 적이 있든 없든, 계속 실패하고 있다면 그 사실을 알려야 한다.
         // 헤더의 "다시 연결하는 중…"만 조용히 도는 것으로는 뭐가 문제인지 알 수 없다.
@@ -330,9 +336,12 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
     callListener.current = listener;
   }, []);
 
-  const emit = useCallback((event: ClientEvent) => {
+  /** 보냈으면 true. 다시 붙는 중이면 보내지 못하고 false — 부른 쪽이 글을 지우지 않게 알려 준다. */
+  const emit = useCallback((event: ClientEvent): boolean => {
     const socket = socketRef.current;
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
+    if (socket?.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify(event));
+    return true;
   }, []);
 
   /**
@@ -373,8 +382,9 @@ export function useChat(token: string | null, onUnauthorized: () => void) {
         attachmentId?: string;
         replyTo?: string;
       } = {},
-    ) => {
-      emit({
+    ): boolean => {
+      // 연결이 끊긴 사이에 보낸 것은 사라진다. false 를 돌려주면 입력창이 글을 그대로 둔다.
+      return emit({
         type: 'send',
         clientId: newClientId(),
         text,

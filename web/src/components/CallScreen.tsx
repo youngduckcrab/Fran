@@ -140,7 +140,7 @@ export default function CallScreen({
         >
           <Media
             stream={swapped ? call.remoteStream : call.localStream}
-            className={`call__meVideo ${swapped ? '' : 'is-mirrored'}`}
+            className={`call__meVideo ${!swapped && call.facing === 'user' ? 'is-mirrored' : ''}`}
             muted={!swapped}
             volume={call.peerVolume}
             onAspect={setAspect}

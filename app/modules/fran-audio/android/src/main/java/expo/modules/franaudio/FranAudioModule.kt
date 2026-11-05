@@ -27,8 +27,9 @@ class FranAudioModule : Module() {
       MicTap.start { pcm, level ->
         try {
           sendEvent("onMicChunk", mapOf("pcm" to pcm, "level" to level))
-        } catch (error: IllegalArgumentException) {
-          // 모듈이 이미 내려간 뒤. 통화가 끝나며 곧 멈춘다.
+        } catch (error: Exception) {
+          // 모듈이 이미 내려간 뒤(또는 자바스크립트 쪽이 다시 뜨는 중). 통화가 끝나며 곧 멈춘다.
+          // 이 줄은 WebRTC 의 녹음 스레드에서 돈다 — 여기서 새어 나간 예외는 앱을 통째로 죽인다.
           Log.w("FranAudio", "소리 토막을 보내지 못함", error)
         }
       }
@@ -39,7 +40,14 @@ class FranAudioModule : Module() {
     }
 
     Function("play") { pcm: String, rate: Int ->
-      player.play(pcm, rate)
+      try {
+        player.play(pcm, rate)
+      } catch (error: Exception) {
+        // 소리 장치를 못 열었거나 토막이 깨졌다. 통역 소리 한 토막을 버리고, 통화는 그대로 둔다.
+        Log.w("FranAudio", "통역 소리를 틀지 못함", error)
+        player.stop()
+        0.0
+      }
     }
 
     Function("stopPlayback") {

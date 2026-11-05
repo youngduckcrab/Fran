@@ -1,5 +1,6 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Pressable,
@@ -10,7 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon, { type IconName } from '../Icon';
 import { RADIUS, usePalette, type Palette } from '../theme';
 
@@ -170,6 +171,20 @@ export function TextButton({
   );
 }
 
+/** 키보드가 떠 있는지. 떠 있으면 아래 시스템 막대 자리를 비워 둘 이유가 없다 — 키보드가 덮는다. */
+export function useKeyboardOpen(): boolean {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => setOpen(true));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setOpen(false));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
+  return open;
+}
+
 /** 아래에서 올라오는 창. 바깥을 누르거나 뒤로가기를 누르면 닫힌다. */
 export function Sheet({
   onClose,
@@ -182,6 +197,8 @@ export function Sheet({
   full?: boolean;
 }) {
   const p = usePalette();
+  const insets = useSafeAreaInsets();
+  const keyboardOpen = useKeyboardOpen();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }} onPress={onClose}>
@@ -199,6 +216,8 @@ export function Sheet({
           }}
         >
           {children}
+          {/* 창은 화면 끝까지 그려진다. 아래 시스템 막대(뒤로·홈 단추)에 마지막 줄이 가리지 않게. */}
+          <View style={{ height: keyboardOpen ? 0 : insets.bottom }} />
         </Pressable>
         </KeyboardAvoidingView>
       </Pressable>

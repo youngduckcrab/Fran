@@ -210,6 +210,10 @@ export function useCall(
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   /** 앞뒤 카메라. 바꿀 때 트랙만 갈아 끼운다. */
   const facing = useRef<'user' | 'environment'>('user');
+  /** 화면에 그릴 때 쓰는 것. 앞 카메라만 거울처럼 뒤집어 보여 준다 — 뒤 카메라를 뒤집으면 글씨가 거꾸로 보인다. */
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  /** 카메라를 바꿀 때 미리보기용으로 만든 스트림. 다음에 바꾸거나 끝날 때 놓는다. */
+  const preview = useRef<MediaStream | null>(null);
   /*
    * 낙서 쪽 함수들을 담아 두는 곳.
    *
@@ -219,6 +223,7 @@ export function useCall(
    */
   const receiveDraw = useRef<((id: string, points: number[]) => void) | null>(null);
   const wipeDoodle = useRef<(() => void) | null>(null);
+  const resetDoodle = useRef<(() => void) | null>(null);
   /** 이 기기가 받아쓰기를 끝내 못 한 경우. 켜 둔 사람에게 왜 안 되는지 알려 준다. */
   const [captionsBroken, setCaptionsBroken] = useState(false);
   /** 통화가 붙은 시각. 화면의 시계가 이걸 센다. */
@@ -314,16 +319,19 @@ export function useCall(
     setLiveError(null);
     setCaptions([]);
     setCaptionsBroken(false);
-    wipeDoodle.current?.();
+    resetDoodle.current?.();
     pc.current?.close();
     pc.current = null;
     // 놓아 주지 않으면 통화가 끝나도 폰에 카메라·마이크 표시가 남는다.
-    mic.current?.getTracks().forEach((track) => track.stop());
+    releaseStream(mic.current);
     mic.current = null;
+    releaseStream(preview.current, false);
+    preview.current = null;
     callId.current = null;
     pendingOffer.current = null;
     earlyIce.current = [];
     facing.current = 'user';
+    setFacingMode('user');
     setSince(null);
     setMuted(false);
     setVideo(false);
@@ -351,12 +359,27 @@ export function useCall(
   const build = useCallback(
     async (id: string, wantsVideo: boolean) => {
       const iceServers = await fetchIceServers();
+      // 주소를 받아 오는 사이에 끊었으면 더 만들지 않는다.
+      if (callId.current !== id) throw new StaleCall();
       const connection = new RTCPeerConnection({ iceServers });
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: AUDIO,
-        video: wantsVideo ? VIDEO : false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: AUDIO,
+          video: wantsVideo ? VIDEO : false,
+        });
+      } catch (error) {
+        connection.close();
+        throw error;
+      }
+      // 권한 창을 보는 사이에 상대가 끊었거나 내가 끊었다. 잡은 마이크·카메라를 바로 놓는다.
+      // 그러지 않으면 아무도 놓지 않아서, 통화가 없는데도 폰에 녹음 표시가 남는다.
+      if (callId.current !== id) {
+        releaseStream(stream);
+        connection.close();
+        throw new StaleCall();
+      }
       mic.current = stream;
       setLocalStream(stream);
       for (const track of stream.getTracks()) connection.addTrack(track, stream);
@@ -411,6 +434,7 @@ export function useCall(
         const connection = await build(id, withVideo);
         const offer = await connection.createOffer();
         await connection.setLocalDescription(offer);
+        if (callId.current !== id) return;
         emit({
           type: 'call',
           callId: id,
@@ -418,6 +442,8 @@ export function useCall(
           video: withVideo,
         });
       } catch (error) {
+        // 기다리는 사이에 끝난 통화는 이미 정리됐다. 새로 건 통화를 끝내 버리지 않게 그대로 둔다.
+        if (error instanceof StaleCall || callId.current !== id) return;
         finish('failed', micTrouble(error));
       }
     },
@@ -435,12 +461,24 @@ export function useCall(
       await drainIce(connection);
       const answer = await connection.createAnswer();
       await connection.setLocalDescription(answer);
+      if (callId.current !== id) return;
       emit({ type: 'call_answer', callId: id, answer: JSON.stringify(connection.localDescription) });
     } catch (error) {
+      if (error instanceof StaleCall || callId.current !== id) return;
       emit({ type: 'call_end', callId: id, reason: 'failed' });
       finish('failed', micTrouble(error));
     }
   }, [build, drainIce, emit, finish, video]);
+
+  /**
+   * 마이크(카메라) 권한이 없어 받지 못할 때. 상대에게는 거절로 알리고, 내 화면에는 왜 못 받았는지 적는다.
+   * 그냥 거절하면 받으려고 누른 사람은 영문도 모른 채 전화가 끊긴다.
+   */
+  const declineNoPermission = useCallback(() => {
+    const id = callId.current;
+    if (id) emit({ type: 'call_end', callId: id, reason: 'declined' });
+    finish('failed', 'denied');
+  }, [emit, finish]);
 
   const decline = useCallback(() => {
     const id = callId.current;
@@ -494,13 +532,19 @@ export function useCall(
 
       for (const old of stream.getVideoTracks()) {
         stream.removeTrack(old);
-        old.stop();
+        releaseTrack(old);
       }
       stream.addTrack(track);
+      // 트랙은 옮겨 담았다. 앱에서는 받아 온 스트림 껍데기가 따로 남으므로 그것만 놓는다.
+      releaseStream(fresh, false);
       track.enabled = cameraOn;
       facing.current = next;
-      // 미리보기가 새 트랙을 잡도록 같은 스트림을 새 객체로 넘긴다.
-      setLocalStream(new MediaStream(stream.getTracks()));
+      setFacingMode(next);
+      // 미리보기가 새 트랙을 잡도록 같은 스트림을 새 객체로 넘긴다. 앞의 복사본은 놓는다.
+      const copy = new MediaStream(stream.getTracks());
+      releaseStream(preview.current, false);
+      preview.current = copy;
+      setLocalStream(copy);
     } catch {
       // 카메라가 하나뿐인 기기. 그대로 둔다.
     }
@@ -520,6 +564,8 @@ export function useCall(
       void (async () => {
         switch (event.type) {
           case 'call': {
+            // 다시 붙으면서 서버가 울리는 중인 전화를 또 보내 준 것. 이미 울리고 있다.
+            if (callId.current === event.callId) return;
             // 이미 통화 중이면 받을 수 없다. 상대가 헛되이 기다리지 않게 바로 알린다.
             if (callId.current) {
               emit({ type: 'call_end', callId: event.callId, reason: 'declined' });
@@ -675,9 +721,10 @@ export function useCall(
         sentText = text;
         emit({ type: 'caption', callId: id, id: current, text, final: false });
       },
-      onError: () => {
+      onError: (reason) => {
         // 애플 기기에서 걸리면 listen() 이 스스로 물러난다. 왜 조용한지는 알려 줘야 한다.
-        if (isApple()) setCaptionsBroken(true);
+        // 앱 판은 다시 켜도 소용없을 때만(권한·언어, 거듭된 실패) 알린다. 그때는 이미 멈춰 있다.
+        if (isApple() || APP_GAVE_UP.has(reason)) setCaptionsBroken(true);
       },
     });
     ear.current = ear_;
@@ -811,6 +858,7 @@ export function useCall(
 
   receiveDraw.current = doodle.receive;
   wipeDoodle.current = doodle.wipe;
+  resetDoodle.current = doodle.reset;
 
   return {
     ...state,
@@ -819,6 +867,8 @@ export function useCall(
     since,
     video,
     cameraOn,
+    /** 지금 보내는 카메라. 'user' 가 앞 카메라. */
+    facing: facingMode,
     peerCamera,
     localStream,
     remoteStream,
@@ -845,6 +895,7 @@ export function useCall(
     start,
     accept,
     decline,
+    declineNoPermission,
     hangup,
     toggleMute,
     toggleCamera,
@@ -854,6 +905,36 @@ export function useCall(
 }
 
 export type Call = ReturnType<typeof useCall>;
+
+/** 앱 판 받아쓰기(app/overrides/listen.ts)가 스스로 그만두며 알리는 이유들. */
+const APP_GAVE_UP = new Set(['not-allowed', 'service-not-allowed', 'language-not-supported', 'gave-up']);
+
+/** 기다리는 사이에 통화가 끝났다(끊었거나 거절당했다). 만들던 것은 치웠으니 조용히 그만둔다. */
+class StaleCall extends Error {
+  constructor() {
+    super('call ended while setting up');
+    this.name = 'StaleCall';
+  }
+}
+
+/**
+ * 스트림을 놓아 준다.
+ *
+ * 브라우저에서는 트랙의 stop() 이면 카메라·마이크가 꺼진다. 앱(react-native-webrtc)의 stop() 은
+ * 트랙을 끄기만 하고 장치는 쥐고 있다 — release() 까지 불러야 카메라 표시가 사라지고 다음 통화가
+ * 카메라를 다시 잡을 수 있다. tracks 가 false 면 트랙은 다른 스트림이 쓰므로 껍데기만 놓는다.
+ */
+function releaseStream(stream: MediaStream | null | undefined, tracks = true): void {
+  if (!stream) return;
+  if (tracks) for (const track of stream.getTracks()) track.stop();
+  (stream as MediaStream & { release?: (releaseTracks?: boolean) => void }).release?.(tracks);
+}
+
+/** 트랙 하나를 멈추고, 앱이면 장치까지 놓는다. */
+function releaseTrack(track: MediaStreamTrack): void {
+  track.stop();
+  (track as MediaStreamTrack & { release?: () => void }).release?.();
+}
 
 /**
  * 자막 한 줄을 목록에 얹는다.
@@ -877,6 +958,7 @@ function merge(lines: Caption[], line: Caption): Caption[] {
  * 브라우저마다 이름이 달라서 늘어놔 봐야 알아볼 수 없다.
  */
 function micTrouble(error: unknown): string | undefined {
+  if (error instanceof StaleCall) return undefined;
   if (!(error instanceof Error)) return undefined;
   if (error.name === 'NotAllowedError') return 'denied';
   if (error.name === 'NotFoundError') return 'nomic';

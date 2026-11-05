@@ -94,7 +94,8 @@ module.exports = {
       'expo-secure-store',
       [
         'expo-notifications',
-        { icon: './assets/favicon.png', color: '#e79ad6' },
+        // 알림줄의 작은 아이콘은 안드로이드가 모양(투명도)만 쓴다. 색 있는 그림을 주면 흰 네모가 된다.
+        { icon: './assets/notification-icon.png', color: '#e79ad6' },
       ],
       [
         'expo-image-picker',

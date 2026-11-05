@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import {
   LANGUAGE_NAMES,
   cleanTerm,
+  messageText,
   type ChatMessage,
   type ExplanationChunk,
   type LangCode,
@@ -35,7 +36,11 @@ export default function Explanation({ message, initialLang, onAdded, onClose }: 
   const p = usePalette();
   const langs = availableLangs(message);
   const [lang, setLang] = useState<LangCode>(langs.includes(initialLang) ? initialLang : message.sourceLang);
-  const [explanation, setExplanation] = useState<MessageExplanation | null>(null);
+  /** 받은 설명과, 그게 어느 언어 문장의 설명인지. 단어를 담을 때 그 언어로 담는다. */
+  const [explained, setExplained] = useState<{ lang: LangCode; data: MessageExplanation } | null>(null);
+  const explanation = explained?.data ?? null;
+  /** 언어를 빨리 바꾸면 앞서 물은 답이 늦게 와서 새 언어 자리에 앉는다. 마지막 물음만 받는다. */
+  const request = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** 단어장에 담은 조각들. 같은 화면에서 눌렀는지 바로 보이게 표시만 해 둔다. */
@@ -60,15 +65,17 @@ export default function Explanation({ message, initialLang, onAdded, onClose }: 
 
   const load = useCallback(
     async (target: LangCode) => {
+      const mine = ++request.current;
       setBusy(true);
       setError(null);
-      setExplanation(null);
+      setExplained(null);
       try {
-        setExplanation(await explainMessage(message.id, target));
+        const data = await explainMessage(message.id, target);
+        if (mine === request.current) setExplained({ lang: target, data });
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
+        if (mine === request.current) setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
-        setBusy(false);
+        if (mine === request.current) setBusy(false);
       }
     },
     [message.id],
@@ -78,15 +85,15 @@ export default function Explanation({ message, initialLang, onAdded, onClose }: 
     void load(lang);
   }, [lang, load]);
 
-  const sentence = lang === message.sourceLang ? message.sourceText : (message.translations[lang]?.text ?? '');
+  const sentence = lang === message.sourceLang ? messageText(message) : (message.translations[lang]?.text ?? '');
 
   const addToVocab = async (chunk: ExplanationChunk) => {
     const term = cleanTerm(chunk.text);
-    if (!term) return;
+    if (!term || !explained) return;
     try {
       await saveVocab({
         term,
-        lang,
+        lang: explained.lang,
         meaning: chunk.meaning,
         ...(chunk.reading ? { reading: chunk.reading } : {}),
         ...(chunk.note ? { note: chunk.note } : {}),

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { fetchUsers, login, type LoginOption } from '../web/api';
 import { createTranslate, toUiLang, type UiLang } from '../web/i18n';
 import Icon from '../Icon';
@@ -63,17 +63,48 @@ export default function Login({ onLogin, presetUserId, uiLang, onUiLang }: Props
     submitText: { color: c.onAccent, fontWeight: '800', fontSize: 16 },
   }));
 
+  /*
+   * 누구로 들어갈지 고를 목록. 못 받으면 고를 사람이 없어 들어갈 수도 없다.
+   *
+   * 처음 켤 때 비행기 모드였거나 서버가 깨어나는 중이면 실패한다. 그대로 두면 앱을 껐다 켜야만
+   * 풀리므로, 받을 때까지 점점 길게 기다리며 다시 받고, 앱으로 돌아올 때도 곧바로 다시 받는다.
+   */
   useEffect(() => {
-    fetchUsers()
-      .then((list) => {
-        setUsers(list);
-        const chosen = list.find((user) => user.id === presetUserId) ?? list[0];
-        if (chosen) {
-          setUserId((current) => current || chosen.id);
-          onUiLang(toUiLang(chosen.uiLang));
-        }
-      })
-      .catch((cause: Error) => setError(cause.message));
+    let done = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const load = () => {
+      if (done) return;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      fetchUsers()
+        .then((list) => {
+          if (done) return;
+          done = true;
+          setError(null);
+          setUsers(list);
+          const chosen = list.find((user) => user.id === presetUserId) ?? list[0];
+          if (chosen) {
+            setUserId((current) => current || chosen.id);
+            onUiLang(toUiLang(chosen.uiLang));
+          }
+        })
+        .catch((cause: Error) => {
+          if (done) return;
+          setError(cause.message);
+          attempt += 1;
+          timer = setTimeout(load, Math.min(2000 * attempt, 15_000));
+        });
+    };
+    load();
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') load();
+    });
+    return () => {
+      done = true;
+      if (timer) clearTimeout(timer);
+      subscription.remove();
+    };
   }, [presetUserId, onUiLang]);
 
   const submit = async () => {

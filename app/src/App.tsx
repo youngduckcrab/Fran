@@ -4,12 +4,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import type { ThemeId } from '@fran/shared';
 import { preloadStorage } from './shims';
-import { getToken, rememberedUser, setActiveUser, setToken } from './web/api';
+import { activeUser, getToken, rememberedUser, setActiveUser, setToken } from './web/api';
 import { clearChat } from './web/cache';
 import { clearCollections } from './web/collections';
 import { LangContext, TranslateContext, createTranslate, type UiLang } from './web/i18n';
 import { applyTheme, remembered } from './web/theme';
 import { PaletteProvider, makePalette } from './theme';
+import { forgetPush } from './push';
 import Login from './screens/Login';
 import Shell from './screens/Shell';
 
@@ -62,13 +63,20 @@ function Root() {
     setTokenState(next);
   }, []);
 
+  /*
+   * 누가 들어와 있는지는 activeUser() 가 안다. 위의 userId 는 앱을 켤 때 한 번 정해진 값이라
+   * 로그인 화면에서 다른 사람을 골랐거나 처음 깔았을 때(null)는 지금 사람과 다르다.
+   */
   const handleLogout = useCallback(() => {
+    const who = activeUser();
+    // 이 폰으로 알림이 계속 가지 않게 서버에서 빼 달라고 한다. 토큰이 있을 때 보내야 한다.
+    void forgetPush();
     // 적어 둔 대화와 보관함도 함께 지운다. 나간 사람의 것을 남겨 둘 이유가 없다.
-    clearChat(userId);
-    clearCollections(userId);
+    clearChat(who);
+    clearCollections(who);
     setToken(null);
     setTokenState(null);
-  }, [userId]);
+  }, []);
 
   const chooseTheme = useCallback((next: ThemeId | undefined) => {
     applyTheme(next);
@@ -88,7 +96,7 @@ function Root() {
               onTheme={chooseTheme}
               onToken={(next) => {
                 // 비밀번호를 바꾸면 서버가 새 토큰을 준다. 갈아 끼워야 로그인이 유지된다.
-                setToken(next, userId);
+                setToken(next, activeUser());
                 setTokenState(next);
               }}
             />

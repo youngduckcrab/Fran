@@ -86,7 +86,17 @@ class VoicePlayer {
       .setBufferSizeInBytes(size)
       .setTransferMode(AudioTrack.MODE_STREAM)
       .build()
-    created.play()
+    if (created.state != AudioTrack.STATE_INITIALIZED) {
+      // 폰이 소리 길을 내주지 않았다(다른 앱이 쥐고 있거나 장치가 바뀌는 중). 다음 토막에서 다시 연다.
+      created.release()
+      throw IllegalStateException("AudioTrack not initialized")
+    }
+    try {
+      created.play()
+    } catch (error: IllegalStateException) {
+      created.release()
+      throw error
+    }
     track = created
     rate = sampleRate
 

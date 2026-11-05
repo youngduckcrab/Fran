@@ -15,6 +15,8 @@ import { getToken } from './web/api';
 export type PushState = 'unsupported' | 'denied' | 'off' | 'on';
 
 const TOKEN_KEY = 'fran.pushToken';
+/** 처음 로그인했을 때 알림을 한 번 물어봤는지. Shell 이 본다. */
+export const ASKED_KEY = 'fran.pushAsked';
 
 /**
  * 앱을 보고 있을 때 서버는 푸시를 보내지 않는다. 혹시 와도 띄우지 않는다 — 화면에 이미 보인다.
@@ -89,6 +91,15 @@ export async function enablePush(): Promise<PushState> {
   return 'on';
 }
 
+/**
+ * 로그아웃할 때. 서버에서 이 폰을 빼고, "처음 한 번 물어보기" 도 다음 사람을 위해 되돌린다.
+ * 빼지 않으면 나간 뒤에도 메시지 내용이 이 폰에 알림으로 뜬다.
+ */
+export async function forgetPush(): Promise<void> {
+  localStorage.removeItem(ASKED_KEY);
+  await disablePush().catch(() => undefined);
+}
+
 export async function disablePush(): Promise<PushState> {
   const token = localStorage.getItem(TOKEN_KEY);
   if (token) {
@@ -114,6 +125,32 @@ export async function testPush(): Promise<number> {
  * FCM 토큰은 바뀔 수 있다. 서버가 옛 토큰으로 보내면 알림이 조용히 사라진다.
  */
 export function useKeepPushFresh(): void {
+  /*
+   * 켤 때마다 지금 토큰을 한 번 다시 알린다(같은 토큰이면 서버는 그대로 둔다).
+   *
+   * 토큰은 앱이 꺼져 있는 사이에도 바뀔 수 있고, 서버가 죽은 토큰을 지웠을 수도 있다.
+   * 폰을 바꾸며 저장소가 복원되면 "켜져 있음" 표시만 옛 폰에서 넘어오고 이 폰의 토큰은
+   * 서버에 없다. 그러면 켜져 있다고 보이는데 알림이 하나도 오지 않는다.
+   */
+  useEffect(() => {
+    if (!localStorage.getItem(TOKEN_KEY)) return;
+    void (async () => {
+      try {
+        const permission = await Notifications.getPermissionsAsync();
+        if (!permission.granted) return;
+        const token = String((await Notifications.getDevicePushTokenAsync()).data);
+        const saved = await fetch('/api/push/native', {
+          method: 'POST',
+          headers: authed(),
+          body: JSON.stringify({ token, platform: Platform.OS }),
+        });
+        if (saved.ok) localStorage.setItem(TOKEN_KEY, token);
+      } catch {
+        // 알리지 못하면 다음에 켤 때 다시 한다.
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     const subscription = Notifications.addPushTokenListener((next) => {
       if (!localStorage.getItem(TOKEN_KEY)) return;
@@ -133,7 +170,11 @@ export function useKeepPushFresh(): void {
 export function useNotificationOpen(onOpen: () => void): void {
   useEffect(() => {
     const last = Notifications.getLastNotificationResponse();
-    if (last) onOpen();
+    if (last) {
+      onOpen();
+      // 한 번 따라갔으면 지운다. 남겨 두면 로그아웃했다 다시 들어올 때 또 채팅으로 끌려간다.
+      Notifications.clearLastNotificationResponse();
+    }
     const subscription = Notifications.addNotificationResponseReceivedListener(() => onOpen());
     return () => subscription.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps

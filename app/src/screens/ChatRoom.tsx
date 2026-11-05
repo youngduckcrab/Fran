@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, FlatList, Keyboard, KeyboardAvoidingView, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, KeyboardAvoidingView, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { messageText, type ChatMessage, type LangCode, type SavedSentence } from '@fran/shared';
@@ -13,8 +13,9 @@ import type { BubbleView } from '../web/view';
 import Icon from '../Icon';
 import { useBackClose } from '../backstack';
 import { clearDelivered } from '../push';
+import { stopVoice } from '../voicePlayer';
 import { ensureCallPermissions } from '../permissions';
-import { Header, IconButton, Row, Sheet, useStyles } from '../ui/kit';
+import { Header, IconButton, Row, Sheet, useKeyboardOpen, useStyles } from '../ui/kit';
 import Wallpaper from '../ui/Wallpaper';
 import { usePalette } from '../theme';
 import Composer from './Composer';
@@ -92,15 +93,7 @@ export default function ChatRoom({
     header.current?.measureInWindow((_x, y, _width, height) => setHeaderBottom(y + height));
   }, []);
   /** 키보드가 떠 있으면 아래 시스템 막대 자리를 비워 둘 이유가 없다. 키보드가 그 위를 덮는다. */
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
-  useEffect(() => {
-    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
-    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
-    return () => {
-      shown.remove();
-      hidden.remove();
-    };
-  }, []);
+  const keyboardOpen = useKeyboardOpen();
 
   /** 길게 눌러 고른 메시지. 메뉴와 설명 패널이 이걸 본다. */
   const [picked, setPicked] = useState<ChatMessage | null>(null);
@@ -242,6 +235,9 @@ export default function ChatRoom({
     }, 60);
     return () => clearTimeout(timer);
   }, [scrollTarget, rows]);
+
+  // 대화방을 나가면 듣던 음성 메시지도 멈춘다. 화면 없이 소리만 남으면 끌 방법이 없다.
+  useEffect(() => stopVoice, []);
 
   // 반짝임은 잠깐이면 된다. 계속 켜 두면 무엇이 새 메시지인지 헷갈린다.
   useEffect(() => {
@@ -454,8 +450,9 @@ export default function ChatRoom({
               }}
               onCancelEdit={() => setEditing(null)}
               onSend={(text, options) => {
-                chat.sendMessage(text, { ...options, ...(replyTo ? { replyTo: replyTo.id } : {}) });
-                setReplyTo(null);
+                const sent = chat.sendMessage(text, { ...options, ...(replyTo ? { replyTo: replyTo.id } : {}) });
+                if (sent) setReplyTo(null);
+                return sent;
               }}
               onTyping={chat.setTyping}
               replyTo={replyTo}
@@ -518,7 +515,8 @@ export default function ChatRoom({
             setPicked(null);
           }}
           onCopy={() => {
-            void Clipboard.setStringAsync(picked.sourceText).catch(() => undefined);
+            // 음성 메시지는 sourceText 가 비어 있다. 받아 적은 글을 복사한다.
+            void Clipboard.setStringAsync(messageText(picked)).catch(() => undefined);
             setPicked(null);
           }}
           onRetranslate={() => {

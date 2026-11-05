@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import {
   LANGUAGE_NAMES,
@@ -48,6 +48,8 @@ export default function WordPicker({ message, initialLang, extraLangs, onAdded, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  /** 단어 A 를 누르고 바로 B 를 누르면 A 의 답이 늦게 와서 B 자리에 앉는다. 마지막 물음만 받는다. */
+  const request = useRef(0);
 
   const st = useStyles((c) => ({
     body: { paddingHorizontal: 20, paddingBottom: 30, gap: 10 },
@@ -72,9 +74,11 @@ export default function WordPicker({ message, initialLang, extraLangs, onAdded, 
 
   const choose = async (word: string) => {
     // 같은 단어를 다시 누르면 접는다.
+    const mine = ++request.current;
     if (picked === word) {
       setPicked(null);
       setLookup(null);
+      setBusy(false);
       return;
     }
     setPicked(word);
@@ -82,16 +86,19 @@ export default function WordPicker({ message, initialLang, extraLangs, onAdded, 
     setError(null);
     setBusy(true);
     try {
-      setLookup(await lookUpWord(message.id, lang, word));
+      const found = await lookUpWord(message.id, lang, word);
+      if (mine === request.current) setLookup(found);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (mine === request.current) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setBusy(false);
+      if (mine === request.current) setBusy(false);
     }
   };
 
   /** 문장을 바꾸면 펼쳐 둔 단어는 의미가 없다. 같이 접는다. */
   const switchLang = (next: LangCode) => {
+    request.current += 1;
+    setBusy(false);
     setLang(next);
     setPicked(null);
     setLookup(null);

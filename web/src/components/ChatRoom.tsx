@@ -461,11 +461,12 @@ export default function ChatRoom({
         }}
         onCancelEdit={() => setEditing(null)}
         onSend={(text, options) => {
-          chat.sendMessage(text, {
+          const sent = chat.sendMessage(text, {
             ...options,
             ...(replyTo ? { replyTo: replyTo.id } : {}),
           });
-          setReplyTo(null);
+          if (sent) setReplyTo(null);
+          return sent;
         }}
         onTyping={chat.setTyping}
         replyTo={replyTo}

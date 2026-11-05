@@ -1,13 +1,13 @@
 import { memo, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { LANGUAGE_NAMES, messageText, type ChatMessage, type LangCode } from '@fran/shared';
 import { useT, type StringKey } from '../web/i18n';
 import { hasSpeech } from '../web/speech';
 import type { BubbleView } from '../web/view';
 import Icon from '../Icon';
 import { attachmentUrl, formatDuration } from '../media';
+import { toggleVoice, useVoicePhase } from '../voicePlayer';
 import { alpha, usePalette } from '../theme';
 import { Accent, useStyles } from '../ui/kit';
 
@@ -391,7 +391,7 @@ function MessageBubble(props: Props) {
   );
 }
 
-/** 음성 메시지 재생 줄. 누르기 전에는 내려받지 않는다. */
+/** 음성 메시지 재생 줄. 누르기 전에는 내려받지 않는다. 재생기는 앱에 하나뿐이다(voicePlayer). */
 function AudioLine({
   id,
   durationMs,
@@ -404,25 +404,18 @@ function AudioLine({
   label: string;
 }) {
   const p = usePalette();
-  const player = useRef<AudioPlayer | null>(null);
-  const [playing, setPlaying] = useState(false);
-
-  const toggle = () => {
-    if (!player.current) {
-      const created = createAudioPlayer({ uri: attachmentUrl(id) });
-      created.addListener('playbackStatusUpdate', (status) => {
-        setPlaying(status.playing);
-        if (status.didJustFinish) created.seekTo(0);
-      });
-      player.current = created;
-    }
-    const current = player.current;
-    if (current.playing) current.pause();
-    else current.play();
-  };
+  const t = useT();
+  const phase = useVoicePhase(id);
+  const active = phase === 'playing' || phase === 'loading';
+  const note = phase === 'failed' ? t('bubble.voiceFailed') : phase === 'loading' ? t('bubble.voiceLoading') : null;
 
   return (
-    <Pressable onPress={toggle} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+    <Pressable
+      onPress={() => toggleVoice(id, attachmentUrl(id))}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+      accessibilityRole="button"
+      accessibilityState={{ busy: phase === 'loading' }}
+    >
       <View
         style={{
           width: 34,
@@ -430,15 +423,18 @@ function AudioLine({
           borderRadius: 17,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: alpha(p.accent, 0.25),
+          backgroundColor: alpha(phase === 'failed' ? p.danger : p.accent, 0.25),
         }}
       >
-        <Icon name={playing ? 'stop' : 'play'} size={14} color={color} />
+        <Icon name={active ? 'stop' : 'play'} size={14} color={color} />
       </View>
-      <Text style={{ color, fontSize: 13 }}>
-        {label}
-        {durationMs ? ` · ${formatDuration(durationMs)}` : ''}
-      </Text>
+      <View style={{ flexShrink: 1 }}>
+        <Text style={{ color, fontSize: 13 }}>
+          {label}
+          {durationMs ? ` · ${formatDuration(durationMs)}` : ''}
+        </Text>
+        {note ? <Text style={{ color, fontSize: 11, opacity: 0.75 }}>{note}</Text> : null}
+      </View>
     </Pressable>
   );
 }
