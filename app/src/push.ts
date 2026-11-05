@@ -16,15 +16,31 @@ export type PushState = 'unsupported' | 'denied' | 'off' | 'on';
 
 const TOKEN_KEY = 'fran.pushToken';
 
-/** 앱을 보고 있을 때 서버는 푸시를 보내지 않는다. 혹시 와도 띄우지 않는다. */
+/**
+ * 앱을 보고 있을 때 서버는 푸시를 보내지 않는다. 혹시 와도 띄우지 않는다 — 화면에 이미 보인다.
+ *
+ * 시험 알림만은 띄운다. 설정 화면에서 단추를 눌러 받아 보는 것이라 그때 앱은 늘 켜져 있다.
+ * 띄우지 않으면 잘 도착했는데도 "안 온다" 로 보인다.
+ */
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: false,
-    shouldShowList: false,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const test = notificationTag(notification) === 'test';
+    return {
+      shouldShowBanner: test,
+      shouldShowList: test,
+      shouldPlaySound: test,
+      shouldSetBadge: false,
+    };
+  },
 });
+
+/** 서버가 알림에 붙여 보낸 tag(메시지 id, `call:…`, 시험이면 `test`). */
+function notificationTag(notification: Notifications.Notification): string | undefined {
+  const data = notification.request.content.data as { tag?: unknown } | null | undefined;
+  if (typeof data?.tag === 'string') return data.tag;
+  const trigger = notification.request.trigger as { remoteMessage?: { data?: Record<string, string> } } | null;
+  return trigger?.remoteMessage?.data?.tag;
+}
 
 async function ensureChannels(): Promise<void> {
   if (Platform.OS !== 'android') return;
